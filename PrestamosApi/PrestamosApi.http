@@ -1,0 +1,6 @@
+@PrestamosApi_HostAddress = http://localhost:5030
+
+GET {{PrestamosApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
