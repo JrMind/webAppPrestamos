@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, Legend } from 'recharts';
-import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, setAuthToken } from './api';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
+import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken } from './api';
 import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, CobrosHoy, BalanceSocio } from './types';
 import './App.css';
 
@@ -30,7 +30,7 @@ function App() {
   const [filtroEstado, setFiltroEstado] = useState('Todos');
   const [filtroFrecuencia, setFiltroFrecuencia] = useState('Todos');
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
-  const [filtroClienteId, setFiltroClienteId] = useState<number | undefined>();
+  const [filtroClienteId] = useState<number | undefined>();
 
   // Modals
   const [showClienteModal, setShowClienteModal] = useState(false);
@@ -43,7 +43,7 @@ function App() {
   const [cuotasDetalle, setCuotasDetalle] = useState<Cuota[]>([]);
   const [pagosDetalle, setPagosDetalle] = useState<Pago[]>([]);
   const [selectedCuota, setSelectedCuota] = useState<Cuota | null>(null);
-  const [selectedSocio, setSelectedSocio] = useState<BalanceSocio | null>(null);
+  const [selectedSocio] = useState<BalanceSocio | null>(null);
 
   // Login form
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
