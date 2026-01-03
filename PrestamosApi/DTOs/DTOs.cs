@@ -52,7 +52,10 @@ public record PrestamoDto(
     decimal TotalPagado,
     decimal SaldoPendiente,
     int CuotasPagadas,
-    CuotaProximaDto? ProximaCuota
+    CuotaProximaDto? ProximaCuota,
+    int? CobradorId = null,
+    string? CobradorNombre = null,
+    decimal PorcentajeCobrador = 5
 );
 
 public record CuotaProximaDto(
@@ -69,7 +72,9 @@ public record CreatePrestamoDto(
     int Duracion,
     string UnidadDuracion, // Dias, Semanas, Quincenas, Meses
     DateTime FechaPrestamo,
-    string? Descripcion
+    string? Descripcion,
+    int? CobradorId = null,
+    decimal PorcentajeCobrador = 5
 );
 
 public record UpdatePrestamoDto(
@@ -137,7 +142,11 @@ public record DashboardMetricasDto(
     List<TopClienteDto> TopClientes,
     DistribucionEstadosDto DistribucionEstados,
     List<IngresoMensualDto> IngresosMensuales,
-    List<CuotaProximaDetalleDto> CuotasProximasDetalle
+    List<CuotaProximaDetalleDto> CuotasProximasDetalle,
+    // Flujo de Capital
+    decimal TotalCobrado = 0,
+    decimal DineroCirculando = 0,
+    decimal ReservaDisponible = 0
 );
 
 public record EvolucionPrestamosDto(

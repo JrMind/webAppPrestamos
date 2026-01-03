@@ -23,8 +23,13 @@
   --accent-purple-dim: #7c3aed;
   --accent-orange: #f97316;
   
-  --border-color: #2a2a2a;
+  --border-color: #2a2a2a; /* Kept for existing uses */
   --border-focus: #3b82f6;
+  --border: #2a2a2a; /* New variable */
+  --accent: #3b82f6; /* New variable */
+  --success: #10b981; /* New variable */
+  --warning: #f59e0b; /* New variable */
+  --danger: #ef4444; /* New variable */
   
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 6px rgba(0, 0, 0, 0.4);
@@ -50,6 +55,49 @@ body {
   line-height: 1.5;
   min-height: 100vh;
 }
+
+/* Login */
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--bg-primary) 0%, #1a1a2e 100%);
+}
+
+.login-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 3rem;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.login-card h1 { font-size: 2rem; margin-bottom: 0.5rem; }
+.login-card p { color: var(--text-secondary); margin-bottom: 2rem; }
+.login-card form { text-align: left; }
+
+.error-message {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  padding: 0.75rem;
+  border-radius: 8px;
+  margin-bottom: 1rem;
+  text-align: center;
+}
+
+.btn-full { width: 100%; }
+
+/* Toasts */
+.toasts { position: fixed; top: 1rem; right: 1rem; z-index: 1000; display: flex; flex-direction: column; gap: 0.5rem; }
+.toast { padding: 1rem 1.5rem; border-radius: 8px; background: var(--bg-tertiary); border: 1px solid var(--border); animation: slideIn 0.3s ease; }
+.toast-success { border-color: var(--success); }
+.toast-error { border-color: var(--danger); }
+.toast-warning { border-color: var(--warning); }
+@keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
 #root {
   min-height: 100vh;

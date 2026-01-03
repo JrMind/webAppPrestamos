@@ -10,8 +10,6 @@ public class Pago
     public string? MetodoPago { get; set; } // Efectivo, Transferencia, etc.
     public string? Comprobante { get; set; }
     public string? Observaciones { get; set; }
-    public string? UsuarioCreacion { get; set; }
-    public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
 
     // Navegación
     public Prestamo? Prestamo { get; set; }

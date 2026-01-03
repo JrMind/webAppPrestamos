@@ -1,4 +1,104 @@
 // API Types
+
+// Usuario Types
+export interface Usuario {
+  id: number;
+  nombre: string;
+  email: string;
+  telefono?: string;
+  rol: string;
+  porcentajeParticipacion: number;
+  tasaInteresMensual: number;
+  activo: boolean;
+}
+
+export interface LoginDto {
+  email: string;
+  password: string;
+}
+
+export interface RegisterDto {
+  nombre: string;
+  email: string;
+  password: string;
+  telefono?: string;
+  rol: string;
+}
+
+export interface AuthResponse {
+  token: string;
+  usuario: Usuario;
+}
+
+// Aporte/Capital Types
+export interface Aporte {
+  id: number;
+  montoInicial: number;
+  montoActual: number;
+  fechaAporte: string;
+  descripcion?: string;
+}
+
+export interface MovimientoCapital {
+  id: number;
+  tipoMovimiento: string;
+  monto: number;
+  saldoAnterior: number;
+  saldoNuevo: number;
+  fechaMovimiento: string;
+  descripcion?: string;
+}
+
+export interface BalanceSocio {
+  id: number;
+  nombre: string;
+  email: string;
+  rol: string;
+  porcentajeParticipacion: number;
+  tasaInteresMensual: number;
+  capitalInicial: number;
+  capitalActual: number;
+  gananciasAcumuladas: number;
+  gananciasPendientes: number;
+}
+
+export interface Cobrador {
+  id: number;
+  nombre: string;
+  telefono?: string;
+}
+
+// Cobros Types
+export interface CuotaCobro {
+  id: number;
+  prestamoId: number;
+  numeroCuota: number;
+  fechaCobro: string;
+  montoCuota: number;
+  montoPagado: number;
+  saldoPendiente: number;
+  estadoCuota: string;
+  cobrado: boolean;
+  clienteNombre: string;
+  clienteTelefono?: string;
+  cobradorNombre?: string;
+  vencido: boolean;
+}
+
+export interface CobrosHoy {
+  fecha: string;
+  cuotasHoy: CuotaCobro[];
+  cuotasVencidas: CuotaCobro[];
+  resumen: {
+    totalCuotasHoy: number;
+    totalCuotasVencidas: number;
+    montoTotalHoy: number;
+    montoTotalVencido: number;
+    montoPendienteTotal: number;
+  };
+}
+
+// Original Types
 export interface Cliente {
   id: number;
   nombre: string;
@@ -47,6 +147,9 @@ export interface Prestamo {
   saldoPendiente: number;
   cuotasPagadas: number;
   proximaCuota?: CuotaProxima;
+  cobradorId?: number;
+  cobradorNombre?: string;
+  porcentajeCobrador: number;
 }
 
 export interface CreatePrestamoDto {
@@ -59,6 +162,8 @@ export interface CreatePrestamoDto {
   unidadDuracion: string;
   fechaPrestamo: string;
   descripcion?: string;
+  cobradorId?: number;
+  porcentajeCobrador: number;
 }
 
 export interface Cuota {
@@ -73,6 +178,7 @@ export interface Cuota {
   fechaPago?: string;
   observaciones?: string;
   fechaEditada: boolean;
+  cobrado: boolean;
 }
 
 export interface Pago {
@@ -85,7 +191,6 @@ export interface Pago {
   metodoPago?: string;
   comprobante?: string;
   observaciones?: string;
-  fechaCreacion: string;
 }
 
 export interface CreatePagoDto {
@@ -148,4 +253,8 @@ export interface DashboardMetricas {
   distribucionEstados: DistribucionEstados;
   ingresosMensuales: IngresoMensual[];
   cuotasProximasDetalle: CuotaProximaDetalle[];
+  // Flujo de Capital
+  totalCobrado: number;
+  dineroCirculando: number;
+  reservaDisponible: number;
 }

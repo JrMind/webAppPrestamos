@@ -41,6 +41,15 @@ public class DashboardController : ControllerBase
             .Where(p => p.EstadoPrestamo == "Activo")
             .SumAsync(p => p.MontoPrestado);
 
+        // Flujo de Capital
+        var totalCobrado = await _context.Pagos.SumAsync(p => p.MontoPago);
+        // Dinero circulando = Capital prestado que aún no se ha recuperado
+        var dineroCirculando = totalPrestado - totalCobrado;
+        if (dineroCirculando < 0) dineroCirculando = 0;
+        // Reserva disponible = Cuotas cobradas menos el capital prestado = dinero disponible para prestar
+        var reservaDisponible = totalCobrado - totalPrestado;
+        if (reservaDisponible < 0) reservaDisponible = 0;
+
         // Cuotas vencidas hoy
         var cuotasVencidasHoy = await _context.CuotasPrestamo
             .Where(c => c.FechaCobro.Date == hoy && 
@@ -191,7 +200,10 @@ public class DashboardController : ControllerBase
             topClientes,
             distribucion,
             ingresosMensuales,
-            cuotasProximasDetalle
+            cuotasProximasDetalle,
+            totalCobrado,
+            dineroCirculando,
+            reservaDisponible
         ));
     }
 }

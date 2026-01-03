@@ -31,6 +31,7 @@ public class PrestamosController : ControllerBase
     {
         var query = _context.Prestamos
             .Include(p => p.Cliente)
+            .Include(p => p.Cobrador)
             .Include(p => p.Cuotas)
             .Include(p => p.Pagos)
             .AsQueryable();
@@ -193,6 +194,7 @@ public class PrestamosController : ControllerBase
         var prestamo = new Prestamo
         {
             ClienteId = dto.ClienteId,
+            CobradorId = dto.CobradorId,
             MontoPrestado = dto.MontoPrestado,
             TasaInteres = dto.TasaInteres,
             TipoInteres = dto.TipoInteres,
@@ -205,7 +207,7 @@ public class PrestamosController : ControllerBase
             MontoCuota = montoCuota,
             EstadoPrestamo = "Activo",
             Descripcion = dto.Descripcion,
-            FechaCreacion = DateTime.UtcNow
+            PorcentajeCobrador = dto.PorcentajeCobrador
         };
 
         _context.Prestamos.Add(prestamo);
@@ -236,7 +238,6 @@ public class PrestamosController : ControllerBase
 
         prestamo.EstadoPrestamo = dto.EstadoPrestamo;
         prestamo.Descripcion = dto.Descripcion;
-        prestamo.FechaModificacion = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 

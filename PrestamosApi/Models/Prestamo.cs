@@ -4,6 +4,7 @@ public class Prestamo
 {
     public int Id { get; set; }
     public int ClienteId { get; set; }
+    public int? CobradorId { get; set; }
     public decimal MontoPrestado { get; set; }
     public decimal TasaInteres { get; set; }
     public string TipoInteres { get; set; } = "Simple"; // Simple o Compuesto
@@ -16,13 +17,12 @@ public class Prestamo
     public decimal MontoCuota { get; set; }
     public string EstadoPrestamo { get; set; } = "Activo"; // Activo, Pagado, Vencido
     public string? Descripcion { get; set; }
-    public string? UsuarioCreacion { get; set; }
-    public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
-    public string? UsuarioModificacion { get; set; }
-    public DateTime? FechaModificacion { get; set; }
+    public decimal PorcentajeCobrador { get; set; } = 5; // % para el cobrador (configurable para préstamos al 15%)
 
     // Navegación
     public Cliente? Cliente { get; set; }
+    public Usuario? Cobrador { get; set; }
     public ICollection<CuotaPrestamo> Cuotas { get; set; } = new List<CuotaPrestamo>();
     public ICollection<Pago> Pagos { get; set; } = new List<Pago>();
+    public ICollection<DistribucionGanancia> Distribuciones { get; set; } = new List<DistribucionGanancia>();
 }

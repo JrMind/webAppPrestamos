@@ -12,10 +12,7 @@ public class CuotaPrestamo
     public string EstadoCuota { get; set; } = "Pendiente"; // Pendiente, Pagada, Vencida, Parcial
     public DateTime? FechaPago { get; set; }
     public string? Observaciones { get; set; }
-    public string? UsuarioCreacion { get; set; }
-    public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
-    public string? UsuarioModificacion { get; set; }
-    public DateTime? FechaModificacion { get; set; }
+    public bool Cobrado { get; set; } = false; // Checklist de cobro diario
 
     // Navegación
     public Prestamo? Prestamo { get; set; }

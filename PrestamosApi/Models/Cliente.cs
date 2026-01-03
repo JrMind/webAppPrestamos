@@ -10,10 +10,6 @@ public class Cliente
     public string? Email { get; set; }
     public DateTime FechaRegistro { get; set; } = DateTime.UtcNow;
     public string Estado { get; set; } = "Activo";
-    public string? UsuarioCreacion { get; set; }
-    public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
-    public string? UsuarioModificacion { get; set; }
-    public DateTime? FechaModificacion { get; set; }
 
     // Navegación
     public ICollection<Prestamo> Prestamos { get; set; } = new List<Prestamo>();
