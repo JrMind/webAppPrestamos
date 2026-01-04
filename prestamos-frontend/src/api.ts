@@ -318,3 +318,49 @@ export const dashboardApi = {
         return handleResponse<DashboardMetricas>(response);
     },
 };
+
+// Balance Personal
+export interface MiBalanceCobrador {
+    rol: string;
+    totalPrestamosAsignados: number;
+    prestamosActivos: number;
+    comisionesTotales: number;
+    comisionesPendientes: number;
+    comisionesCobradas: number;
+    montoTotalReferido: number;
+    detalleActivos: Array<{
+        id: number;
+        clienteNombre: string;
+        montoTotal: number;
+        porcentajeCobrador: number;
+        comision: number;
+        totalPagado: number;
+        saldoPendiente: number;
+    }>;
+}
+
+export interface MiBalanceSocio {
+    rol: string;
+    porcentajeParticipacion: number;
+    tasaInteresMensual: number;
+    capitalInicial: number;
+    capitalActual: number;
+    gananciasAcumuladas: number;
+    gananciasPendientes: number;
+    gananciasPagadas: number;
+    portafolioGlobal: {
+        totalPrestado: number;
+        totalCobrado: number;
+        prestamosActivos: number;
+        miParticipacionCapital: number;
+    };
+}
+
+export type MiBalance = MiBalanceCobrador | MiBalanceSocio;
+
+export const balanceApi = {
+    getMiBalance: async (): Promise<MiBalance> => {
+        const response = await fetch(`${API_URL}/balance/mi-balance`, { headers: getHeaders() });
+        return handleResponse<MiBalance>(response);
+    },
+};
