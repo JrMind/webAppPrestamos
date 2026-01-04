@@ -43,7 +43,6 @@ function App() {
   const [cuotasDetalle, setCuotasDetalle] = useState<Cuota[]>([]);
   const [pagosDetalle, setPagosDetalle] = useState<Pago[]>([]);
   const [selectedCuota, setSelectedCuota] = useState<Cuota | null>(null);
-  const [selectedSocio] = useState<BalanceSocio | null>(null);
 
   // Login form
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -550,6 +549,23 @@ function App() {
                   ))}</tbody>
                 </table>
               </div>
+              {pagosDetalle.length > 0 && (
+                <>
+                  <h4 style={{ marginTop: '1rem' }}>Historial de Pagos</h4>
+                  <div className="table-container" style={{ maxHeight: '150px', overflow: 'auto' }}>
+                    <table>
+                      <thead><tr><th>Fecha</th><th>Monto</th><th>Método</th></tr></thead>
+                      <tbody>{pagosDetalle.map(p => (
+                        <tr key={p.id}>
+                          <td>{formatDate(p.fechaPago)}</td>
+                          <td className="money" style={{ color: '#10b981' }}>{formatMoney(p.montoPago)}</td>
+                          <td>{p.metodoPago || 'Efectivo'}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </>
+              )}
             </div>
           </div>
         </div>
