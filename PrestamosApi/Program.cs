@@ -55,8 +55,15 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
-app.UseSwagger();
-app.UseSwaggerUI();
+app.UseSwagger(c =>
+{
+    c.RouteTemplate = "api/swagger/{documentName}/swagger.json";
+});
+app.UseSwaggerUI(c =>
+{
+    c.SwaggerEndpoint("/api/swagger/v1/swagger.json", "Prestamos API v1");
+    c.RoutePrefix = "api/swagger";
+});
 
 app.UseCors("AllowAll");
 
@@ -64,7 +71,9 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapGet("/", () => "PrestamosAPI is running!");
+app.MapGet("/api", () => "PrestamosAPI is running!");
 app.MapGet("/health", () => Results.Ok(new { status = "healthy", time = DateTime.UtcNow }));
+app.MapGet("/api/health", () => Results.Ok(new { status = "healthy", time = DateTime.UtcNow }));
 app.MapControllers();
 
 // Create database and apply migrations
