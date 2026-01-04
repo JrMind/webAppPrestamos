@@ -6,7 +6,7 @@ using PrestamosApi.DTOs;
 namespace PrestamosApi.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("[controller]")]
 public class CuotasController : ControllerBase
 {
     private readonly PrestamosDbContext _context;

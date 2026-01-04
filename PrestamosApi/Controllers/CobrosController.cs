@@ -6,7 +6,7 @@ using PrestamosApi.Data;
 namespace PrestamosApi.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("[controller]")]
 [Authorize]
 public class CobrosController : ControllerBase
 {

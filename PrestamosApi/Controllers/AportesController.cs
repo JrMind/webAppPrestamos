@@ -7,7 +7,7 @@ using PrestamosApi.Services;
 namespace PrestamosApi.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("[controller]")]
 [Authorize]
 public class AportesController : ControllerBase
 {

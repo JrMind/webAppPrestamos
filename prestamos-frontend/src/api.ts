@@ -5,8 +5,8 @@ import {
 } from './types';
 
 const API_URL = import.meta.env.DEV
-    ? 'http://localhost:5000/api'
-    : 'https://plankton-app-eucni.ondigitalocean.app/api';
+    ? 'http://localhost:5000'
+    : 'https://api.prestamos.group';
 
 // Token management
 let authToken: string | null = localStorage.getItem('token');
