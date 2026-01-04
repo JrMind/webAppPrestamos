@@ -30,18 +30,8 @@ public class ClientesController : BaseApiController
         }
 
         var termino = q.ToLower();
-        var userId = GetCurrentUserId();
-        var isCobrador = IsCobrador();
 
-        var query = _context.Clientes.AsQueryable();
-
-        // Si es cobrador, solo mostrar clientes con préstamos asignados a él
-        if (isCobrador && userId.HasValue)
-        {
-            query = query.Where(c => c.Prestamos.Any(p => p.CobradorId == userId.Value));
-        }
-
-        var clientes = await query
+        var clientes = await _context.Clientes
             .Where(c => c.Nombre.ToLower().Contains(termino) || 
                         c.Cedula.ToLower().Contains(termino))
             .OrderBy(c => c.Nombre)
@@ -66,20 +56,8 @@ public class ClientesController : BaseApiController
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ClienteDto>>> GetClientes()
     {
-        var userId = GetCurrentUserId();
-        var isCobrador = IsCobrador();
-
-        var query = _context.Clientes
+        var clientes = await _context.Clientes
             .Include(c => c.Prestamos)
-            .AsQueryable();
-
-        // Si es cobrador, solo mostrar clientes con préstamos asignados a él
-        if (isCobrador && userId.HasValue)
-        {
-            query = query.Where(c => c.Prestamos.Any(p => p.CobradorId == userId.Value));
-        }
-
-        var clientes = await query
             .Select(c => new ClienteDto(
                 c.Id,
                 c.Nombre,
