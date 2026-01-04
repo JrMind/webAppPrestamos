@@ -8,7 +8,7 @@ using PrestamosApi.Services;
 namespace PrestamosApi.Controllers;
 
 [ApiController]
-[Route("[controller]")]
+[Route("api/[controller]")]
 public class PrestamosController : ControllerBase
 {
     private readonly PrestamosDbContext _context;
