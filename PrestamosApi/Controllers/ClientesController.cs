@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PrestamosApi.Data;
@@ -8,7 +9,8 @@ namespace PrestamosApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class ClientesController : ControllerBase
+[Authorize]
+public class ClientesController : BaseApiController
 {
     private readonly PrestamosDbContext _context;
 
@@ -28,7 +30,18 @@ public class ClientesController : ControllerBase
         }
 
         var termino = q.ToLower();
-        var clientes = await _context.Clientes
+        var userId = GetCurrentUserId();
+        var isCobrador = IsCobrador();
+
+        var query = _context.Clientes.AsQueryable();
+
+        // Si es cobrador, solo mostrar clientes con préstamos asignados a él
+        if (isCobrador && userId.HasValue)
+        {
+            query = query.Where(c => c.Prestamos.Any(p => p.CobradorId == userId.Value));
+        }
+
+        var clientes = await query
             .Where(c => c.Nombre.ToLower().Contains(termino) || 
                         c.Cedula.ToLower().Contains(termino))
             .OrderBy(c => c.Nombre)
@@ -53,8 +66,20 @@ public class ClientesController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ClienteDto>>> GetClientes()
     {
-        var clientes = await _context.Clientes
+        var userId = GetCurrentUserId();
+        var isCobrador = IsCobrador();
+
+        var query = _context.Clientes
             .Include(c => c.Prestamos)
+            .AsQueryable();
+
+        // Si es cobrador, solo mostrar clientes con préstamos asignados a él
+        if (isCobrador && userId.HasValue)
+        {
+            query = query.Where(c => c.Prestamos.Any(p => p.CobradorId == userId.Value));
+        }
+
+        var clientes = await query
             .Select(c => new ClienteDto(
                 c.Id,
                 c.Nombre,

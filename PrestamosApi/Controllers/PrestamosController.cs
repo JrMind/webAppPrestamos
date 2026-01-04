@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PrestamosApi.Data;
@@ -9,7 +10,8 @@ namespace PrestamosApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class PrestamosController : ControllerBase
+[Authorize]
+public class PrestamosController : BaseApiController
 {
     private readonly PrestamosDbContext _context;
     private readonly IPrestamoService _prestamoService;
@@ -29,12 +31,21 @@ public class PrestamosController : ControllerBase
         [FromQuery] int? clienteId,
         [FromQuery] string? busqueda)
     {
+        var userId = GetCurrentUserId();
+        var isCobrador = IsCobrador();
+
         var query = _context.Prestamos
             .Include(p => p.Cliente)
             .Include(p => p.Cobrador)
             .Include(p => p.Cuotas)
             .Include(p => p.Pagos)
             .AsQueryable();
+
+        // Si es cobrador, solo mostrar préstamos asignados a él
+        if (isCobrador && userId.HasValue)
+        {
+            query = query.Where(p => p.CobradorId == userId.Value);
+        }
 
         if (fechaDesde.HasValue)
             query = query.Where(p => p.FechaPrestamo >= fechaDesde.Value);

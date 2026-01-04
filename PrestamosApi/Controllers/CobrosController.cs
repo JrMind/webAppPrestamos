@@ -2,13 +2,14 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PrestamosApi.Data;
+using PrestamosApi.Models;
 
 namespace PrestamosApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class CobrosController : ControllerBase
+public class CobrosController : BaseApiController
 {
     private readonly PrestamosDbContext _context;
 
@@ -18,17 +19,28 @@ public class CobrosController : ControllerBase
     }
 
     [HttpGet("hoy")]
-    [AllowAnonymous]
     public async Task<ActionResult<object>> GetCobrosHoy()
     {
         var today = DateTime.UtcNow.Date;
+        var userId = GetCurrentUserId();
+        var isCobrador = IsCobrador();
 
-        // Cuotas de hoy
-        var cuotasHoy = await _context.CuotasPrestamo
+        // Base query
+        var baseQuery = _context.CuotasPrestamo
             .Include(c => c.Prestamo)
                 .ThenInclude(p => p!.Cliente)
             .Include(c => c.Prestamo)
                 .ThenInclude(p => p!.Cobrador)
+            .AsQueryable();
+
+        // Si es cobrador, filtrar solo sus préstamos asignados
+        if (isCobrador && userId.HasValue)
+        {
+            baseQuery = baseQuery.Where(c => c.Prestamo!.CobradorId == userId.Value);
+        }
+
+        // Cuotas de hoy
+        var cuotasHoy = await baseQuery
             .Where(c => c.FechaCobro.Date == today && c.EstadoCuota != "Pagada")
             .OrderBy(c => c.Cobrado)
             .ThenBy(c => c.Prestamo!.Cliente!.Nombre)
@@ -51,11 +63,7 @@ public class CobrosController : ControllerBase
             .ToListAsync();
 
         // Cuotas vencidas (días anteriores no pagadas)
-        var cuotasVencidas = await _context.CuotasPrestamo
-            .Include(c => c.Prestamo)
-                .ThenInclude(p => p!.Cliente)
-            .Include(c => c.Prestamo)
-                .ThenInclude(p => p!.Cobrador)
+        var cuotasVencidas = await baseQuery
             .Where(c => c.FechaCobro.Date < today && c.EstadoCuota != "Pagada" && !c.Cobrado)
             .OrderBy(c => c.FechaCobro)
             .ThenBy(c => c.Prestamo!.Cliente!.Nombre)
