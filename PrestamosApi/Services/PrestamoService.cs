@@ -28,8 +28,10 @@ public class PrestamoService : IPrestamoService
         
         if (tipoInteres == "Simple")
         {
-            // Interés Simple: I = P * r * t / 365
-            montoIntereses = (montoPrestado * tasaInteres * diasTotales) / (100m * 365m);
+            // Convertir días a meses para el cálculo (tasa es mensual)
+            decimal meses = diasTotales / 30m;
+            // Interés Simple con tasa mensual: I = P * (r/100) * meses
+            montoIntereses = montoPrestado * (tasaInteres / 100m) * meses;
             montoTotal = montoPrestado + montoIntereses;
         }
         else // Compuesto

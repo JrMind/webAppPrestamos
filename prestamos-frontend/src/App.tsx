@@ -198,7 +198,10 @@ function App() {
     let numeroCuotas = Math.ceil(diasTotales / diasEntreCuotas);
     let montoIntereses: number, montoTotal: number;
     if (prestamoForm.tipoInteres === 'Simple') {
-      montoIntereses = (prestamoForm.montoPrestado * prestamoForm.tasaInteres * diasTotales) / (100 * 365);
+      // Convertir días a meses (tasa es mensual)
+      const meses = diasTotales / 30;
+      // Interés Simple: I = P * (r/100) * meses
+      montoIntereses = prestamoForm.montoPrestado * (prestamoForm.tasaInteres / 100) * meses;
       montoTotal = prestamoForm.montoPrestado + montoIntereses;
     } else {
       const tasaPorPeriodo = (prestamoForm.tasaInteres / 100) / (365 / diasEntreCuotas);
