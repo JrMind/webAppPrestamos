@@ -63,6 +63,8 @@ app.UseCors("AllowAll");
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.MapGet("/", () => "PrestamosAPI is running!");
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", time = DateTime.UtcNow }));
 app.MapControllers();
 
 // Create database and apply migrations
