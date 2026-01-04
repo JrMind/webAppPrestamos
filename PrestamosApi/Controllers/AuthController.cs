@@ -18,10 +18,11 @@ public class AuthController : ControllerBase
     [HttpPost("login")]
     public async Task<IActionResult> Login([FromBody] LoginDto dto)
     {
-        var (usuario, token) = await _authService.LoginAsync(dto.Email, dto.Password);
-        if (usuario == null || token == null)
+        var (usuario, token, error) = await _authService.LoginAsync(dto.Email, dto.Password);
+        
+        if (error != null)
         {
-            return Unauthorized(new { message = "Email o contraseña incorrectos" });
+            return Unauthorized(new { message = error });
         }
 
         return Ok(new
@@ -29,24 +30,24 @@ public class AuthController : ControllerBase
             token,
             usuario = new
             {
-                usuario.Id,
+                usuario!.Id,
                 usuario.Nombre,
                 usuario.Email,
-                Rol = usuario.Rol.ToString(),
+                Rol = usuario.Rol?.ToString() ?? "Pendiente",
                 usuario.Telefono
             }
         });
     }
 
+    /// <summary>
+    /// Registro público - usuario queda pendiente de asignación de rol por admin
+    /// </summary>
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterDto dto)
     {
-        if (!Enum.TryParse<RolUsuario>(dto.Rol, out var rol))
-        {
-            return BadRequest(new { message = "Rol inválido" });
-        }
-
-        var usuario = await _authService.RegisterAsync(dto.Nombre, dto.Email, dto.Password, dto.Telefono, rol);
+        // Registro público: sin rol asignado (pendiente)
+        var usuario = await _authService.RegisterAsync(dto.Nombre, dto.Email, dto.Password, dto.Telefono, null);
+        
         if (usuario == null)
         {
             return BadRequest(new { message = "El email ya está registrado" });
@@ -54,13 +55,13 @@ public class AuthController : ControllerBase
 
         return Ok(new
         {
-            message = "Usuario registrado exitosamente",
+            message = "Registro exitoso. Tu cuenta está pendiente de aprobación por un administrador.",
             usuario = new
             {
                 usuario.Id,
                 usuario.Nombre,
                 usuario.Email,
-                Rol = usuario.Rol.ToString()
+                Rol = "Pendiente"
             }
         });
     }
@@ -78,5 +79,5 @@ public class RegisterDto
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string? Telefono { get; set; }
-    public string Rol { get; set; } = "Socio";
 }
+

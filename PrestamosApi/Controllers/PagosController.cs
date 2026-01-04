@@ -1,20 +1,27 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PrestamosApi.Data;
 using PrestamosApi.DTOs;
 using PrestamosApi.Models;
+using PrestamosApi.Services;
 
 namespace PrestamosApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class PagosController : ControllerBase
 {
     private readonly PrestamosDbContext _context;
+    private readonly ITwilioService _twilioService;
+    private readonly ILogger<PagosController> _logger;
 
-    public PagosController(PrestamosDbContext context)
+    public PagosController(PrestamosDbContext context, ITwilioService twilioService, ILogger<PagosController> logger)
     {
         _context = context;
+        _twilioService = twilioService;
+        _logger = logger;
     }
 
     [HttpGet("prestamo/{prestamoId}")]
@@ -43,8 +50,9 @@ public class PagosController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<PagoDto>> CreatePago(CreatePagoDto dto)
     {
-        // Validar préstamo existe
+        // Validar préstamo existe - IMPORTANTE: incluir Cliente para SMS
         var prestamo = await _context.Prestamos
+            .Include(p => p.Cliente)  // <-- CRÍTICO: para enviar SMS al cliente correcto
             .Include(p => p.Cuotas)
             .FirstOrDefaultAsync(p => p.Id == dto.PrestamoId);
             
@@ -97,9 +105,54 @@ public class PagosController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        // *** ENVIAR SMS AL CLIENTE ***
+        // CRÍTICO: El teléfono es del CLIENTE del préstamo, NO del usuario logueado
+        await EnviarSmsAlCliente(prestamo, dto.MontoPago);
+
         return CreatedAtAction(nameof(GetPagosByPrestamo), new { prestamoId = pago.PrestamoId },
             new PagoDto(pago.Id, pago.PrestamoId, pago.CuotaId, null, pago.MontoPago,
                 pago.FechaPago, pago.MetodoPago, pago.Comprobante, pago.Observaciones));
+    }
+
+    /// <summary>
+    /// Envia SMS al CLIENTE del préstamo con su balance actualizado
+    /// </summary>
+    private async Task EnviarSmsAlCliente(Prestamo prestamo, decimal montoPagado)
+    {
+        try
+        {
+            // Validar que el cliente tiene teléfono
+            if (prestamo.Cliente == null || string.IsNullOrEmpty(prestamo.Cliente.Telefono))
+            {
+                _logger.LogWarning("Cliente {ClienteId} no tiene teléfono registrado, no se envía SMS", 
+                    prestamo.ClienteId);
+                return;
+            }
+
+            // Calcular balance del cliente
+            var cuotasPagadas = prestamo.Cuotas.Count(c => c.EstadoCuota == "Pagada");
+            var cuotasRestantes = prestamo.NumeroCuotas - cuotasPagadas;
+            var saldoPendiente = prestamo.Cuotas.Sum(c => c.SaldoPendiente);
+
+            var mensaje = $"📱 Hola {prestamo.Cliente.Nombre}\n" +
+                $"✅ Pago recibido: ${montoPagado:N0}\n" +
+                $"📊 Cuotas pagadas: {cuotasPagadas}/{prestamo.NumeroCuotas}\n" +
+                $"📝 Cuotas restantes: {cuotasRestantes}\n" +
+                $"💰 Saldo pendiente: ${saldoPendiente:N0}\n" +
+                $"💵 Capital prestado: ${prestamo.MontoPrestado:N0}";
+
+            _logger.LogInformation("Enviando SMS a cliente {ClienteNombre} ({Telefono})", 
+                prestamo.Cliente.Nombre, prestamo.Cliente.Telefono);
+
+            await _twilioService.SendSmsAsync(prestamo.Cliente.Telefono, mensaje);
+
+            _logger.LogInformation("SMS enviado exitosamente a {Telefono}", prestamo.Cliente.Telefono);
+        }
+        catch (Exception ex)
+        {
+            // No fallar el pago si el SMS falla, solo loguear
+            _logger.LogError(ex, "Error enviando SMS al cliente {ClienteId}", prestamo.ClienteId);
+        }
     }
 
     [HttpDelete("{id}")]

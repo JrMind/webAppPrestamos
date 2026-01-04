@@ -10,7 +10,7 @@ namespace PrestamosApi.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class UsuariosController : ControllerBase
+public class UsuariosController : BaseApiController
 {
     private readonly PrestamosDbContext _context;
     private readonly IAuthService _authService;
@@ -118,7 +118,69 @@ public class UsuariosController : ControllerBase
             usuario.Id,
             usuario.Nombre,
             usuario.Email,
-            Rol = usuario.Rol.ToString()
+            Rol = usuario.Rol?.ToString() ?? "Pendiente"
+        });
+    }
+
+    /// <summary>
+    /// Obtener usuarios pendientes de asignación de rol (solo para admin)
+    /// </summary>
+    [HttpGet("pendientes")]
+    public async Task<ActionResult<IEnumerable<object>>> GetUsuariosPendientes()
+    {
+        var currentRole = GetCurrentUserRole();
+        if (currentRole != RolUsuario.Admin)
+        {
+            return Forbid();
+        }
+
+        var pendientes = await _context.Usuarios
+            .Where(u => u.Rol == null && u.Activo)
+            .Select(u => new
+            {
+                u.Id,
+                u.Nombre,
+                u.Email,
+                u.Telefono,
+                Rol = "Pendiente"
+            })
+            .ToListAsync();
+
+        return Ok(pendientes);
+    }
+
+    /// <summary>
+    /// Asignar rol a un usuario (solo admin)
+    /// </summary>
+    [HttpPut("{id}/asignar-rol")]
+    public async Task<IActionResult> AsignarRol(int id, [FromBody] AsignarRolDto dto)
+    {
+        var currentRole = GetCurrentUserRole();
+        if (currentRole != RolUsuario.Admin)
+        {
+            return Forbid();
+        }
+
+        if (!Enum.TryParse<RolUsuario>(dto.Rol, out var rol))
+        {
+            return BadRequest(new { message = "Rol inválido" });
+        }
+
+        var usuario = await _context.Usuarios.FindAsync(id);
+        if (usuario == null)
+        {
+            return NotFound(new { message = "Usuario no encontrado" });
+        }
+
+        usuario.Rol = rol;
+        usuario.PorcentajeParticipacion = dto.PorcentajeParticipacion ?? 0;
+        usuario.TasaInteresMensual = dto.TasaInteresMensual ?? 3;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { 
+            message = $"Rol '{rol}' asignado exitosamente a {usuario.Nombre}",
+            usuario = new { usuario.Id, usuario.Nombre, usuario.Email, Rol = rol.ToString() }
         });
     }
 
@@ -164,7 +226,7 @@ public class CreateUsuarioDto
     public string Email { get; set; } = string.Empty;
     public string Password { get; set; } = string.Empty;
     public string? Telefono { get; set; }
-    public string Rol { get; set; } = "Socio";
+    public string? Rol { get; set; }
     public decimal PorcentajeParticipacion { get; set; }
     public decimal TasaInteresMensual { get; set; } = 3;
 }
@@ -177,3 +239,11 @@ public class UpdateUsuarioDto
     public decimal? TasaInteresMensual { get; set; }
     public bool? Activo { get; set; }
 }
+
+public class AsignarRolDto
+{
+    public string Rol { get; set; } = string.Empty;
+    public decimal? PorcentajeParticipacion { get; set; }
+    public decimal? TasaInteresMensual { get; set; }
+}
+

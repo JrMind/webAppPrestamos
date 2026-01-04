@@ -2,6 +2,7 @@ namespace PrestamosApi.Models;
 
 public enum RolUsuario
 {
+    Admin,
     Socio,
     AportadorInterno,
     AportadorExterno,
@@ -15,7 +16,7 @@ public class Usuario
     public string Email { get; set; } = string.Empty;
     public string PasswordHash { get; set; } = string.Empty;
     public string? Telefono { get; set; }
-    public RolUsuario Rol { get; set; }
+    public RolUsuario? Rol { get; set; } = null; // null = pendiente de asignación por admin
     public decimal PorcentajeParticipacion { get; set; } // % de ganancias
     public decimal TasaInteresMensual { get; set; } = 3; // 3% mensual por defecto
     public bool Activo { get; set; } = true;

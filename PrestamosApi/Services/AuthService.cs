@@ -11,8 +11,8 @@ namespace PrestamosApi.Services;
 
 public interface IAuthService
 {
-    Task<(Usuario? usuario, string? token)> LoginAsync(string email, string password);
-    Task<Usuario?> RegisterAsync(string nombre, string email, string password, string? telefono, RolUsuario rol);
+    Task<(Usuario? usuario, string? token, string? error)> LoginAsync(string email, string password);
+    Task<Usuario?> RegisterAsync(string nombre, string email, string password, string? telefono, RolUsuario? rol = null);
     string HashPassword(string password);
     bool VerifyPassword(string password, string hash);
 }
@@ -28,19 +28,25 @@ public class AuthService : IAuthService
         _configuration = configuration;
     }
 
-    public async Task<(Usuario? usuario, string? token)> LoginAsync(string email, string password)
+    public async Task<(Usuario? usuario, string? token, string? error)> LoginAsync(string email, string password)
     {
         var usuario = await _context.Usuarios.FirstOrDefaultAsync(u => u.Email == email && u.Activo);
         if (usuario == null || !VerifyPassword(password, usuario.PasswordHash))
         {
-            return (null, null);
+            return (null, null, "Email o contraseña incorrectos");
+        }
+
+        // Bloquear login si el usuario no tiene rol asignado
+        if (!usuario.Rol.HasValue)
+        {
+            return (null, null, "Tu cuenta está pendiente de aprobación. Un administrador debe asignarte un rol.");
         }
 
         var token = GenerateJwtToken(usuario);
-        return (usuario, token);
+        return (usuario, token, null);
     }
 
-    public async Task<Usuario?> RegisterAsync(string nombre, string email, string password, string? telefono, RolUsuario rol)
+    public async Task<Usuario?> RegisterAsync(string nombre, string email, string password, string? telefono, RolUsuario? rol = null)
     {
         if (await _context.Usuarios.AnyAsync(u => u.Email == email))
         {
@@ -53,7 +59,7 @@ public class AuthService : IAuthService
             Email = email,
             PasswordHash = HashPassword(password),
             Telefono = telefono,
-            Rol = rol,
+            Rol = rol, // null si es registro público
             Activo = true
         };
 
@@ -85,7 +91,7 @@ public class AuthService : IAuthService
             new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
             new Claim(ClaimTypes.Email, usuario.Email),
             new Claim(ClaimTypes.Name, usuario.Nombre),
-            new Claim(ClaimTypes.Role, usuario.Rol.ToString())
+            new Claim(ClaimTypes.Role, usuario.Rol?.ToString() ?? "Pendiente")
         };
 
         var token = new JwtSecurityToken(
@@ -99,3 +105,4 @@ public class AuthService : IAuthService
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
 }
+
