@@ -17,6 +17,39 @@ public class ClientesController : ControllerBase
         _context = context;
     }
 
+    [HttpGet("buscar")]
+    public async Task<ActionResult<IEnumerable<ClienteDto>>> BuscarClientes(
+        [FromQuery] string q = "",
+        [FromQuery] int limite = 10)
+    {
+        if (string.IsNullOrWhiteSpace(q) || q.Length < 2)
+        {
+            return Ok(new List<ClienteDto>());
+        }
+
+        var termino = q.ToLower();
+        var clientes = await _context.Clientes
+            .Where(c => c.Nombre.ToLower().Contains(termino) || 
+                        c.Cedula.ToLower().Contains(termino))
+            .OrderBy(c => c.Nombre)
+            .Take(limite)
+            .Select(c => new ClienteDto(
+                c.Id,
+                c.Nombre,
+                c.Cedula,
+                c.Telefono,
+                c.Direccion,
+                c.Email,
+                c.FechaRegistro,
+                c.Estado,
+                c.Prestamos.Count(p => p.EstadoPrestamo == "Activo"),
+                c.Prestamos.Sum(p => p.MontoPrestado)
+            ))
+            .ToListAsync();
+
+        return Ok(clientes);
+    }
+
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ClienteDto>>> GetClientes()
     {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken } from './api';
 import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, CobrosHoy, BalanceSocio } from './types';
@@ -43,6 +43,13 @@ function App() {
   const [cuotasDetalle, setCuotasDetalle] = useState<Cuota[]>([]);
   const [pagosDetalle, setPagosDetalle] = useState<Pago[]>([]);
   const [selectedCuota, setSelectedCuota] = useState<Cuota | null>(null);
+
+  // Client search state
+  const [clienteSearch, setClienteSearch] = useState('');
+  const [clienteSearchResults, setClienteSearchResults] = useState<Cliente[]>([]);
+  const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
+  const [showClienteDropdown, setShowClienteDropdown] = useState(false);
+  const searchTimeoutRef = useRef<number | null>(null);
 
   // Login form
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -116,6 +123,45 @@ function App() {
   useEffect(() => { if (activeTab === 'cobros') loadCobros(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'socios') loadBalanceSocios(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'usuarios') loadUsuarios(); }, [activeTab]);
+
+  // Client search handler with debounce
+  const handleClienteSearch = (value: string) => {
+    setClienteSearch(value);
+    setShowClienteDropdown(true);
+
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    if (value.length >= 2) {
+      searchTimeoutRef.current = setTimeout(async () => {
+        try {
+          const results = await clientesApi.buscar(value);
+          setClienteSearchResults(results);
+        } catch (error) {
+          console.error('Error searching clients:', error);
+          setClienteSearchResults([]);
+        }
+      }, 300);
+    } else {
+      setClienteSearchResults([]);
+    }
+  };
+
+  const selectCliente = (cliente: Cliente) => {
+    setSelectedCliente(cliente);
+    setClienteSearch(`${cliente.nombre} - ${cliente.cedula}`);
+    setPrestamoForm({ ...prestamoForm, clienteId: cliente.id });
+    setShowClienteDropdown(false);
+    setClienteSearchResults([]);
+  };
+
+  const clearClienteSelection = () => {
+    setSelectedCliente(null);
+    setClienteSearch('');
+    setPrestamoForm({ ...prestamoForm, clienteId: 0 });
+    setClienteSearchResults([]);
+  };
 
   // Forms
   const [clienteForm, setClienteForm] = useState<CreateClienteDto>({ nombre: '', cedula: '', telefono: '', direccion: '', email: '' });
@@ -510,7 +556,49 @@ function App() {
             <form onSubmit={handleCreatePrestamo}>
               <div className="modal-body">
                 <div className="form-grid">
-                  <div className="form-group full-width"><label>Cliente *</label><select required value={prestamoForm.clienteId || ''} onChange={e => setPrestamoForm({ ...prestamoForm, clienteId: Number(e.target.value) })}><option value="">Seleccione...</option>{clientes.map(c => <option key={c.id} value={c.id}>{c.nombre} - {c.cedula}</option>)}</select></div>
+                  <div className="form-group full-width" style={{ position: 'relative' }}>
+                    <label>Cliente *</label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        placeholder="Buscar cliente por nombre o cédula..."
+                        value={clienteSearch}
+                        onChange={e => handleClienteSearch(e.target.value)}
+                        onFocus={() => clienteSearchResults.length > 0 && setShowClienteDropdown(true)}
+                        required={!selectedCliente}
+                        style={{ paddingRight: selectedCliente ? '40px' : undefined }}
+                      />
+                      {selectedCliente && (
+                        <button
+                          type="button"
+                          onClick={clearClienteSelection}
+                          style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#888' }}
+                        >×</button>
+                      )}
+                      {showClienteDropdown && clienteSearchResults.length > 0 && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', maxHeight: '200px', overflow: 'auto', zIndex: 1000, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+                          {clienteSearchResults.map(c => (
+                            <div
+                              key={c.id}
+                              onClick={() => selectCliente(c)}
+                              style={{ padding: '0.75rem 1rem', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = 'var(--primary)', e.currentTarget.style.color = 'white')}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent', e.currentTarget.style.color = 'inherit')}
+                            >
+                              <strong>{c.nombre}</strong> - {c.cedula}
+                              {c.telefono && <span style={{ marginLeft: '0.5rem', opacity: 0.7 }}>({c.telefono})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {clienteSearch.length >= 2 && clienteSearchResults.length === 0 && showClienteDropdown && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem 1rem', color: '#888' }}>
+                          No se encontraron clientes
+                        </div>
+                      )}
+                    </div>
+                    <input type="hidden" value={prestamoForm.clienteId || ''} required />
+                  </div>
                   <div className="form-group"><label>Monto ($) *</label><input type="number" min="50" required value={prestamoForm.montoPrestado || ''} onChange={e => setPrestamoForm({ ...prestamoForm, montoPrestado: Number(e.target.value) })} /></div>
                   <div className="form-group"><label>Tasa Interés (%) *</label><input type="number" min="0" step="0.1" required value={prestamoForm.tasaInteres} onChange={e => setPrestamoForm({ ...prestamoForm, tasaInteres: Number(e.target.value) })} /></div>
                   <div className="form-group"><label>Frecuencia *</label><select value={prestamoForm.frecuenciaPago} onChange={e => setPrestamoForm({ ...prestamoForm, frecuenciaPago: e.target.value })}><option>Diario</option><option>Semanal</option><option>Quincenal</option><option>Mensual</option></select></div>

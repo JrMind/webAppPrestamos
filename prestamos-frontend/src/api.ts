@@ -169,6 +169,11 @@ export const clientesApi = {
         return handleResponse<Cliente[]>(response);
     },
 
+    buscar: async (q: string, limite = 10): Promise<Cliente[]> => {
+        const response = await fetch(`${API_URL}/clientes/buscar?q=${encodeURIComponent(q)}&limite=${limite}`, { headers: getHeaders() });
+        return handleResponse<Cliente[]>(response);
+    },
+
     getById: async (id: number): Promise<Cliente> => {
         const response = await fetch(`${API_URL}/clientes/${id}`, { headers: getHeaders() });
         return handleResponse<Cliente>(response);
