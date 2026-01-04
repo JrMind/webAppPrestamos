@@ -4,7 +4,9 @@ import {
     Usuario, Cobrador, BalanceSocio, CobrosHoy, MovimientoCapital, Aporte
 } from './types';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+const API_URL = import.meta.env.DEV
+    ? 'http://localhost:5000/api'
+    : 'https://plankton-app-eucni.ondigitalocean.app/api';
 
 // Token management
 let authToken: string | null = localStorage.getItem('token');
