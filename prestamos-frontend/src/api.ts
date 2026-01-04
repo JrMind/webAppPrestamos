@@ -148,7 +148,7 @@ export const aportesApi = {
 // Cobros
 export const cobrosApi = {
     getCobrosHoy: async (): Promise<CobrosHoy> => {
-        const response = await fetch(`${API_URL}/cobros/hoy`);
+        const response = await fetch(`${API_URL}/cobros/hoy`, { headers: getHeaders() });
         return handleResponse<CobrosHoy>(response);
     },
 
