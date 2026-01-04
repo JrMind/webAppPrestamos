@@ -33,8 +33,7 @@ public class PagosController : ControllerBase
                 p.FechaPago,
                 p.MetodoPago,
                 p.Comprobante,
-                p.Observaciones,
-                p.FechaCreacion
+                p.Observaciones
             ))
             .ToListAsync();
 
@@ -60,8 +59,7 @@ public class PagosController : ControllerBase
             FechaPago = dto.FechaPago,
             MetodoPago = dto.MetodoPago,
             Comprobante = dto.Comprobante,
-            Observaciones = dto.Observaciones,
-            FechaCreacion = DateTime.UtcNow
+            Observaciones = dto.Observaciones
         };
 
         _context.Pagos.Add(pago);
@@ -74,7 +72,6 @@ public class PagosController : ControllerBase
             {
                 cuota.MontoPagado += dto.MontoPago;
                 cuota.SaldoPendiente = cuota.MontoCuota - cuota.MontoPagado;
-                cuota.FechaModificacion = DateTime.UtcNow;
 
                 if (cuota.SaldoPendiente <= 0)
                 {
@@ -96,14 +93,13 @@ public class PagosController : ControllerBase
         if (todasPagadas)
         {
             prestamo.EstadoPrestamo = "Pagado";
-            prestamo.FechaModificacion = DateTime.UtcNow;
         }
 
         await _context.SaveChangesAsync();
 
         return CreatedAtAction(nameof(GetPagosByPrestamo), new { prestamoId = pago.PrestamoId },
             new PagoDto(pago.Id, pago.PrestamoId, pago.CuotaId, null, pago.MontoPago,
-                pago.FechaPago, pago.MetodoPago, pago.Comprobante, pago.Observaciones, pago.FechaCreacion));
+                pago.FechaPago, pago.MetodoPago, pago.Comprobante, pago.Observaciones));
     }
 
     [HttpDelete("{id}")]
@@ -121,7 +117,6 @@ public class PagosController : ControllerBase
         {
             pago.Cuota.MontoPagado -= pago.MontoPago;
             pago.Cuota.SaldoPendiente = pago.Cuota.MontoCuota - pago.Cuota.MontoPagado;
-            pago.Cuota.FechaModificacion = DateTime.UtcNow;
 
             if (pago.Cuota.MontoPagado <= 0)
             {
@@ -141,7 +136,6 @@ public class PagosController : ControllerBase
         if (prestamo != null && prestamo.EstadoPrestamo == "Pagado")
         {
             prestamo.EstadoPrestamo = "Activo";
-            prestamo.FechaModificacion = DateTime.UtcNow;
         }
 
         _context.Pagos.Remove(pago);

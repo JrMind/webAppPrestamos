@@ -33,7 +33,7 @@ public class CuotasController : ControllerBase
                 c.EstadoCuota,
                 c.FechaPago,
                 c.Observaciones,
-                c.FechaModificacion != null
+                false
             ))
             .ToListAsync();
 
@@ -48,7 +48,6 @@ public class CuotasController : ControllerBase
             return NotFound(new { message = "Cuota no encontrada" });
 
         cuota.FechaCobro = dto.FechaCobro;
-        cuota.FechaModificacion = DateTime.UtcNow;
 
         // Actualizar estado si la nueva fecha ya pasó
         if (dto.FechaCobro.Date < DateTime.Today && cuota.SaldoPendiente > 0)
@@ -108,7 +107,6 @@ public class CuotasController : ControllerBase
         foreach (var cuota in cuotasVencidas)
         {
             cuota.EstadoCuota = "Vencida";
-            cuota.FechaModificacion = DateTime.UtcNow;
         }
 
         // Actualizar estado de préstamos con cuotas vencidas
@@ -121,7 +119,6 @@ public class CuotasController : ControllerBase
         foreach (var prestamo in prestamosConVencidas)
         {
             prestamo.EstadoPrestamo = "Vencido";
-            prestamo.FechaModificacion = DateTime.UtcNow;
         }
 
         await _context.SaveChangesAsync();

@@ -83,7 +83,10 @@ public class PrestamosController : ControllerBase
                     .Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida")
                     .OrderBy(c => c.FechaCobro)
                     .Select(c => new CuotaProximaDto(c.FechaCobro, c.SaldoPendiente))
-                    .FirstOrDefault()
+                    .FirstOrDefault(),
+                p.CobradorId,
+                p.Cobrador != null ? p.Cobrador.Nombre : null,
+                p.PorcentajeCobrador
             ))
             .ToListAsync();
 
@@ -123,7 +126,10 @@ public class PrestamosController : ControllerBase
                     .Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida")
                     .OrderBy(c => c.FechaCobro)
                     .Select(c => new CuotaProximaDto(c.FechaCobro, c.SaldoPendiente))
-                    .FirstOrDefault()
+                    .FirstOrDefault(),
+                p.CobradorId,
+                p.Cobrador != null ? p.Cobrador.Nombre : null,
+                p.PorcentajeCobrador
             ))
             .FirstOrDefaultAsync();
 
@@ -166,7 +172,10 @@ public class PrestamosController : ControllerBase
                     .Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida")
                     .OrderBy(c => c.FechaCobro)
                     .Select(c => new CuotaProximaDto(c.FechaCobro, c.SaldoPendiente))
-                    .FirstOrDefault()
+                    .FirstOrDefault(),
+                p.CobradorId,
+                p.Cobrador != null ? p.Cobrador.Nombre : null,
+                p.PorcentajeCobrador
             ))
             .ToListAsync();
 

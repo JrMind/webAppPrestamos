@@ -79,8 +79,7 @@ public class ClientesController : ControllerBase
             Telefono = dto.Telefono,
             Direccion = dto.Direccion,
             Email = dto.Email,
-            FechaRegistro = DateTime.UtcNow,
-            FechaCreacion = DateTime.UtcNow
+            FechaRegistro = DateTime.UtcNow
         };
 
         _context.Clientes.Add(cliente);
@@ -103,7 +102,6 @@ public class ClientesController : ControllerBase
         cliente.Direccion = dto.Direccion;
         cliente.Email = dto.Email;
         cliente.Estado = dto.Estado;
-        cliente.FechaModificacion = DateTime.UtcNow;
 
         await _context.SaveChangesAsync();
 

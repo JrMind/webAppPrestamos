@@ -111,8 +111,7 @@ public record PagoDto(
     DateTime FechaPago,
     string? MetodoPago,
     string? Comprobante,
-    string? Observaciones,
-    DateTime FechaCreacion
+    string? Observaciones
 );
 
 public record CreatePagoDto(

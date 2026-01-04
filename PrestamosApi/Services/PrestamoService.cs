@@ -67,8 +67,7 @@ public class PrestamoService : IPrestamoService
                 MontoCuota = prestamo.MontoCuota,
                 MontoPagado = 0,
                 SaldoPendiente = prestamo.MontoCuota,
-                EstadoCuota = "Pendiente",
-                FechaCreacion = DateTime.UtcNow
+                EstadoCuota = "Pendiente"
             });
         }
         
