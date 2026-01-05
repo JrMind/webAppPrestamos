@@ -108,42 +108,30 @@ function App() {
     console.log('🚪 Sesión cerrada y caché limpiado');
   };
 
-  // Cargar datos iniciales (una sola vez al autenticarse)
+  // Cargar datos iniciales (solo métricas y préstamos al autenticarse)
   const loadInitialData = useCallback(async () => {
     if (!isAuthenticated || initialDataLoaded) { setLoading(false); return; }
     setLoading(true);
     try {
       console.log('🔄 Cargando datos iniciales del backend...');
-      const [metricasData, prestamosData, clientesData, cobradoresData, usuariosData, balanceData] = await Promise.all([
+      const [metricasData, prestamosData] = await Promise.all([
         dashboardApi.getMetricas(),
-        prestamosApi.getAll({}),
-        clientesApi.getAll(),
-        usuariosApi.getCobradores(),
-        usuariosApi.getAll(),
-        aportesApi.getBalance()
+        prestamosApi.getAll({})
       ]);
 
       // Actualizar estado y caché
       setMetricas(metricasData);
       setPrestamos(prestamosData);
-      setClientes(clientesData);
-      setCobradores(cobradoresData);
-      setUsuarios(usuariosData);
-      setBalanceSocios(balanceData);
 
       // Actualizar timestamps del caché
       const now = Date.now();
       cacheRef.current = {
         metricas: now,
-        prestamos: now,
-        clientes: now,
-        cobradores: now,
-        usuarios: now,
-        balanceSocios: now
+        prestamos: now
       };
 
       setInitialDataLoaded(true);
-      console.log('✅ Datos iniciales cargados correctamente');
+      console.log('✅ Datos iniciales cargados (métricas y préstamos)');
     } catch (error) {
       console.error('❌ Error loading initial data:', error);
       showToast('Error al cargar datos iniciales', 'error');
@@ -254,6 +242,18 @@ function App() {
       console.error('❌ Error refreshing balance:', error);
       showToast('Error al actualizar balance', 'error');
     }
+  };
+
+  // Función para abrir modal de nuevo préstamo (carga cobradores primero)
+  const openPrestamoModal = async () => {
+    console.log('📍 Abriendo modal de nuevo préstamo...');
+    // Cargar cobradores si no están en caché
+    if (!isCacheValid('cobradores') || cobradores.length === 0) {
+      await refreshCobradores();
+    } else {
+      console.log('📦 Usando cobradores del caché');
+    }
+    setShowPrestamoModal(true);
   };
 
   // Cargar datos iniciales al autenticarse
@@ -525,7 +525,7 @@ function App() {
         <div className="header-right">
           <div className="header-stat"><span>Activos</span><strong>{metricas?.prestamosActivos || 0}</strong></div>
           <button className="btn btn-secondary" onClick={() => setShowClienteModal(true)}>+ Cliente</button>
-          <button className="btn btn-primary" onClick={() => setShowPrestamoModal(true)}>+ Préstamo</button>
+          <button className="btn btn-primary" onClick={openPrestamoModal}>+ Préstamo</button>
           <button className="btn btn-danger" onClick={handleLogout}>Salir</button>
         </div>
       </header>
