@@ -223,6 +223,7 @@ public class PrestamosController : BaseApiController
             TasaInteres = dto.TasaInteres,
             TipoInteres = dto.TipoInteres,
             FrecuenciaPago = dto.FrecuenciaPago,
+            DiaSemana = dto.DiaSemana, // Nuevo campo
             NumeroCuotas = numeroCuotas,
             FechaPrestamo = fechaPrestamoUtc,
             FechaVencimiento = fechaVencimientoUtc,
