@@ -79,8 +79,18 @@ public record CreatePrestamoDto(
 );
 
 public record UpdatePrestamoDto(
+    decimal MontoPrestado,
+    decimal TasaInteres,
+    string TipoInteres,
+    string FrecuenciaPago,
+    int NumeroCuotas,
+    DateTime FechaPrestamo,
+    DateTime? FechaPrimerPago, // Nueva opción
     string EstadoPrestamo,
-    string? Descripcion
+    string? Descripcion,
+    int? CobradorId,
+    decimal PorcentajeCobrador,
+    string? DiaSemana
 );
 
 // Cuota DTOs

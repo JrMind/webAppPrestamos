@@ -94,6 +94,10 @@ function App() {
     setCurrentUser(null);
   };
 
+  // Edición de Préstamo
+  const [editMode, setEditMode] = useState(false);
+  const [editingPrestamoId, setEditingPrestamoId] = useState<number | null>(null);
+
   const loadData = useCallback(async () => {
     if (!isAuthenticated) { setLoading(false); return; }
     try {
@@ -294,7 +298,25 @@ function App() {
 
   const openPrestamoModalWithBalance = async () => {
     await loadBalanceCapital();
+    setEditMode(false);
+    setEditingPrestamoId(null);
+    setPrestamoForm({
+      clienteId: 0,
+      montoPrestado: 0,
+      tasaInteres: 0,
+      tipoInteres: 'Simple',
+      frecuenciaPago: 'Mensual',
+      duracion: 1,
+      unidadDuracion: 'Meses',
+      fechaPrestamo: new Date().toISOString().split('T')[0],
+      descripcion: '',
+      porcentajeCobrador: 5,
+      diaSemana: undefined
+    });
     setFuentesCapital([]);
+    clearClienteSelection();
+    clearCobradorSelection();
+    setClienteSearch('');
     setShowFuentesSection(false);
     setShowPrestamoModal(true);
   };
@@ -384,12 +406,46 @@ function App() {
   };
   const preview = calcularPreview();
 
+  const openEditPrestamo = async (prestamo: Prestamo) => {
+    setEditMode(true);
+    setEditingPrestamoId(prestamo.id);
+
+    // Cargar cliente
+    const cliente = clientes.find(c => c.id === prestamo.clienteId);
+    if (cliente) selectCliente(cliente);
+
+    // Cargar cobrador
+    if (prestamo.cobradorId) {
+      const cobrador = await usuariosApi.getCobradores().then(res => res.find(c => c.id === prestamo.cobradorId));
+      if (cobrador) selectCobrador(cobrador);
+    }
+
+    setPrestamoForm({
+      clienteId: prestamo.clienteId,
+      montoPrestado: prestamo.montoPrestado,
+      tasaInteres: prestamo.tasaInteres,
+      tipoInteres: prestamo.tipoInteres,
+      frecuenciaPago: prestamo.frecuenciaPago,
+      // Usamos las cuotas como duración. Unidad dependerá de frecuencia para simplificar.
+      duracion: prestamo.numeroCuotas,
+      unidadDuracion: prestamo.frecuenciaPago === 'Semanal' ? 'Semanas' : prestamo.frecuenciaPago === 'Mensual' ? 'Meses' : prestamo.frecuenciaPago === 'Quincenal' ? 'Quincenas' : 'Dias',
+      fechaPrestamo: prestamo.fechaPrestamo.split('T')[0],
+      descripcion: prestamo.descripcion || '',
+      porcentajeCobrador: prestamo.porcentajeCobrador,
+      diaSemana: prestamo.diaSemana
+    });
+
+    setShowPrestamoModal(true);
+  };
+
+
+
   const handleCreatePrestamo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prestamoForm.clienteId) { showToast('Seleccione un cliente', 'warning'); return; }
 
     // Validar fuentes de capital si están configuradas
-    if (fuentesCapital.length > 0) {
+    if (!editMode && fuentesCapital.length > 0) {
       const totalAsignado = fuentesCapital.reduce((sum, f) => sum + f.montoAportado, 0);
       if (totalAsignado !== prestamoForm.montoPrestado) {
         showToast(`El total de fuentes (${formatMoney(totalAsignado)}) debe ser igual al monto prestado (${formatMoney(prestamoForm.montoPrestado)})`, 'warning');
@@ -398,33 +454,53 @@ function App() {
     }
 
     try {
-      // Si hay fuentes configuradas, usar el endpoint con fuentes
-      if (fuentesCapital.length > 0) {
-        await prestamosConFuentesApi.create({
-          clienteId: prestamoForm.clienteId,
-          montoPrestado: prestamoForm.montoPrestado,
-          tasaInteres: prestamoForm.tasaInteres,
-          tipoInteres: prestamoForm.tipoInteres,
-          frecuenciaPago: prestamoForm.frecuenciaPago,
-          duracion: prestamoForm.duracion,
-          unidadDuracion: prestamoForm.unidadDuracion,
-          fechaPrestamo: prestamoForm.fechaPrestamo,
-          descripcion: prestamoForm.descripcion,
-          cobradorId: prestamoForm.cobradorId,
-          porcentajeCobrador: prestamoForm.porcentajeCobrador,
-          fuentesCapital: fuentesCapital
+      if (editMode && editingPrestamoId) {
+        // MODO EDICIÓN
+        await prestamosApi.updateCompleto(editingPrestamoId, {
+          ...prestamoForm,
+          numeroCuotas: prestamoForm.duracion, // Asumiendo duracion = numeroCuotas
+          // La fecha del formulario se envía como FechaPrestamo Y como FechaPrimerPago si queremos forzar el inicio
+          // Para que el servicio sepa que queremos iniciar en esa fecha, la pasamos como FechaPrimerPago
+          fechaPrimerPago: prestamoForm.fechaPrestamo // Enviamos la fecha seleccionada como inicio explicito
         });
+        showToast('Préstamo actualizado exitosamente', 'success');
       } else {
-        // Sin fuentes, usar el endpoint normal
-        await prestamosApi.create(prestamoForm);
+        // MODO CREACIÓN
+        // Si hay fuentes configuradas, usar el endpoint con fuentes
+        if (fuentesCapital.length > 0) {
+          await prestamosConFuentesApi.create({
+            clienteId: prestamoForm.clienteId,
+            montoPrestado: prestamoForm.montoPrestado,
+            tasaInteres: prestamoForm.tasaInteres,
+            tipoInteres: prestamoForm.tipoInteres,
+            frecuenciaPago: prestamoForm.frecuenciaPago,
+            duracion: prestamoForm.duracion,
+            unidadDuracion: prestamoForm.unidadDuracion,
+            fechaPrestamo: prestamoForm.fechaPrestamo,
+            descripcion: prestamoForm.descripcion,
+            cobradorId: prestamoForm.cobradorId,
+            porcentajeCobrador: prestamoForm.porcentajeCobrador,
+            fuentesCapital: fuentesCapital
+          });
+        } else {
+          // Sin fuentes, usar el endpoint normal
+          // PREGUNTA: ¿Debo enviar fechaPrimerPago aquí también?
+          // El backend CreatePrestamo toma la FechaPrestamo del DTO como fecha base ya modificada por mi.
+          // Pero el create DTO no tiene FechaPrimerPago.
+          // El backend usa dto.FechaPrestamo.
+          // Asi que prestamoForm.fechaPrestamo es suficiente, el backend la usará como inicio.
+          await prestamosApi.create(prestamoForm);
+        }
+        showToast('Préstamo creado exitosamente', 'success');
       }
 
-      showToast('Préstamo creado exitosamente', 'success');
       setShowPrestamoModal(false);
       setPrestamoForm({ clienteId: 0, montoPrestado: 0, tasaInteres: 15, tipoInteres: 'Simple', frecuenciaPago: 'Quincenal', duracion: 3, unidadDuracion: 'Meses', fechaPrestamo: formatDateInput(new Date()), descripcion: '', cobradorId: undefined, porcentajeCobrador: 5 });
       setFuentesCapital([]);
       setSelectedCliente(null);
       setClienteSearch('');
+      setEditMode(false);
+      setEditingPrestamoId(null);
       loadData();
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
@@ -624,7 +700,7 @@ function App() {
                     <td>{p.cobradorNombre || '-'}</td>
                     <td>{p.cuotasPagadas}/{p.numeroCuotas}</td>
                     <td><span className={`badge ${p.estadoPrestamo === 'Activo' ? 'badge-green' : p.estadoPrestamo === 'Pagado' ? 'badge-blue' : 'badge-red'}`}>{p.estadoPrestamo}</span></td>
-                    <td><div className="actions"><button className="btn btn-secondary btn-sm" onClick={() => openDetalle(p)}>Ver</button><button className="btn btn-danger btn-sm" onClick={() => handleDeletePrestamo(p.id)}>✕</button></div></td>
+                    <td><div className="actions"><button className="btn btn-secondary btn-sm" onClick={() => openDetalle(p)}>Ver</button><button className="btn btn-primary btn-sm" onClick={() => openEditPrestamo(p)}>✏️</button><button className="btn btn-danger btn-sm" onClick={() => handleDeletePrestamo(p.id)}>✕</button></div></td>
                   </tr>
                 ))}{prestamos.length === 0 && <tr><td colSpan={8} className="empty-state">No hay préstamos</td></tr>}</tbody>
               </table>
@@ -813,7 +889,7 @@ function App() {
       {showPrestamoModal && (
         <div className="modal-overlay" onClick={() => setShowPrestamoModal(false)}>
           <div className="modal modal-lg" onClick={e => e.stopPropagation()}>
-            <div className="modal-header"><h2>Nuevo Préstamo</h2><button className="modal-close" onClick={() => setShowPrestamoModal(false)}>×</button></div>
+            <div className="modal-header"><h2>{editMode ? 'Editar Préstamo' : 'Nuevo Préstamo'}</h2><button className="modal-close" onClick={() => setShowPrestamoModal(false)}>×</button></div>
             <form onSubmit={handleCreatePrestamo}>
               <div className="modal-body">
                 <div className="form-grid">
@@ -920,7 +996,11 @@ function App() {
                       </select>
                     </div>
                   )}
-                  <div className="form-group"><label>Fecha *</label><input type="date" required value={prestamoForm.fechaPrestamo} onChange={e => setPrestamoForm({ ...prestamoForm, fechaPrestamo: e.target.value })} /></div>
+                  <div className="form-group">
+                    <label>Fecha Primera Cuota *</label>
+                    <input type="date" required value={prestamoForm.fechaPrestamo} onChange={e => setPrestamoForm({ ...prestamoForm, fechaPrestamo: e.target.value })} />
+                    <small style={{ display: 'block', fontSize: '0.75rem', color: '#666', marginTop: '2px' }}>Fecha inicio de pagos</small>
+                  </div>
                 </div>
 
                 {/* Sección de Fuentes de Capital */}
@@ -1002,7 +1082,7 @@ function App() {
 
                 {preview && <div className="preview-card"><h4>Vista Previa</h4><div className="preview-grid"><div className="preview-item"><span>Cuotas</span><strong>{preview.numeroCuotas}</strong></div><div className="preview-item"><span>Intereses</span><strong style={{ color: '#10b981' }}>{formatMoney(preview.montoIntereses)}</strong></div><div className="preview-item"><span>Total</span><strong>{formatMoney(preview.montoTotal)}</strong></div><div className="preview-item"><span>Por Cuota</span><strong style={{ color: '#3b82f6' }}>{formatMoney(preview.montoCuota)}</strong></div></div></div>}
               </div>
-              <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowPrestamoModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">Crear</button></div>
+              <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowPrestamoModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">{editMode ? 'Guardar Cambios' : 'Crear'}</button></div>
             </form>
           </div>
         </div>
@@ -1024,6 +1104,9 @@ function App() {
                 <div className="detail-item"><label>Pendiente</label><span style={{ color: '#ef4444' }}>{formatMoney(selectedPrestamo.saldoPendiente)}</span></div>
                 <div className="detail-item"><label>Estado</label><span className={`badge ${selectedPrestamo.estadoPrestamo === 'Activo' ? 'badge-green' : selectedPrestamo.estadoPrestamo === 'Pagado' ? 'badge-blue' : 'badge-red'}`}>{selectedPrestamo.estadoPrestamo}</span></div>
                 <div className="detail-item"><label>Cobrador</label><span>{selectedPrestamo.cobradorNombre || 'No asignado'}</span></div>
+                <div style={{ marginTop: '1rem', gridColumn: '1 / -1' }}>
+                  <button className="btn btn-primary btn-sm" onClick={() => { setShowDetalleModal(false); openEditPrestamo(selectedPrestamo); }}>✏️ Editar Préstamo</button>
+                </div>
               </div>
               <div className="progress-bar" style={{ margin: '1rem 0' }}><div className="progress-fill" style={{ width: `${(selectedPrestamo.totalPagado / selectedPrestamo.montoTotal) * 100}%` }}></div></div>
 

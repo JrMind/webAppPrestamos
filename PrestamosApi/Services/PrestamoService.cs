@@ -4,7 +4,7 @@ namespace PrestamosApi.Services;
 
 public interface IPrestamoService
 {
-    List<CuotaPrestamo> GenerarCuotas(Prestamo prestamo);
+    List<CuotaPrestamo> GenerarCuotas(Prestamo prestamo, DateTime? fechaPrimerPago = null);
     (decimal MontoTotal, decimal MontoIntereses, decimal MontoCuota, int NumeroCuotas, DateTime FechaVencimiento) 
         CalcularPrestamo(decimal montoPrestado, decimal tasaInteres, string tipoInteres, 
                          string frecuenciaPago, int duracion, string unidadDuracion, DateTime fechaPrestamo);
@@ -53,13 +53,31 @@ public class PrestamoService : IPrestamoService
         return (Math.Round(montoTotal, 2), Math.Round(montoIntereses, 2), montoCuota, numeroCuotas, fechaVencimiento);
     }
 
-    public List<CuotaPrestamo> GenerarCuotas(Prestamo prestamo)
+    public List<CuotaPrestamo> GenerarCuotas(Prestamo prestamo, DateTime? fechaPrimerPago = null)
     {
         var cuotas = new List<CuotaPrestamo>();
+        // La primera cuota es la fecha indicada, o se calcula desde la fecha del préstamo
+        DateTime fechaBase = fechaPrimerPago ?? prestamo.FechaPrestamo; 
         
+        // Si no se especificó fechaPrimerPago, calculamos la primera cuota según frecuencia
+        if (fechaPrimerPago == null)
+        {
+             fechaBase = CalcularProximaFecha(prestamo.FechaPrestamo, prestamo.FrecuenciaPago, prestamo.DiaSemana);
+        }
+
+        DateTime fechaActual = fechaBase;
+
         for (int i = 1; i <= prestamo.NumeroCuotas; i++)
         {
-            DateTime fechaCobro = CalcularFechaCuota(prestamo.FechaPrestamo, prestamo.FrecuenciaPago, i, prestamo.DiaSemana);
+             // Para la primera cuota usamos la fecha base decidida
+             // Para las siguientes, sumamos el periodo a la fecha anterior
+            if (i > 1)
+            {
+                fechaActual = CalcularProximaFecha(fechaActual, prestamo.FrecuenciaPago, prestamo.DiaSemana);
+            }
+
+             // Asegurar UTC
+            var fechaCobro = DateTime.SpecifyKind(fechaActual, DateTimeKind.Utc);
             
             cuotas.Add(new CuotaPrestamo
             {
@@ -74,6 +92,24 @@ public class PrestamoService : IPrestamoService
         }
         
         return cuotas;
+    }
+
+    private DateTime CalcularProximaFecha(DateTime fechaAnterior, string frecuencia, string? diaSemana)
+    {
+        if (frecuencia == "Semanal" && !string.IsNullOrEmpty(diaSemana))
+        {
+             // Si ya estamos en una fecha alineada al día, sumamos 7. Si no, buscamos el día.
+             return CalcularFechaSemanalPorDia(fechaAnterior.AddDays(1), 1, diaSemana);
+        }
+
+         return frecuencia switch
+        {
+            "Diario" => fechaAnterior.AddDays(1),
+            "Semanal" => fechaAnterior.AddDays(7),
+            "Quincenal" => fechaAnterior.AddDays(15),
+            "Mensual" => fechaAnterior.AddMonths(1),
+            _ => fechaAnterior.AddMonths(1)
+        };
     }
 
     private int CalcularDiasTotales(int duracion, string unidadDuracion)

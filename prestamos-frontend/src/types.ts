@@ -150,6 +150,7 @@ export interface Prestamo {
   cobradorId?: number;
   cobradorNombre?: string;
   porcentajeCobrador: number;
+  diaSemana?: string;
 }
 
 export interface CreatePrestamoDto {

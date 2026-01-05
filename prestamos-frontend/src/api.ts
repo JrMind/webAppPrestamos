@@ -255,12 +255,27 @@ export const prestamosApi = {
         if (!response.ok) throw new Error('Error al actualizar préstamo');
     },
 
+    updateCompleto: async (id: number, data: any): Promise<void> => {
+        const response = await fetch(`${API_URL}/prestamos/${id}`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ message: 'Error al actualizar préstamo' }));
+            throw new Error(error.message);
+        }
+    },
+
     delete: async (id: number): Promise<void> => {
         const response = await fetch(`${API_URL}/prestamos/${id}`, {
             method: 'DELETE',
             headers: getHeaders(),
         });
-        if (!response.ok) throw new Error('Error al eliminar préstamo');
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ message: 'Error' }));
+            throw new Error(error.message);
+        }
     },
 };
 
