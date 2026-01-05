@@ -80,23 +80,56 @@ function App() {
     setCurrentUser(null);
   };
 
-  const loadData = useCallback(async () => {
-    if (!isAuthenticated) { setLoading(false); return; }
+  // Flags para controlar si los datos ya fueron cargados
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+
+  // Cargar datos iniciales (una sola vez al autenticarse)
+  const loadInitialData = useCallback(async () => {
+    if (!isAuthenticated || initialDataLoaded) { setLoading(false); return; }
     try {
-      const [metricasData, prestamosData, clientesData, cobradoresData] = await Promise.all([
+      const [metricasData, prestamosData, clientesData, cobradoresData, usuariosData, balanceData] = await Promise.all([
         dashboardApi.getMetricas(),
-        prestamosApi.getAll({ estado: filtroEstado !== 'Todos' ? filtroEstado : undefined, frecuencia: filtroFrecuencia !== 'Todos' ? filtroFrecuencia : undefined, busqueda: filtroBusqueda || undefined, clienteId: filtroClienteId }),
+        prestamosApi.getAll({}),
         clientesApi.getAll(),
-        usuariosApi.getCobradores()
+        usuariosApi.getCobradores(),
+        usuariosApi.getAll(),
+        aportesApi.getBalance()
       ]);
       setMetricas(metricasData);
       setPrestamos(prestamosData);
       setClientes(clientesData);
       setCobradores(cobradoresData);
+      setUsuarios(usuariosData);
+      setBalanceSocios(balanceData);
+      setInitialDataLoaded(true);
     } catch (error) {
-      console.error('Error loading data:', error);
+      console.error('Error loading initial data:', error);
     } finally { setLoading(false); }
+  }, [isAuthenticated, initialDataLoaded]);
+
+  // Cargar préstamos con filtros (depende de los filtros aplicados)
+  const loadPrestamos = useCallback(async () => {
+    if (!isAuthenticated) return;
+    try {
+      const prestamosData = await prestamosApi.getAll({
+        estado: filtroEstado !== 'Todos' ? filtroEstado : undefined,
+        frecuencia: filtroFrecuencia !== 'Todos' ? filtroFrecuencia : undefined,
+        busqueda: filtroBusqueda || undefined,
+        clienteId: filtroClienteId
+      });
+      setPrestamos(prestamosData);
+    } catch (error) {
+      console.error('Error loading prestamos:', error);
+    }
   }, [isAuthenticated, filtroEstado, filtroFrecuencia, filtroBusqueda, filtroClienteId]);
+
+  // Recargar métricas del dashboard
+  const loadMetricas = async () => {
+    try {
+      const data = await dashboardApi.getMetricas();
+      setMetricas(data);
+    } catch (error) { console.error('Error loading metricas:', error); }
+  };
 
   const loadCobros = async () => {
     try {
@@ -105,32 +138,43 @@ function App() {
     } catch (error) { console.error('Error loading cobros:', error); }
   };
 
-  const loadBalanceSocios = async () => {
-    try {
-      const data = await aportesApi.getBalance();
-      setBalanceSocios(data);
-    } catch (error) { console.error('Error loading balance:', error); }
-  };
-
-  const loadUsuarios = async () => {
-    try {
-      const data = await usuariosApi.getAll();
-      setUsuarios(data);
-    } catch (error) { console.error('Error loading usuarios:', error); }
-  };
-
-  const loadClientes = async () => {
+  // Funciones para recargar datos específicos (solo cuando hay cambios)
+  const refreshClientes = async () => {
     try {
       const data = await clientesApi.getAll();
       setClientes(data);
-    } catch (error) { console.error('Error loading clientes:', error); }
+    } catch (error) { console.error('Error refreshing clientes:', error); }
   };
 
-  useEffect(() => { loadData(); }, [loadData]);
-  useEffect(() => { if (activeTab === 'cobros') loadCobros(); }, [activeTab]);
-  useEffect(() => { if (activeTab === 'socios') loadBalanceSocios(); }, [activeTab]);
-  useEffect(() => { if (activeTab === 'usuarios') loadUsuarios(); }, [activeTab]);
-  useEffect(() => { if (activeTab === 'clientes') loadClientes(); }, [activeTab]);
+  const refreshUsuarios = async () => {
+    try {
+      const data = await usuariosApi.getAll();
+      setUsuarios(data);
+    } catch (error) { console.error('Error refreshing usuarios:', error); }
+  };
+
+  const refreshCobradores = async () => {
+    try {
+      const data = await usuariosApi.getCobradores();
+      setCobradores(data);
+    } catch (error) { console.error('Error refreshing cobradores:', error); }
+  };
+
+  const refreshBalanceSocios = async () => {
+    try {
+      const data = await aportesApi.getBalance();
+      setBalanceSocios(data);
+    } catch (error) { console.error('Error refreshing balance:', error); }
+  };
+
+  // Cargar datos iniciales al autenticarse
+  useEffect(() => { loadInitialData(); }, [loadInitialData]);
+
+  // Cargar préstamos cuando cambian los filtros (después de la carga inicial)
+  useEffect(() => { if (initialDataLoaded) loadPrestamos(); }, [loadPrestamos, initialDataLoaded]);
+
+  // Cargar cobros cuando se va al tab de cobros
+  useEffect(() => { if (activeTab === 'cobros' && initialDataLoaded) loadCobros(); }, [activeTab, initialDataLoaded]);
 
   // Client search handler with debounce
   const handleClienteSearch = (value: string) => {
@@ -193,7 +237,7 @@ function App() {
       showToast('Cliente creado exitosamente', 'success');
       setShowClienteModal(false);
       setClienteForm({ nombre: '', cedula: '', telefono: '', direccion: '', email: '' });
-      loadData();
+      refreshClientes();
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
@@ -231,7 +275,7 @@ function App() {
       showToast('Préstamo creado exitosamente', 'success');
       setShowPrestamoModal(false);
       setPrestamoForm({ clienteId: 0, montoPrestado: 0, tasaInteres: 15, tipoInteres: 'Simple', frecuenciaPago: 'Quincenal', duracion: 3, unidadDuracion: 'Meses', fechaPrestamo: formatDateInput(new Date()), descripcion: '', cobradorId: undefined, porcentajeCobrador: 5 });
-      loadData();
+      await Promise.all([loadPrestamos(), loadMetricas()]);
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
@@ -262,7 +306,7 @@ function App() {
         setCuotasDetalle(cuotas);
         setPagosDetalle(pagos);
       }
-      loadData();
+      await Promise.all([loadPrestamos(), loadMetricas()]);
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
@@ -281,8 +325,7 @@ function App() {
       showToast('Usuario creado', 'success');
       setShowUsuarioModal(false);
       setUsuarioForm({ nombre: '', email: '', password: '', telefono: '', rol: 'Socio', porcentajeParticipacion: 0, tasaInteresMensual: 3 });
-      loadUsuarios();
-      loadData();
+      await Promise.all([refreshUsuarios(), refreshCobradores(), refreshBalanceSocios()]);
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
@@ -296,13 +339,13 @@ function App() {
       }
       showToast(aporteForm.tipo === 'aporte' ? 'Aporte registrado' : 'Retiro registrado', 'success');
       setShowAporteModal(false);
-      loadBalanceSocios();
+      refreshBalanceSocios();
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
   const handleDeletePrestamo = async (id: number) => {
     if (!confirm('¿Eliminar este préstamo?')) return;
-    try { await prestamosApi.delete(id); showToast('Préstamo eliminado', 'success'); loadData(); }
+    try { await prestamosApi.delete(id); showToast('Préstamo eliminado', 'success'); await Promise.all([loadPrestamos(), loadMetricas()]); }
     catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
