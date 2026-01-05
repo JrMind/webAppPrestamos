@@ -276,7 +276,15 @@ function App() {
         case 'clientes':
           console.log('📍 Tab: Clientes');
           if (clientes.length === 0 || !isCacheValid('clientes')) {
-            await refreshClientes();
+            console.log('🔄 Cargando clientes desde el backend...');
+            try {
+              const data = await clientesApi.getAll();
+              setClientes(data);
+              cacheRef.current.clientes = Date.now();
+              console.log('✅ Clientes cargados');
+            } catch (error) {
+              console.error('❌ Error loading clientes:', error);
+            }
           } else {
             console.log('📦 Usando clientes del caché');
           }
@@ -284,13 +292,33 @@ function App() {
 
         case 'cobros':
           console.log('📍 Tab: Cobros del Día');
-          await loadCobros();
+          if (!isCacheValid('cobrosHoy')) {
+            console.log('🔄 Cargando cobros desde el backend...');
+            try {
+              const data = await cobrosApi.getCobrosHoy();
+              setCobrosHoy(data);
+              cacheRef.current.cobrosHoy = Date.now();
+              console.log('✅ Cobros cargados');
+            } catch (error) {
+              console.error('❌ Error loading cobros:', error);
+            }
+          } else {
+            console.log('📦 Usando cobros del caché');
+          }
           break;
 
         case 'socios':
           console.log('📍 Tab: Socios/Aportadores');
           if (balanceSocios.length === 0 || !isCacheValid('balanceSocios')) {
-            await refreshBalanceSocios();
+            console.log('🔄 Cargando balance de socios desde el backend...');
+            try {
+              const data = await aportesApi.getBalance();
+              setBalanceSocios(data);
+              cacheRef.current.balanceSocios = Date.now();
+              console.log('✅ Balance cargado');
+            } catch (error) {
+              console.error('❌ Error loading balance:', error);
+            }
           } else {
             console.log('📦 Usando balance de socios del caché');
           }
@@ -299,7 +327,15 @@ function App() {
         case 'usuarios':
           console.log('📍 Tab: Usuarios');
           if (usuarios.length === 0 || !isCacheValid('usuarios')) {
-            await refreshUsuarios();
+            console.log('🔄 Cargando usuarios desde el backend...');
+            try {
+              const data = await usuariosApi.getAll();
+              setUsuarios(data);
+              cacheRef.current.usuarios = Date.now();
+              console.log('✅ Usuarios cargados');
+            } catch (error) {
+              console.error('❌ Error loading usuarios:', error);
+            }
           } else {
             console.log('📦 Usando usuarios del caché');
           }
@@ -308,7 +344,7 @@ function App() {
     };
 
     loadTabData();
-  }, [activeTab, initialDataLoaded]);
+  }, [activeTab, initialDataLoaded, clientes.length, balanceSocios.length, usuarios.length]);
 
   // Client search handler with debounce
   const handleClienteSearch = (value: string) => {
