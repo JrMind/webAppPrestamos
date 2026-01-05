@@ -353,7 +353,18 @@ function App() {
     const diasTotales = prestamoForm.duracion * (diasMap[prestamoForm.unidadDuracion] || 30);
     const frecuenciaDias: Record<string, number> = { Diario: 1, Semanal: 7, Quincenal: 15, Mensual: 30 };
     const diasEntreCuotas = frecuenciaDias[prestamoForm.frecuenciaPago] || 15;
-    let numeroCuotas = Math.ceil(diasTotales / diasEntreCuotas);
+
+    let numeroCuotas = 0;
+    // Ajuste específico de negocio para Meses (Sync con Backend)
+    if (prestamoForm.unidadDuracion === 'Meses') {
+      if (prestamoForm.frecuenciaPago === 'Semanal') numeroCuotas = prestamoForm.duracion * 4;
+      else if (prestamoForm.frecuenciaPago === 'Quincenal') numeroCuotas = prestamoForm.duracion * 2;
+      else if (prestamoForm.frecuenciaPago === 'Mensual') numeroCuotas = prestamoForm.duracion;
+    }
+
+    if (numeroCuotas === 0) {
+      numeroCuotas = Math.max(1, Math.ceil(diasTotales / diasEntreCuotas));
+    }
     let montoIntereses: number, montoTotal: number;
     if (prestamoForm.tipoInteres === 'Simple') {
       // Convertir días a meses (tasa es mensual)
