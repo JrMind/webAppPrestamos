@@ -364,3 +364,75 @@ export const balanceApi = {
         return handleResponse<MiBalance>(response);
     },
 };
+
+// Capital y Fuentes
+import type { BalanceCapital, AportadorExterno, CreateAportadorExternoDto, CreatePrestamoConFuentesDto, Socio } from './types';
+
+export const capitalApi = {
+    getBalance: async (): Promise<BalanceCapital> => {
+        const response = await fetch(`${API_URL}/capital/balance`, { headers: getHeaders() });
+        return handleResponse<BalanceCapital>(response);
+    },
+
+    getSocios: async (): Promise<Socio[]> => {
+        const response = await fetch(`${API_URL}/capital/socios`, { headers: getHeaders() });
+        return handleResponse<Socio[]>(response);
+    },
+};
+
+export const aportadoresExternosApi = {
+    getAll: async (): Promise<AportadorExterno[]> => {
+        const response = await fetch(`${API_URL}/aportadoresexternos`, { headers: getHeaders() });
+        return handleResponse<AportadorExterno[]>(response);
+    },
+
+    getById: async (id: number): Promise<AportadorExterno> => {
+        const response = await fetch(`${API_URL}/aportadoresexternos/${id}`, { headers: getHeaders() });
+        return handleResponse<AportadorExterno>(response);
+    },
+
+    create: async (data: CreateAportadorExternoDto): Promise<AportadorExterno> => {
+        const response = await fetch(`${API_URL}/aportadoresexternos`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return handleResponse<AportadorExterno>(response);
+    },
+
+    update: async (id: number, data: Partial<AportadorExterno>): Promise<void> => {
+        const response = await fetch(`${API_URL}/aportadoresexternos/${id}`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ message: 'Error' }));
+            throw new Error(error.message);
+        }
+    },
+
+    delete: async (id: number): Promise<void> => {
+        const response = await fetch(`${API_URL}/aportadoresexternos/${id}`, {
+            method: 'DELETE',
+            headers: getHeaders(),
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ message: 'Error' }));
+            throw new Error(error.message);
+        }
+    },
+};
+
+// Extender prestamosApi para crear con fuentes
+export const prestamosConFuentesApi = {
+    create: async (data: CreatePrestamoConFuentesDto): Promise<Prestamo> => {
+        const response = await fetch(`${API_URL}/prestamos/con-fuentes`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return handleResponse<Prestamo>(response);
+    },
+};
+

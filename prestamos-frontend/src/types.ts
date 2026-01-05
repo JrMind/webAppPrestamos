@@ -240,6 +240,7 @@ export interface DashboardMetricas {
   totalPrestado: number;
   totalACobrar: number;
   totalGanadoIntereses: number;
+  interesesProyectados: number; // NUEVO
   prestamosActivos: number;
   montoPrestamosActivos: number;
   cuotasVencidasHoy: number;
@@ -258,3 +259,76 @@ export interface DashboardMetricas {
   dineroCirculando: number;
   reservaDisponible: number;
 }
+
+// Aportador Externo
+export interface AportadorExterno {
+  id: number;
+  nombre: string;
+  telefono?: string;
+  email?: string;
+  tasaInteres: number;
+  diasParaPago: number;
+  montoTotalAportado: number;
+  montoPagado: number;
+  saldoPendiente: number;
+  estado: string;
+  fechaCreacion: string;
+  notas?: string;
+}
+
+export interface CreateAportadorExternoDto {
+  nombre: string;
+  telefono?: string;
+  email?: string;
+  tasaInteres: number;
+  diasParaPago: number;
+  notas?: string;
+}
+
+// Fuente de Capital para préstamos
+export interface FuenteCapital {
+  tipo: 'Reserva' | 'Interno' | 'Externo';
+  usuarioId?: number;
+  aportadorExternoId?: number;
+  montoAportado: number;
+}
+
+// Socio interno
+export interface Socio {
+  id: number;
+  nombre: string;
+  telefono?: string;
+  rol: string;
+  tasaInteresMensual: number;
+  porcentajeParticipacion: number;
+  capitalActual: number;
+  gananciasAcumuladas: number;
+  saldoTotal: number;
+  ultimoCalculoInteres?: string;
+}
+
+// Balance de capital para crear préstamos
+export interface BalanceCapital {
+  reservaDisponible: number;
+  totalCobrado: number;
+  capitalUsadoDeReserva: number;
+  socios: Socio[];
+  aportadoresExternos: AportadorExterno[];
+}
+
+// DTO para crear préstamo con fuentes
+export interface CreatePrestamoConFuentesDto {
+  clienteId: number;
+  montoPrestado: number;
+  tasaInteres: number;
+  tipoInteres: string;
+  frecuenciaPago: string;
+  duracion: number;
+  unidadDuracion: string;
+  fechaPrestamo: string;
+  descripcion?: string;
+  cobradorId?: number;
+  porcentajeCobrador: number;
+  fuentesCapital: FuenteCapital[];
+}
+

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken } from './api';
-import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, CobrosHoy, BalanceSocio } from './types';
+import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi } from './api';
+import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, CobrosHoy, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto } from './types';
 import './App.css';
 
 const formatMoney = (amount: number): string => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount);
@@ -15,7 +15,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'socios' | 'usuarios'>('prestamos');
+  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'socios' | 'usuarios' | 'aportadores'>('prestamos');
 
   // Data states
   const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
@@ -23,6 +23,9 @@ function App() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [cobrosHoy, setCobrosHoy] = useState<CobrosHoy | null>(null);
   const [balanceSocios, setBalanceSocios] = useState<BalanceSocio[]>([]);
+  const [aportadoresExternos, setAportadoresExternos] = useState<AportadorExterno[]>([]);
+  const [showAportadorModal, setShowAportadorModal] = useState(false);
+  const [aportadorForm, setAportadorForm] = useState<CreateAportadorExternoDto>({ nombre: '', telefono: '', email: '', tasaInteres: 3, diasParaPago: 30, notas: '' });
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
 
   // Filters
@@ -56,6 +59,11 @@ function App() {
   const [selectedCobrador, setSelectedCobrador] = useState<Cobrador | null>(null);
   const [showCobradorDropdown, setShowCobradorDropdown] = useState(false);
   const cobradorSearchTimeoutRef = useRef<number | null>(null);
+
+  // Fuentes de capital state
+  const [balanceCapital, setBalanceCapital] = useState<BalanceCapital | null>(null);
+  const [fuentesCapital, setFuentesCapital] = useState<FuenteCapital[]>([]);
+  const [showFuentesSection, setShowFuentesSection] = useState(false);
 
   // Login form
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -133,6 +141,40 @@ function App() {
   useEffect(() => { if (activeTab === 'socios') loadBalanceSocios(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'usuarios') loadUsuarios(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'clientes') loadClientes(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'aportadores') loadAportadoresExternos(); }, [activeTab]);
+
+  const loadAportadoresExternos = async () => {
+    try {
+      const data = await aportadoresExternosApi.getAll();
+      setAportadoresExternos(data);
+    } catch (error) {
+      console.error('Error loading aportadores:', error);
+    }
+  };
+
+  const handleCreateAportador = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await aportadoresExternosApi.create(aportadorForm);
+      showToast('Aportador creado exitosamente', 'success');
+      setShowAportadorModal(false);
+      setAportadorForm({ nombre: '', telefono: '', email: '', tasaInteres: 3, diasParaPago: 30, notas: '' });
+      loadAportadoresExternos();
+    } catch (error: unknown) {
+      showToast(error instanceof Error ? error.message : 'Error', 'error');
+    }
+  };
+
+  const handleDeleteAportador = async (id: number) => {
+    if (!confirm('¿Está seguro de eliminar este aportador?')) return;
+    try {
+      await aportadoresExternosApi.delete(id);
+      showToast('Aportador eliminado', 'success');
+      loadAportadoresExternos();
+    } catch (error: unknown) {
+      showToast(error instanceof Error ? error.message : 'Error al eliminar', 'error');
+    }
+  };
 
   // Client search handler with debounce
   const handleClienteSearch = (value: string) => {
@@ -240,6 +282,45 @@ function App() {
     }
   };
 
+  // Fuentes de Capital functions
+  const loadBalanceCapital = async () => {
+    try {
+      const balance = await capitalApi.getBalance();
+      setBalanceCapital(balance);
+    } catch (error) {
+      console.error('Error loading balance:', error);
+    }
+  };
+
+  const openPrestamoModalWithBalance = async () => {
+    await loadBalanceCapital();
+    setFuentesCapital([]);
+    setShowFuentesSection(false);
+    setShowPrestamoModal(true);
+  };
+
+  const addFuenteCapital = (tipo: 'Reserva' | 'Interno' | 'Externo', usuarioId?: number, aportadorExternoId?: number) => {
+    const newFuente: FuenteCapital = {
+      tipo,
+      usuarioId: tipo === 'Interno' ? usuarioId : undefined,
+      aportadorExternoId: tipo === 'Externo' ? aportadorExternoId : undefined,
+      montoAportado: 0
+    };
+    setFuentesCapital([...fuentesCapital, newFuente]);
+  };
+
+  const updateFuenteMonto = (index: number, monto: number) => {
+    const updated = [...fuentesCapital];
+    updated[index].montoAportado = monto;
+    setFuentesCapital(updated);
+  };
+
+  const removeFuente = (index: number) => {
+    setFuentesCapital(fuentesCapital.filter((_, i) => i !== index));
+  };
+
+  const totalFuentesAsignado = fuentesCapital.reduce((sum, f) => sum + f.montoAportado, 0);
+
   // Forms
   const [clienteForm, setClienteForm] = useState<CreateClienteDto>({ nombre: '', cedula: '', telefono: '', direccion: '', email: '' });
   const [prestamoForm, setPrestamoForm] = useState<CreatePrestamoDto>({
@@ -295,11 +376,44 @@ function App() {
   const handleCreatePrestamo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prestamoForm.clienteId) { showToast('Seleccione un cliente', 'warning'); return; }
+
+    // Validar fuentes de capital si están configuradas
+    if (fuentesCapital.length > 0) {
+      const totalAsignado = fuentesCapital.reduce((sum, f) => sum + f.montoAportado, 0);
+      if (totalAsignado !== prestamoForm.montoPrestado) {
+        showToast(`El total de fuentes (${formatMoney(totalAsignado)}) debe ser igual al monto prestado (${formatMoney(prestamoForm.montoPrestado)})`, 'warning');
+        return;
+      }
+    }
+
     try {
-      await prestamosApi.create(prestamoForm);
+      // Si hay fuentes configuradas, usar el endpoint con fuentes
+      if (fuentesCapital.length > 0) {
+        await prestamosConFuentesApi.create({
+          clienteId: prestamoForm.clienteId,
+          montoPrestado: prestamoForm.montoPrestado,
+          tasaInteres: prestamoForm.tasaInteres,
+          tipoInteres: prestamoForm.tipoInteres,
+          frecuenciaPago: prestamoForm.frecuenciaPago,
+          duracion: prestamoForm.duracion,
+          unidadDuracion: prestamoForm.unidadDuracion,
+          fechaPrestamo: prestamoForm.fechaPrestamo,
+          descripcion: prestamoForm.descripcion,
+          cobradorId: prestamoForm.cobradorId,
+          porcentajeCobrador: prestamoForm.porcentajeCobrador,
+          fuentesCapital: fuentesCapital
+        });
+      } else {
+        // Sin fuentes, usar el endpoint normal
+        await prestamosApi.create(prestamoForm);
+      }
+
       showToast('Préstamo creado exitosamente', 'success');
       setShowPrestamoModal(false);
       setPrestamoForm({ clienteId: 0, montoPrestado: 0, tasaInteres: 15, tipoInteres: 'Simple', frecuenciaPago: 'Quincenal', duracion: 3, unidadDuracion: 'Meses', fechaPrestamo: formatDateInput(new Date()), descripcion: '', cobradorId: undefined, porcentajeCobrador: 5 });
+      setFuentesCapital([]);
+      setSelectedCliente(null);
+      setClienteSearch('');
       loadData();
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
@@ -417,7 +531,7 @@ function App() {
         <div className="header-right">
           <div className="header-stat"><span>Activos</span><strong>{metricas?.prestamosActivos || 0}</strong></div>
           <button className="btn btn-secondary" onClick={() => setShowClienteModal(true)}>+ Cliente</button>
-          <button className="btn btn-primary" onClick={() => setShowPrestamoModal(true)}>+ Préstamo</button>
+          <button className="btn btn-primary" onClick={openPrestamoModalWithBalance}>+ Préstamo</button>
           <button className="btn btn-danger" onClick={handleLogout}>Salir</button>
         </div>
       </header>
@@ -435,7 +549,8 @@ function App() {
         <div className="kpi-grid">
           <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Total Prestado</span></div><span className="kpi-value">{formatMoney(metricas?.totalPrestado || 0)}</span></div>
           <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Total Cobrado</span></div><span className="kpi-value">{formatMoney(metricas?.totalCobrado || 0)}</span></div>
-          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Intereses Ganados</span></div><span className="kpi-value">{formatMoney(metricas?.totalGanadoIntereses || 0)}</span></div>
+          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Intereses Ganados</span></div><span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(metricas?.totalGanadoIntereses || 0)}</span></div>
+          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Intereses Proyectados</span></div><span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(metricas?.interesesProyectados || 0)}</span></div>
           <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Cuotas Vencidas</span></div><span className="kpi-value">{metricas?.cuotasVencidasHoy || 0}</span></div>
         </div>
 
@@ -486,6 +601,7 @@ function App() {
             <button className={`tab ${activeTab === 'cobros' ? 'active' : ''}`} onClick={() => setActiveTab('cobros')}>Cobros del Día</button>
             <button className={`tab ${activeTab === 'socios' ? 'active' : ''}`} onClick={() => setActiveTab('socios')}>Socios/Aportadores</button>
             <button className={`tab ${activeTab === 'usuarios' ? 'active' : ''}`} onClick={() => setActiveTab('usuarios')}>Usuarios</button>
+            <button className={`tab ${activeTab === 'aportadores' ? 'active' : ''}`} onClick={() => setActiveTab('aportadores')}>Aportadores Ext</button>
           </div>
 
           {/* Prestamos Tab */}
@@ -636,6 +752,34 @@ function App() {
               </div>
             </div>
           )}
+
+          {/* Aportadores Externos Tab */}
+          {activeTab === 'aportadores' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+                <button className="btn btn-primary" onClick={() => setShowAportadorModal(true)}>+ Nuevo Aportador</button>
+              </div>
+              <div className="table-container">
+                <table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Tasa %</th><th>Días Pago</th><th>Aportado</th><th>Pagado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>
+                  <tbody>{aportadoresExternos.map(a => (
+                    <tr key={a.id}>
+                      <td><strong>{a.nombre}</strong></td>
+                      <td>{a.telefono || '-'}</td>
+                      <td>{a.tasaInteres}%</td>
+                      <td>{a.diasParaPago}</td>
+                      <td>{formatMoney(a.montoTotalAportado)}</td>
+                      <td style={{ color: '#10b981' }}>{formatMoney(a.montoPagado)}</td>
+                      <td style={{ color: a.saldoPendiente > 0 ? '#ef4444' : '#10b981' }}>{formatMoney(a.saldoPendiente)}</td>
+                      <td><span className={`badge ${a.estado === 'Activo' ? 'badge-green' : 'badge-gray'}`}>{a.estado}</span></td>
+                      <td>
+                        <button className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }} onClick={() => handleDeleteAportador(a.id)}>Eliminar</button>
+                      </td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </main>
 
@@ -757,6 +901,84 @@ function App() {
                   {prestamoForm.tasaInteres >= 15 && <div className="form-group"><label>% Cobrador</label><input type="number" min="0" max="15" step="0.5" value={prestamoForm.porcentajeCobrador} onChange={e => setPrestamoForm({ ...prestamoForm, porcentajeCobrador: Number(e.target.value) })} /></div>}
                   <div className="form-group"><label>Fecha *</label><input type="date" required value={prestamoForm.fechaPrestamo} onChange={e => setPrestamoForm({ ...prestamoForm, fechaPrestamo: e.target.value })} /></div>
                 </div>
+
+                {/* Sección de Fuentes de Capital */}
+                {prestamoForm.montoPrestado > 0 && (
+                  <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--background)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                      <h4 style={{ margin: 0 }}>💰 Fuentes del Capital ({formatMoney(prestamoForm.montoPrestado)})</h4>
+                      <button type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.25rem 0.5rem' }} onClick={() => setShowFuentesSection(!showFuentesSection)}>
+                        {showFuentesSection ? 'Ocultar' : 'Configurar'}
+                      </button>
+                    </div>
+
+                    {balanceCapital && (
+                      <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.75rem', fontSize: '0.85rem' }}>
+                        <span style={{ color: '#10b981' }}>Reserva: {formatMoney(balanceCapital.reservaDisponible)}</span>
+                        <span style={{ color: '#3b82f6' }}>Socios: {balanceCapital.socios.length}</span>
+                        <span style={{ color: '#f59e0b' }}>Aportadores: {balanceCapital.aportadoresExternos.length}</span>
+                      </div>
+                    )}
+
+                    {showFuentesSection && (
+                      <>
+                        {/* Lista de fuentes agregadas */}
+                        {fuentesCapital.map((fuente, index) => (
+                          <div key={index} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem', padding: '0.5rem', background: 'var(--surface)', borderRadius: '6px' }}>
+                            <span style={{ minWidth: '80px', fontWeight: 500, color: fuente.tipo === 'Reserva' ? '#10b981' : fuente.tipo === 'Interno' ? '#3b82f6' : '#f59e0b' }}>
+                              {fuente.tipo}
+                            </span>
+                            {fuente.tipo === 'Interno' && balanceCapital && (
+                              <span style={{ flex: 1, fontSize: '0.85rem' }}>
+                                {balanceCapital.socios.find(s => s.id === fuente.usuarioId)?.nombre || 'Socio'}
+                              </span>
+                            )}
+                            {fuente.tipo === 'Externo' && balanceCapital && (
+                              <span style={{ flex: 1, fontSize: '0.85rem' }}>
+                                {balanceCapital.aportadoresExternos.find(a => a.id === fuente.aportadorExternoId)?.nombre || 'Aportador'}
+                              </span>
+                            )}
+                            <input
+                              type="number"
+                              min="0"
+                              value={fuente.montoAportado || ''}
+                              onChange={e => updateFuenteMonto(index, Number(e.target.value))}
+                              style={{ width: '120px' }}
+                              placeholder="Monto"
+                            />
+                            <button type="button" onClick={() => removeFuente(index)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '1.2rem' }}>×</button>
+                          </div>
+                        ))}
+
+                        {/* Botones para agregar fuentes */}
+                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
+                          <button type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }} onClick={() => addFuenteCapital('Reserva')}>
+                            + Reserva
+                          </button>
+                          {balanceCapital?.socios.map(socio => (
+                            <button key={socio.id} type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }} onClick={() => addFuenteCapital('Interno', socio.id)}>
+                              + {socio.nombre}
+                            </button>
+                          ))}
+                          {balanceCapital?.aportadoresExternos.map(aportador => (
+                            <button key={aportador.id} type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem', borderColor: '#f59e0b' }} onClick={() => addFuenteCapital('Externo', undefined, aportador.id)}>
+                              + {aportador.nombre} (Ext)
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Total asignado */}
+                        <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'space-between', padding: '0.5rem', background: totalFuentesAsignado === prestamoForm.montoPrestado ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', borderRadius: '6px' }}>
+                          <span>Total asignado:</span>
+                          <strong style={{ color: totalFuentesAsignado === prestamoForm.montoPrestado ? '#10b981' : '#ef4444' }}>
+                            {formatMoney(totalFuentesAsignado)} / {formatMoney(prestamoForm.montoPrestado)}
+                          </strong>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+
                 {preview && <div className="preview-card"><h4>Vista Previa</h4><div className="preview-grid"><div className="preview-item"><span>Cuotas</span><strong>{preview.numeroCuotas}</strong></div><div className="preview-item"><span>Intereses</span><strong style={{ color: '#10b981' }}>{formatMoney(preview.montoIntereses)}</strong></div><div className="preview-item"><span>Total</span><strong>{formatMoney(preview.montoTotal)}</strong></div><div className="preview-item"><span>Por Cuota</span><strong style={{ color: '#3b82f6' }}>{formatMoney(preview.montoCuota)}</strong></div></div></div>}
               </div>
               <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowPrestamoModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">Crear</button></div>
@@ -924,6 +1146,28 @@ function App() {
                 </div>
               </div>
               <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowAporteModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">Registrar</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Nuevo Aportador Externo */}
+      {showAportadorModal && (
+        <div className="modal-overlay" onClick={() => setShowAportadorModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header"><h2>Nuevo Aportador Externo</h2><button className="modal-close" onClick={() => setShowAportadorModal(false)}>×</button></div>
+            <form onSubmit={handleCreateAportador}>
+              <div className="modal-body">
+                <div className="form-grid">
+                  <div className="form-group full-width"><label>Nombre *</label><input type="text" required value={aportadorForm.nombre} onChange={e => setAportadorForm({ ...aportadorForm, nombre: e.target.value })} /></div>
+                  <div className="form-group"><label>Teléfono</label><input type="tel" value={aportadorForm.telefono || ''} onChange={e => setAportadorForm({ ...aportadorForm, telefono: e.target.value })} /></div>
+                  <div className="form-group"><label>Email</label><input type="email" value={aportadorForm.email || ''} onChange={e => setAportadorForm({ ...aportadorForm, email: e.target.value })} /></div>
+                  <div className="form-group"><label>Tasa Interés (%)</label><input type="number" min="0" step="0.5" value={aportadorForm.tasaInteres} onChange={e => setAportadorForm({ ...aportadorForm, tasaInteres: Number(e.target.value) })} /></div>
+                  <div className="form-group"><label>Días para Pago</label><input type="number" min="1" value={aportadorForm.diasParaPago} onChange={e => setAportadorForm({ ...aportadorForm, diasParaPago: Number(e.target.value) })} /></div>
+                  <div className="form-group full-width"><label>Notas</label><textarea value={aportadorForm.notas || ''} onChange={e => setAportadorForm({ ...aportadorForm, notas: e.target.value })} rows={2}></textarea></div>
+                </div>
+              </div>
+              <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowAportadorModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">Crear</button></div>
             </form>
           </div>
         </div>
