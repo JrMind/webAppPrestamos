@@ -42,13 +42,26 @@ public class DashboardController : ControllerBase
             .Where(p => p.EstadoPrestamo == "Activo")
             .SumAsync(p => p.MontoPrestado);
 
-        // Flujo de Capital
+        // Flujo de Capital - CORRECCIÓN
         var totalCobrado = await _context.Pagos.SumAsync(p => p.MontoPago);
-        // Dinero circulando = Capital prestado que aún no se ha recuperado
-        var dineroCirculando = totalPrestado - totalCobrado;
-        if (dineroCirculando < 0) dineroCirculando = 0;
-        // Reserva disponible = Cuotas cobradas menos el capital prestado = dinero disponible para prestar
-        var reservaDisponible = totalCobrado - totalPrestado;
+        
+        // Saldo pendiente de préstamos activos (lo que falta por cobrar)
+        var saldoPendienteActivos = await _context.CuotasPrestamo
+            .Include(c => c.Prestamo)
+            .Where(c => c.Prestamo!.EstadoPrestamo == "Activo")
+            .SumAsync(c => c.SaldoPendiente);
+        
+        // Dinero circulando = Lo que está prestado y aún no se ha cobrado (saldo pendiente)
+        var dineroCirculando = saldoPendienteActivos;
+        
+        // Capital usado de la reserva para préstamos activos
+        var capitalUsadoDeReserva = await _context.FuentesCapitalPrestamo
+            .Include(f => f.Prestamo)
+            .Where(f => f.Tipo == "Reserva" && f.Prestamo!.EstadoPrestamo == "Activo")
+            .SumAsync(f => f.MontoAportado);
+        
+        // Reserva disponible = Total cobrado - Lo que ya se usó de la reserva para préstamos activos
+        var reservaDisponible = totalCobrado - capitalUsadoDeReserva;
         if (reservaDisponible < 0) reservaDisponible = 0;
 
         // Cuotas vencidas hoy - comparar solo la parte de fecha
