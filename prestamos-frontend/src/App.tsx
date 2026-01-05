@@ -55,6 +55,30 @@ function App() {
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
   const [loginError, setLoginError] = useState('');
 
+  // Sistema de caché con timestamps
+  const cacheRef = useRef<{
+    metricas?: number;
+    prestamos?: number;
+    clientes?: number;
+    cobradores?: number;
+    usuarios?: number;
+    balanceSocios?: number;
+    cobrosHoy?: number;
+  }>({});
+
+  // Tiempo de caché en milisegundos (5 minutos)
+  const CACHE_TIME = 5 * 60 * 1000;
+
+  // Función para verificar si el caché es válido
+  const isCacheValid = (key: keyof typeof cacheRef.current): boolean => {
+    const timestamp = cacheRef.current[key];
+    if (!timestamp) return false;
+    return Date.now() - timestamp < CACHE_TIME;
+  };
+
+  // Flags para controlar si los datos ya fueron cargados
+  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
+
   const showToast = (message: string, type: Toast['type']) => {
     const id = Date.now();
     setToasts(prev => [...prev, { id, message, type }]);
@@ -78,15 +102,18 @@ function App() {
     authApi.logout();
     setIsAuthenticated(false);
     setCurrentUser(null);
+    setInitialDataLoaded(false);
+    // Limpiar caché
+    cacheRef.current = {};
+    console.log('🚪 Sesión cerrada y caché limpiado');
   };
-
-  // Flags para controlar si los datos ya fueron cargados
-  const [initialDataLoaded, setInitialDataLoaded] = useState(false);
 
   // Cargar datos iniciales (una sola vez al autenticarse)
   const loadInitialData = useCallback(async () => {
     if (!isAuthenticated || initialDataLoaded) { setLoading(false); return; }
+    setLoading(true);
     try {
+      console.log('🔄 Cargando datos iniciales del backend...');
       const [metricasData, prestamosData, clientesData, cobradoresData, usuariosData, balanceData] = await Promise.all([
         dashboardApi.getMetricas(),
         prestamosApi.getAll({}),
@@ -95,16 +122,34 @@ function App() {
         usuariosApi.getAll(),
         aportesApi.getBalance()
       ]);
+
+      // Actualizar estado y caché
       setMetricas(metricasData);
       setPrestamos(prestamosData);
       setClientes(clientesData);
       setCobradores(cobradoresData);
       setUsuarios(usuariosData);
       setBalanceSocios(balanceData);
+
+      // Actualizar timestamps del caché
+      const now = Date.now();
+      cacheRef.current = {
+        metricas: now,
+        prestamos: now,
+        clientes: now,
+        cobradores: now,
+        usuarios: now,
+        balanceSocios: now
+      };
+
       setInitialDataLoaded(true);
+      console.log('✅ Datos iniciales cargados correctamente');
     } catch (error) {
-      console.error('Error loading initial data:', error);
-    } finally { setLoading(false); }
+      console.error('❌ Error loading initial data:', error);
+      showToast('Error al cargar datos iniciales', 'error');
+    } finally {
+      setLoading(false);
+    }
   }, [isAuthenticated, initialDataLoaded]);
 
   // Cargar préstamos con filtros (depende de los filtros aplicados)
@@ -123,48 +168,92 @@ function App() {
     }
   }, [isAuthenticated, filtroEstado, filtroFrecuencia, filtroBusqueda, filtroClienteId]);
 
-  // Recargar métricas del dashboard
-  const loadMetricas = async () => {
+  // Recargar métricas del dashboard (forzar recarga sin caché)
+  const loadMetricas = async (force = false) => {
+    if (!force && isCacheValid('metricas')) {
+      console.log('📦 Usando métricas del caché');
+      return;
+    }
     try {
+      console.log('🔄 Recargando métricas...');
       const data = await dashboardApi.getMetricas();
       setMetricas(data);
-    } catch (error) { console.error('Error loading metricas:', error); }
+      cacheRef.current.metricas = Date.now();
+      console.log('✅ Métricas actualizadas');
+    } catch (error) {
+      console.error('❌ Error loading metricas:', error);
+      showToast('Error al cargar métricas', 'error');
+    }
   };
 
-  const loadCobros = async () => {
+  const loadCobros = async (force = false) => {
+    if (!force && isCacheValid('cobrosHoy')) {
+      console.log('📦 Usando cobros del caché');
+      return;
+    }
     try {
+      console.log('🔄 Cargando cobros del día...');
       const data = await cobrosApi.getCobrosHoy();
       setCobrosHoy(data);
-    } catch (error) { console.error('Error loading cobros:', error); }
+      cacheRef.current.cobrosHoy = Date.now();
+      console.log('✅ Cobros cargados');
+    } catch (error) {
+      console.error('❌ Error loading cobros:', error);
+      showToast('Error al cargar cobros', 'error');
+    }
   };
 
   // Funciones para recargar datos específicos (solo cuando hay cambios)
   const refreshClientes = async () => {
     try {
+      console.log('🔄 Refrescando clientes...');
       const data = await clientesApi.getAll();
       setClientes(data);
-    } catch (error) { console.error('Error refreshing clientes:', error); }
+      cacheRef.current.clientes = Date.now();
+      console.log('✅ Clientes actualizados');
+    } catch (error) {
+      console.error('❌ Error refreshing clientes:', error);
+      showToast('Error al actualizar clientes', 'error');
+    }
   };
 
   const refreshUsuarios = async () => {
     try {
+      console.log('🔄 Refrescando usuarios...');
       const data = await usuariosApi.getAll();
       setUsuarios(data);
-    } catch (error) { console.error('Error refreshing usuarios:', error); }
+      cacheRef.current.usuarios = Date.now();
+      console.log('✅ Usuarios actualizados');
+    } catch (error) {
+      console.error('❌ Error refreshing usuarios:', error);
+      showToast('Error al actualizar usuarios', 'error');
+    }
   };
 
   const refreshCobradores = async () => {
     try {
+      console.log('🔄 Refrescando cobradores...');
       const data = await usuariosApi.getCobradores();
       setCobradores(data);
-    } catch (error) { console.error('Error refreshing cobradores:', error); }
+      cacheRef.current.cobradores = Date.now();
+      console.log('✅ Cobradores actualizados');
+    } catch (error) {
+      console.error('❌ Error refreshing cobradores:', error);
+      showToast('Error al actualizar cobradores', 'error');
+    }
   };
 
   const refreshBalanceSocios = async () => {
     try {
+      console.log('🔄 Refrescando balance de socios...');
       const data = await aportesApi.getBalance();
       setBalanceSocios(data);
-    } catch (error) { console.error('Error refreshing balance:', error); }
+      cacheRef.current.balanceSocios = Date.now();
+      console.log('✅ Balance actualizado');
+    } catch (error) {
+      console.error('❌ Error refreshing balance:', error);
+      showToast('Error al actualizar balance', 'error');
+    }
   };
 
   // Cargar datos iniciales al autenticarse
@@ -173,8 +262,53 @@ function App() {
   // Cargar préstamos cuando cambian los filtros (después de la carga inicial)
   useEffect(() => { if (initialDataLoaded) loadPrestamos(); }, [loadPrestamos, initialDataLoaded]);
 
-  // Cargar cobros cuando se va al tab de cobros
-  useEffect(() => { if (activeTab === 'cobros' && initialDataLoaded) loadCobros(); }, [activeTab, initialDataLoaded]);
+  // Cargar datos cuando se cambia de tab (con caché inteligente)
+  useEffect(() => {
+    if (!initialDataLoaded) return;
+
+    const loadTabData = async () => {
+      switch (activeTab) {
+        case 'prestamos':
+          console.log('📍 Tab: Préstamos');
+          // Los préstamos ya se cargan con loadPrestamos
+          break;
+
+        case 'clientes':
+          console.log('📍 Tab: Clientes');
+          if (!isCacheValid('clientes') && clientes.length === 0) {
+            await refreshClientes();
+          } else {
+            console.log('📦 Usando clientes del caché');
+          }
+          break;
+
+        case 'cobros':
+          console.log('📍 Tab: Cobros del Día');
+          await loadCobros();
+          break;
+
+        case 'socios':
+          console.log('📍 Tab: Socios/Aportadores');
+          if (!isCacheValid('balanceSocios') && balanceSocios.length === 0) {
+            await refreshBalanceSocios();
+          } else {
+            console.log('📦 Usando balance de socios del caché');
+          }
+          break;
+
+        case 'usuarios':
+          console.log('📍 Tab: Usuarios');
+          if (!isCacheValid('usuarios') && usuarios.length === 0) {
+            await refreshUsuarios();
+          } else {
+            console.log('📦 Usando usuarios del caché');
+          }
+          break;
+      }
+    };
+
+    loadTabData();
+  }, [activeTab, initialDataLoaded]);
 
   // Client search handler with debounce
   const handleClienteSearch = (value: string) => {
@@ -275,7 +409,7 @@ function App() {
       showToast('Préstamo creado exitosamente', 'success');
       setShowPrestamoModal(false);
       setPrestamoForm({ clienteId: 0, montoPrestado: 0, tasaInteres: 15, tipoInteres: 'Simple', frecuenciaPago: 'Quincenal', duracion: 3, unidadDuracion: 'Meses', fechaPrestamo: formatDateInput(new Date()), descripcion: '', cobradorId: undefined, porcentajeCobrador: 5 });
-      await Promise.all([loadPrestamos(), loadMetricas()]);
+      await Promise.all([loadPrestamos(), loadMetricas(true)]);
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
@@ -306,7 +440,7 @@ function App() {
         setCuotasDetalle(cuotas);
         setPagosDetalle(pagos);
       }
-      await Promise.all([loadPrestamos(), loadMetricas()]);
+      await Promise.all([loadPrestamos(), loadMetricas(true)]);
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
@@ -314,7 +448,7 @@ function App() {
     try {
       await cobrosApi.marcarCobrado(cuotaId, cobrado);
       showToast(cobrado ? 'Cuota marcada como cobrada' : 'Marca removida', 'success');
-      loadCobros();
+      await Promise.all([loadCobros(true), loadMetricas(true)]);
     } catch { showToast('Error al marcar cuota', 'error'); }
   };
 
@@ -345,7 +479,7 @@ function App() {
 
   const handleDeletePrestamo = async (id: number) => {
     if (!confirm('¿Eliminar este préstamo?')) return;
-    try { await prestamosApi.delete(id); showToast('Préstamo eliminado', 'success'); await Promise.all([loadPrestamos(), loadMetricas()]); }
+    try { await prestamosApi.delete(id); showToast('Préstamo eliminado', 'success'); await Promise.all([loadPrestamos(), loadMetricas(true)]); }
     catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
