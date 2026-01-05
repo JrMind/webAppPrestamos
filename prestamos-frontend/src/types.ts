@@ -164,6 +164,7 @@ export interface CreatePrestamoDto {
   descripcion?: string;
   cobradorId?: number;
   porcentajeCobrador: number;
+  diaSemana?: string; // Para frecuencia Semanal: Lunes, Martes, etc.
 }
 
 export interface Cuota {

@@ -74,7 +74,8 @@ public record CreatePrestamoDto(
     DateTime FechaPrestamo,
     string? Descripcion,
     int? CobradorId = null,
-    decimal PorcentajeCobrador = 5
+    decimal PorcentajeCobrador = 5,
+    string? DiaSemana = null // Para Semanal: Lunes, Martes, etc.
 );
 
 public record UpdatePrestamoDto(

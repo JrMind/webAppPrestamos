@@ -894,7 +894,21 @@ function App() {
                       )}
                     </div>
                   </div>
-                  {prestamoForm.tasaInteres >= 15 && <div className="form-group"><label>% Cobrador</label><input type="number" min="0" max="15" step="0.5" value={prestamoForm.porcentajeCobrador} onChange={e => setPrestamoForm({ ...prestamoForm, porcentajeCobrador: Number(e.target.value) })} /></div>}
+                  <div className="form-group"><label>% Cobrador</label><input type="number" min="0" max="15" step="0.5" value={prestamoForm.porcentajeCobrador} onChange={e => setPrestamoForm({ ...prestamoForm, porcentajeCobrador: Number(e.target.value) })} /></div>
+                  {prestamoForm.frecuenciaPago === 'Semanal' && (
+                    <div className="form-group">
+                      <label>Día de pago *</label>
+                      <select value={(prestamoForm as any).diaSemana || 'Lunes'} onChange={e => setPrestamoForm({ ...prestamoForm, diaSemana: e.target.value } as any)}>
+                        <option>Lunes</option>
+                        <option>Martes</option>
+                        <option>Miércoles</option>
+                        <option>Jueves</option>
+                        <option>Viernes</option>
+                        <option>Sábado</option>
+                        <option>Domingo</option>
+                      </select>
+                    </div>
+                  )}
                   <div className="form-group"><label>Fecha *</label><input type="date" required value={prestamoForm.fechaPrestamo} onChange={e => setPrestamoForm({ ...prestamoForm, fechaPrestamo: e.target.value })} /></div>
                 </div>
 

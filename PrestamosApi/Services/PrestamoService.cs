@@ -59,7 +59,7 @@ public class PrestamoService : IPrestamoService
         
         for (int i = 1; i <= prestamo.NumeroCuotas; i++)
         {
-            DateTime fechaCobro = CalcularFechaCuota(prestamo.FechaPrestamo, prestamo.FrecuenciaPago, i);
+            DateTime fechaCobro = CalcularFechaCuota(prestamo.FechaPrestamo, prestamo.FrecuenciaPago, i, prestamo.DiaSemana);
             
             cuotas.Add(new CuotaPrestamo
             {
@@ -113,18 +113,55 @@ public class PrestamoService : IPrestamoService
         };
     }
 
-    private DateTime CalcularFechaCuota(DateTime fechaInicial, string frecuenciaPago, int numeroCuota)
+    private DateTime CalcularFechaCuota(DateTime fechaInicial, string frecuenciaPago, int numeroCuota, string? diaSemana = null)
     {
-        var fecha = frecuenciaPago switch
+        DateTime fecha;
+        
+        if (frecuenciaPago == "Semanal" && !string.IsNullOrEmpty(diaSemana))
         {
-            "Diario" => fechaInicial.AddDays(numeroCuota),
-            "Semanal" => fechaInicial.AddDays(numeroCuota * 7),
-            "Quincenal" => CalcularFechaQuincenal(fechaInicial, numeroCuota),
-            "Mensual" => CalcularFechaMensual(fechaInicial, numeroCuota),
-            _ => fechaInicial.AddDays(numeroCuota * 30)
-        };
+            // Calcular basado en día de semana específico
+            fecha = CalcularFechaSemanalPorDia(fechaInicial, numeroCuota, diaSemana);
+        }
+        else
+        {
+            fecha = frecuenciaPago switch
+            {
+                "Diario" => fechaInicial.AddDays(numeroCuota),
+                "Semanal" => fechaInicial.AddDays(numeroCuota * 7),
+                "Quincenal" => CalcularFechaQuincenal(fechaInicial, numeroCuota),
+                "Mensual" => CalcularFechaMensual(fechaInicial, numeroCuota),
+                _ => fechaInicial.AddDays(numeroCuota * 30)
+            };
+        }
+        
         // Asegurar que la fecha sea UTC para PostgreSQL
         return DateTime.SpecifyKind(fecha, DateTimeKind.Utc);
+    }
+
+    private DateTime CalcularFechaSemanalPorDia(DateTime fechaInicial, int numeroCuota, string diaSemana)
+    {
+        // Mapear nombre del día a DayOfWeek
+        DayOfWeek diaObjetivo = diaSemana switch
+        {
+            "Lunes" => DayOfWeek.Monday,
+            "Martes" => DayOfWeek.Tuesday,
+            "Miércoles" => DayOfWeek.Wednesday,
+            "Jueves" => DayOfWeek.Thursday,
+            "Viernes" => DayOfWeek.Friday,
+            "Sábado" => DayOfWeek.Saturday,
+            "Domingo" => DayOfWeek.Sunday,
+            _ => DayOfWeek.Monday
+        };
+        
+        // Encontrar el próximo día de la semana después de la fecha inicial
+        int diasHastaProximo = ((int)diaObjetivo - (int)fechaInicial.DayOfWeek + 7) % 7;
+        if (diasHastaProximo == 0) diasHastaProximo = 7; // Si hoy es el día, ir al próximo
+        
+        // Primera cuota es el próximo día objetivo
+        DateTime primeraCuota = fechaInicial.AddDays(diasHastaProximo);
+        
+        // Las siguientes cuotas son cada 7 días
+        return primeraCuota.AddDays((numeroCuota - 1) * 7);
     }
 
     private DateTime CalcularFechaQuincenal(DateTime fechaInicial, int numeroCuota)

@@ -9,6 +9,7 @@ public class Prestamo
     public decimal TasaInteres { get; set; }
     public string TipoInteres { get; set; } = "Simple"; // Simple o Compuesto
     public string FrecuenciaPago { get; set; } = string.Empty; // Diario, Semanal, Quincenal, Mensual
+    public string? DiaSemana { get; set; } // Para Semanal: Lunes, Martes, etc.
     public int NumeroCuotas { get; set; }
     public DateTime FechaPrestamo { get; set; }
     public DateTime FechaVencimiento { get; set; }
@@ -17,7 +18,7 @@ public class Prestamo
     public decimal MontoCuota { get; set; }
     public string EstadoPrestamo { get; set; } = "Activo"; // Activo, Pagado, Vencido
     public string? Descripcion { get; set; }
-    public decimal PorcentajeCobrador { get; set; } = 5; // % para el cobrador (configurable para préstamos al 15%)
+    public decimal PorcentajeCobrador { get; set; } = 5; // % para el cobrador
 
     // Navegación
     public Cliente? Cliente { get; set; }
