@@ -434,10 +434,40 @@ function App() {
           {/* Clientes Tab */}
           {activeTab === 'clientes' && (
             <div className="table-container">
-              <table><thead><tr><th>ID</th><th>Nombre</th><th>Cédula</th><th>Teléfono</th><th>Préstamos</th><th>Total</th><th>Estado</th></tr></thead>
-                <tbody>{clientes.map(c => (
-                  <tr key={c.id}><td>#{c.id}</td><td><strong>{c.nombre}</strong></td><td>{c.cedula}</td><td>{c.telefono || '-'}</td><td>{c.prestamosActivos}</td><td className="money">{formatMoney(c.totalPrestado)}</td><td><span className={`badge ${c.estado === 'Activo' ? 'badge-green' : 'badge-gray'}`}>{c.estado}</span></td></tr>
-                ))}{clientes.length === 0 && <tr><td colSpan={7} className="empty-state">No hay clientes</td></tr>}</tbody>
+              <table>
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Nombre</th>
+                    <th>Cédula</th>
+                    <th>Teléfono</th>
+                    <th>Préstamos</th>
+                    <th>Total</th>
+                    <th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {clientes.map(c => (
+                    <tr key={c.id}>
+                      <td>#{c.id}</td>
+                      <td><strong>{c.nombre}</strong></td>
+                      <td>{c.cedula}</td>
+                      <td>{c.telefono || '-'}</td>
+                      <td>{c.prestamosActivos}</td>
+                      <td className="money">{formatMoney(c.totalPrestado)}</td>
+                      <td>
+                        <span className={`badge ${c.estado === 'Activo' ? 'badge-green' : 'badge-gray'}`}>
+                          {c.estado}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                  {clientes.length === 0 && (
+                    <tr>
+                      <td colSpan={7} className="empty-state">No hay clientes</td>
+                    </tr>
+                  )}
+                </tbody>
               </table>
             </div>
           )}
