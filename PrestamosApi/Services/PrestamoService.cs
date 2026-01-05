@@ -115,7 +115,7 @@ public class PrestamoService : IPrestamoService
 
     private DateTime CalcularFechaCuota(DateTime fechaInicial, string frecuenciaPago, int numeroCuota)
     {
-        return frecuenciaPago switch
+        var fecha = frecuenciaPago switch
         {
             "Diario" => fechaInicial.AddDays(numeroCuota),
             "Semanal" => fechaInicial.AddDays(numeroCuota * 7),
@@ -123,6 +123,8 @@ public class PrestamoService : IPrestamoService
             "Mensual" => CalcularFechaMensual(fechaInicial, numeroCuota),
             _ => fechaInicial.AddDays(numeroCuota * 30)
         };
+        // Asegurar que la fecha sea UTC para PostgreSQL
+        return DateTime.SpecifyKind(fecha, DateTimeKind.Utc);
     }
 
     private DateTime CalcularFechaQuincenal(DateTime fechaInicial, int numeroCuota)
@@ -134,17 +136,17 @@ public class PrestamoService : IPrestamoService
         {
             if (fecha.Day < 15)
             {
-                fecha = new DateTime(fecha.Year, fecha.Month, 15);
+                fecha = new DateTime(fecha.Year, fecha.Month, 15, 0, 0, 0, DateTimeKind.Utc);
             }
             else if (fecha.Day < DateTime.DaysInMonth(fecha.Year, fecha.Month))
             {
                 int ultimoDia = DateTime.DaysInMonth(fecha.Year, fecha.Month);
-                fecha = new DateTime(fecha.Year, fecha.Month, ultimoDia);
+                fecha = new DateTime(fecha.Year, fecha.Month, ultimoDia, 0, 0, 0, DateTimeKind.Utc);
             }
             else
             {
                 fecha = fecha.AddMonths(1);
-                fecha = new DateTime(fecha.Year, fecha.Month, 15);
+                fecha = new DateTime(fecha.Year, fecha.Month, 15, 0, 0, 0, DateTimeKind.Utc);
             }
             
             cuotasGeneradas++;
@@ -163,7 +165,7 @@ public class PrestamoService : IPrestamoService
         
         if (diaOriginal > diasEnMes)
         {
-            fecha = new DateTime(fecha.Year, fecha.Month, diasEnMes);
+            fecha = new DateTime(fecha.Year, fecha.Month, diasEnMes, 0, 0, 0, DateTimeKind.Utc);
         }
         
         return fecha;

@@ -772,38 +772,98 @@ function App() {
             <div className="modal-body">
               <div className="detail-grid">
                 <div className="detail-item"><label>Cliente</label><span>{selectedPrestamo.clienteNombre}</span></div>
-                <div className="detail-item"><label>Monto</label><span>{formatMoney(selectedPrestamo.montoPrestado)}</span></div>
-                <div className="detail-item"><label>Total</label><span>{formatMoney(selectedPrestamo.montoTotal)}</span></div>
+                <div className="detail-item"><label>Monto Prestado</label><span>{formatMoney(selectedPrestamo.montoPrestado)}</span></div>
+                <div className="detail-item"><label>Total a Pagar</label><span>{formatMoney(selectedPrestamo.montoTotal)}</span></div>
+                <div className="detail-item"><label>Interés</label><span style={{ color: '#10b981' }}>{selectedPrestamo.tasaInteres}% ({selectedPrestamo.tipoInteres})</span></div>
+                <div className="detail-item"><label>Frecuencia</label><span className="badge badge-blue">{selectedPrestamo.frecuenciaPago}</span></div>
+                <div className="detail-item"><label>Cuotas</label><span>{selectedPrestamo.cuotasPagadas} / {selectedPrestamo.numeroCuotas}</span></div>
                 <div className="detail-item"><label>Pagado</label><span style={{ color: '#10b981' }}>{formatMoney(selectedPrestamo.totalPagado)}</span></div>
                 <div className="detail-item"><label>Pendiente</label><span style={{ color: '#ef4444' }}>{formatMoney(selectedPrestamo.saldoPendiente)}</span></div>
+                <div className="detail-item"><label>Estado</label><span className={`badge ${selectedPrestamo.estadoPrestamo === 'Activo' ? 'badge-green' : selectedPrestamo.estadoPrestamo === 'Pagado' ? 'badge-blue' : 'badge-red'}`}>{selectedPrestamo.estadoPrestamo}</span></div>
                 <div className="detail-item"><label>Cobrador</label><span>{selectedPrestamo.cobradorNombre || 'No asignado'}</span></div>
               </div>
               <div className="progress-bar" style={{ margin: '1rem 0' }}><div className="progress-fill" style={{ width: `${(selectedPrestamo.totalPagado / selectedPrestamo.montoTotal) * 100}%` }}></div></div>
-              <h4>Cuotas</h4>
-              <div className="table-container" style={{ maxHeight: '200px', overflow: 'auto' }}>
-                <table><thead><tr><th>#</th><th>Fecha</th><th>Monto</th><th>Pagado</th><th>Estado</th><th></th></tr></thead>
-                  <tbody>{cuotasDetalle.map(c => (
-                    <tr key={c.id}><td>{c.numeroCuota}</td><td>{formatDate(c.fechaCobro)}</td><td>{formatMoney(c.montoCuota)}</td><td>{formatMoney(c.montoPagado)}</td><td><span className={`badge ${c.estadoCuota === 'Pagada' ? 'badge-green' : c.estadoCuota === 'Vencida' ? 'badge-red' : 'badge-gray'}`}>{c.estadoCuota}</span></td><td>{c.estadoCuota !== 'Pagada' && <button className="btn btn-primary btn-sm" onClick={() => openPagoModal(c)}>Pagar</button>}</td></tr>
-                  ))}</tbody>
+
+              <h4 style={{ marginTop: '1.5rem', marginBottom: '0.5rem' }}>📅 Plan de Cuotas</h4>
+              <div className="table-container" style={{ maxHeight: '280px', overflow: 'auto' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th style={{ width: '40px' }}>✓</th>
+                      <th>#</th>
+                      <th>Fecha</th>
+                      <th>Valor Cuota</th>
+                      <th>Pagado</th>
+                      <th>Pendiente</th>
+                      <th>Estado</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cuotasDetalle.map(c => (
+                      <tr key={c.id} style={{ opacity: c.estadoCuota === 'Pagada' ? 0.6 : 1, background: c.estadoCuota === 'Vencida' ? 'rgba(239,68,68,0.1)' : undefined }}>
+                        <td>
+                          <input
+                            type="checkbox"
+                            checked={c.estadoCuota === 'Pagada'}
+                            onChange={async (e) => {
+                              try {
+                                await cobrosApi.marcarCobrado(c.id, e.target.checked);
+                                showToast(e.target.checked ? 'Cuota marcada como pagada' : 'Marca removida', 'success');
+                                // Recargar cuotas
+                                const cuotas = await cuotasApi.getByPrestamo(selectedPrestamo.id);
+                                setCuotasDetalle(cuotas);
+                                // Recargar préstamos para actualizar totales
+                                loadData();
+                              } catch { showToast('Error al marcar cuota', 'error'); }
+                            }}
+                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                          />
+                        </td>
+                        <td>{c.numeroCuota}</td>
+                        <td>{formatDate(c.fechaCobro)}</td>
+                        <td className="money">{formatMoney(c.montoCuota)}</td>
+                        <td className="money" style={{ color: '#10b981' }}>{formatMoney(c.montoPagado)}</td>
+                        <td className="money" style={{ color: c.saldoPendiente > 0 ? '#ef4444' : '#10b981' }}>{formatMoney(c.saldoPendiente)}</td>
+                        <td>
+                          <span className={`badge ${c.estadoCuota === 'Pagada' ? 'badge-green' : c.estadoCuota === 'Vencida' ? 'badge-red' : c.estadoCuota === 'Parcial' ? 'badge-orange' : 'badge-gray'}`}>
+                            {c.estadoCuota}
+                          </span>
+                        </td>
+                        <td>
+                          {c.estadoCuota !== 'Pagada' && (
+                            <button className="btn btn-primary btn-sm" onClick={() => openPagoModal(c)}>
+                              💰 Pagar
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
                 </table>
               </div>
+
               {pagosDetalle.length > 0 && (
                 <>
-                  <h4 style={{ marginTop: '1rem' }}>Historial de Pagos</h4>
+                  <h4 style={{ marginTop: '1.5rem', marginBottom: '0.5rem' }}>💵 Historial de Pagos</h4>
                   <div className="table-container" style={{ maxHeight: '150px', overflow: 'auto' }}>
                     <table>
-                      <thead><tr><th>Fecha</th><th>Monto</th><th>Método</th></tr></thead>
+                      <thead><tr><th>Fecha</th><th>Monto</th><th>Método</th><th>Cuota</th></tr></thead>
                       <tbody>{pagosDetalle.map(p => (
                         <tr key={p.id}>
                           <td>{formatDate(p.fechaPago)}</td>
                           <td className="money" style={{ color: '#10b981' }}>{formatMoney(p.montoPago)}</td>
                           <td>{p.metodoPago || 'Efectivo'}</td>
+                          <td>{p.numeroCuota ? `#${p.numeroCuota}` : '-'}</td>
                         </tr>
                       ))}</tbody>
                     </table>
                   </div>
                 </>
               )}
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowDetalleModal(false)}>Cerrar</button>
             </div>
           </div>
         </div>

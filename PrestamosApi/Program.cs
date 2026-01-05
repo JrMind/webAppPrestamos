@@ -1,11 +1,15 @@
 using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PrestamosApi.Data;
 using PrestamosApi.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Check if authentication is enabled
+var authEnabled = builder.Configuration.GetValue<bool>("Auth:Enabled", true);
 
 // Add services to the container.
 builder.Services.AddControllers()
@@ -21,7 +25,7 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<PrestamosDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// JWT Authentication
+// JWT Authentication (always configured, but authorization is conditional)
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -36,6 +40,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["Jwt:Key"]!))
         };
     });
+
+// Authorization - if auth is disabled, allow anonymous by default
+builder.Services.AddAuthorization(options =>
+{
+    if (!authEnabled)
+    {
+        // When auth is disabled, set default policy to allow anonymous
+        options.DefaultPolicy = new AuthorizationPolicyBuilder()
+            .RequireAssertion(_ => true)
+            .Build();
+        options.FallbackPolicy = null;
+        Console.WriteLine("⚠️ Authentication is DISABLED - All endpoints are accessible without login");
+    }
+    else
+    {
+        Console.WriteLine("✅ Authentication is ENABLED - JWT token required for protected endpoints");
+    }
+});
 
 // Services
 builder.Services.AddScoped<IPrestamoService, PrestamoService>();

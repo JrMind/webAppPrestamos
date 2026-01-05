@@ -211,6 +211,10 @@ public class PrestamosController : BaseApiController
                 dto.MontoPrestado, dto.TasaInteres, dto.TipoInteres,
                 dto.FrecuenciaPago, dto.Duracion, dto.UnidadDuracion, dto.FechaPrestamo);
 
+        // Convertir fechas a UTC para PostgreSQL
+        var fechaPrestamoUtc = DateTime.SpecifyKind(dto.FechaPrestamo, DateTimeKind.Utc);
+        var fechaVencimientoUtc = DateTime.SpecifyKind(fechaVencimiento, DateTimeKind.Utc);
+
         var prestamo = new Prestamo
         {
             ClienteId = dto.ClienteId,
@@ -220,8 +224,8 @@ public class PrestamosController : BaseApiController
             TipoInteres = dto.TipoInteres,
             FrecuenciaPago = dto.FrecuenciaPago,
             NumeroCuotas = numeroCuotas,
-            FechaPrestamo = dto.FechaPrestamo,
-            FechaVencimiento = fechaVencimiento,
+            FechaPrestamo = fechaPrestamoUtc,
+            FechaVencimiento = fechaVencimientoUtc,
             MontoTotal = montoTotal,
             MontoIntereses = montoIntereses,
             MontoCuota = montoCuota,

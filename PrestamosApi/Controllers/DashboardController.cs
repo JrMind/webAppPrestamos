@@ -19,7 +19,8 @@ public class DashboardController : ControllerBase
     [HttpGet("metricas")]
     public async Task<ActionResult<DashboardMetricasDto>> GetMetricas()
     {
-        var hoy = DateTime.Today;
+        // Usar UTC para PostgreSQL
+        var hoy = DateTime.UtcNow.Date;
         var en7Dias = hoy.AddDays(7);
 
         // KPIs básicos
@@ -50,7 +51,7 @@ public class DashboardController : ControllerBase
         var reservaDisponible = totalCobrado - totalPrestado;
         if (reservaDisponible < 0) reservaDisponible = 0;
 
-        // Cuotas vencidas hoy
+        // Cuotas vencidas hoy - comparar solo la parte de fecha
         var cuotasVencidasHoy = await _context.CuotasPrestamo
             .Where(c => c.FechaCobro.Date == hoy && 
                        (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial"))
@@ -85,10 +86,11 @@ public class DashboardController : ControllerBase
             .GroupBy(p => new { p.FechaPrestamo.Year, p.FechaPrestamo.Month })
             .Select(g => new 
             {
-                Fecha = new DateTime(g.Key.Year, g.Key.Month, 1),
+                Year = g.Key.Year,
+                Month = g.Key.Month,
                 MontoPrestado = g.Sum(p => p.MontoPrestado)
             })
-            .OrderBy(e => e.Fecha)
+            .OrderBy(e => e.Year).ThenBy(e => e.Month)
             .ToListAsync();
 
         var pagosEvolucion = await _context.Pagos
@@ -96,10 +98,11 @@ public class DashboardController : ControllerBase
             .GroupBy(p => new { p.FechaPago.Year, p.FechaPago.Month })
             .Select(g => new 
             {
-                Fecha = new DateTime(g.Key.Year, g.Key.Month, 1),
+                Year = g.Key.Year,
+                Month = g.Key.Month,
                 MontoCobrado = g.Sum(p => p.MontoPago)
             })
-            .OrderBy(e => e.Fecha)
+            .OrderBy(e => e.Year).ThenBy(e => e.Month)
             .ToListAsync();
 
         decimal acumuladoPrestado = 0;
@@ -108,13 +111,16 @@ public class DashboardController : ControllerBase
         
         for (var fecha = hace12Meses; fecha <= hoy; fecha = fecha.AddMonths(1))
         {
-            var prestadoMes = evolucion.FirstOrDefault(e => e.Fecha.Year == fecha.Year && e.Fecha.Month == fecha.Month)?.MontoPrestado ?? 0;
-            var cobradoMes = pagosEvolucion.FirstOrDefault(e => e.Fecha.Year == fecha.Year && e.Fecha.Month == fecha.Month)?.MontoCobrado ?? 0;
+            var prestadoMes = evolucion.FirstOrDefault(e => e.Year == fecha.Year && e.Month == fecha.Month)?.MontoPrestado ?? 0;
+            var cobradoMes = pagosEvolucion.FirstOrDefault(e => e.Year == fecha.Year && e.Month == fecha.Month)?.MontoCobrado ?? 0;
             
             acumuladoPrestado += prestadoMes;
             acumuladoCobrado += cobradoMes;
             
-            evolucionPrestamos.Add(new EvolucionPrestamosDto(fecha, acumuladoPrestado, acumuladoCobrado));
+            evolucionPrestamos.Add(new EvolucionPrestamosDto(
+                DateTime.SpecifyKind(new DateTime(fecha.Year, fecha.Month, 1), DateTimeKind.Utc), 
+                acumuladoPrestado, 
+                acumuladoCobrado));
         }
 
         // Top 10 clientes
@@ -136,7 +142,7 @@ public class DashboardController : ControllerBase
         var ingresosMensuales = new List<IngresoMensualDto>();
         for (int i = 5; i >= 0; i--)
         {
-            var mesInicio = new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-i);
+            var mesInicio = DateTime.SpecifyKind(new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-i), DateTimeKind.Utc);
             var mesFin = mesInicio.AddMonths(1);
             
             var pagosDelMes = await _context.Pagos
