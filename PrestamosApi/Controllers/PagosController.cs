@@ -59,12 +59,15 @@ public class PagosController : ControllerBase
         if (prestamo == null)
             return BadRequest(new { message = "Préstamo no encontrado" });
 
+        // Convertir fecha a UTC para PostgreSQL
+        var fechaPagoUtc = DateTime.SpecifyKind(dto.FechaPago, DateTimeKind.Utc);
+
         var pago = new Pago
         {
             PrestamoId = dto.PrestamoId,
             CuotaId = dto.CuotaId,
             MontoPago = dto.MontoPago,
-            FechaPago = dto.FechaPago,
+            FechaPago = fechaPagoUtc,
             MetodoPago = dto.MetodoPago,
             Comprobante = dto.Comprobante,
             Observaciones = dto.Observaciones
@@ -85,7 +88,7 @@ public class PagosController : ControllerBase
                 {
                     cuota.SaldoPendiente = 0;
                     cuota.EstadoCuota = "Pagada";
-                    cuota.FechaPago = dto.FechaPago;
+                    cuota.FechaPago = fechaPagoUtc;
                 }
                 else if (cuota.MontoPagado > 0)
                 {
@@ -175,7 +178,7 @@ public class PagosController : ControllerBase
             {
                 pago.Cuota.MontoPagado = 0;
                 pago.Cuota.SaldoPendiente = pago.Cuota.MontoCuota;
-                pago.Cuota.EstadoCuota = pago.Cuota.FechaCobro.Date < DateTime.Today ? "Vencida" : "Pendiente";
+                pago.Cuota.EstadoCuota = pago.Cuota.FechaCobro.Date < DateTime.UtcNow.Date ? "Vencida" : "Pendiente";
                 pago.Cuota.FechaPago = null;
             }
             else

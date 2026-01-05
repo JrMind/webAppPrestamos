@@ -17,6 +17,9 @@ public class PrestamosDbContext : DbContext
     public DbSet<Aporte> Aportes => Set<Aporte>();
     public DbSet<MovimientoCapital> MovimientosCapital => Set<MovimientoCapital>();
     public DbSet<DistribucionGanancia> DistribucionesGanancia => Set<DistribucionGanancia>();
+    public DbSet<AportadorExterno> AportadoresExternos => Set<AportadorExterno>();
+    public DbSet<FuenteCapitalPrestamo> FuentesCapitalPrestamo => Set<FuenteCapitalPrestamo>();
+    public DbSet<PagoAportadorExterno> PagosAportadoresExternos => Set<PagoAportadorExterno>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -141,6 +144,9 @@ public class PrestamosDbContext : DbContext
             entity.Property(e => e.PorcentajeParticipacion).HasColumnName("porcentajeparticipacion").HasColumnType("decimal(5,2)").HasDefaultValue(0);
             entity.Property(e => e.TasaInteresMensual).HasColumnName("tasainteresmensual").HasColumnType("decimal(5,2)").HasDefaultValue(3);
             entity.Property(e => e.Activo).HasColumnName("activo").HasDefaultValue(true);
+            entity.Property(e => e.CapitalActual).HasColumnName("capitalactual").HasColumnType("decimal(18,2)").HasDefaultValue(0);
+            entity.Property(e => e.GananciasAcumuladas).HasColumnName("gananciasacumuladas").HasColumnType("decimal(18,2)").HasDefaultValue(0);
+            entity.Property(e => e.UltimoCalculoInteres).HasColumnName("ultimocalculointeres");
             entity.HasIndex(e => e.Email).IsUnique();
         });
 
@@ -209,6 +215,79 @@ public class PrestamosDbContext : DbContext
 
             entity.HasIndex(e => e.PrestamoId).HasDatabaseName("idx_distribuciones_prestamo");
             entity.HasIndex(e => e.UsuarioId).HasDatabaseName("idx_distribuciones_usuario");
+        });
+
+        // AportadorExterno
+        modelBuilder.Entity<AportadorExterno>(entity =>
+        {
+            entity.ToTable("aportadoresexternos");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Nombre).HasColumnName("nombre").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Telefono).HasColumnName("telefono").HasMaxLength(50);
+            entity.Property(e => e.Email).HasColumnName("email").HasMaxLength(255);
+            entity.Property(e => e.TasaInteres).HasColumnName("tasainteres").HasColumnType("decimal(5,2)").HasDefaultValue(3);
+            entity.Property(e => e.DiasParaPago).HasColumnName("diasparapago").HasDefaultValue(30);
+            entity.Property(e => e.MontoTotalAportado).HasColumnName("montototalaportado").HasColumnType("decimal(18,2)").HasDefaultValue(0);
+            entity.Property(e => e.MontoPagado).HasColumnName("montopagado").HasColumnType("decimal(18,2)").HasDefaultValue(0);
+            entity.Property(e => e.SaldoPendiente).HasColumnName("saldopendiente").HasColumnType("decimal(18,2)").HasDefaultValue(0);
+            entity.Property(e => e.Estado).HasColumnName("estado").HasMaxLength(50).HasDefaultValue("Activo");
+            entity.Property(e => e.FechaCreacion).HasColumnName("fechacreacion").HasDefaultValueSql("NOW()");
+            entity.Property(e => e.Notas).HasColumnName("notas");
+        });
+
+        // FuenteCapitalPrestamo
+        modelBuilder.Entity<FuenteCapitalPrestamo>(entity =>
+        {
+            entity.ToTable("fuentescapitalprestamo");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.PrestamoId).HasColumnName("prestamoid");
+            entity.Property(e => e.Tipo).HasColumnName("tipo").HasMaxLength(50).IsRequired();
+            entity.Property(e => e.UsuarioId).HasColumnName("usuarioid");
+            entity.Property(e => e.AportadorExternoId).HasColumnName("aportadorexternoid");
+            entity.Property(e => e.MontoAportado).HasColumnName("montoaportado").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.PorcentajeParticipacion).HasColumnName("porcentajeparticipacion").HasColumnType("decimal(5,2)").HasDefaultValue(0);
+            entity.Property(e => e.FechaRegistro).HasColumnName("fecharegistro").HasDefaultValueSql("NOW()");
+
+            entity.HasOne(e => e.Prestamo)
+                .WithMany(p => p.FuentesCapital)
+                .HasForeignKey(e => e.PrestamoId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Usuario)
+                .WithMany(u => u.FuentesCapital)
+                .HasForeignKey(e => e.UsuarioId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.AportadorExterno)
+                .WithMany(a => a.FuentesCapital)
+                .HasForeignKey(e => e.AportadorExternoId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(e => e.PrestamoId).HasDatabaseName("idx_fuentescapital_prestamo");
+            entity.HasIndex(e => e.UsuarioId).HasDatabaseName("idx_fuentescapital_usuario");
+            entity.HasIndex(e => e.AportadorExternoId).HasDatabaseName("idx_fuentescapital_aportador");
+        });
+
+        // PagoAportadorExterno
+        modelBuilder.Entity<PagoAportadorExterno>(entity =>
+        {
+            entity.ToTable("pagosaportadoresexternos");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.AportadorExternoId).HasColumnName("aportadorexternoid");
+            entity.Property(e => e.Monto).HasColumnName("monto").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.MontoCapital).HasColumnName("montocapital").HasColumnType("decimal(18,2)").HasDefaultValue(0);
+            entity.Property(e => e.MontoIntereses).HasColumnName("montointereses").HasColumnType("decimal(18,2)").HasDefaultValue(0);
+            entity.Property(e => e.FechaPago).HasColumnName("fechapago");
+            entity.Property(e => e.MetodoPago).HasColumnName("metodopago").HasMaxLength(50);
+            entity.Property(e => e.Comprobante).HasColumnName("comprobante").HasMaxLength(255);
+            entity.Property(e => e.Notas).HasColumnName("notas");
+
+            entity.HasOne(e => e.AportadorExterno)
+                .WithMany(a => a.Pagos)
+                .HasForeignKey(e => e.AportadorExternoId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.AportadorExternoId).HasDatabaseName("idx_pagosaportadores_aportador");
         });
     }
 }
