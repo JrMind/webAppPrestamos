@@ -51,6 +51,7 @@ public class PrestamosDbContext : DbContext
             entity.Property(e => e.TasaInteres).HasColumnName("tasainteres").HasColumnType("decimal(5,2)");
             entity.Property(e => e.TipoInteres).HasColumnName("tipointeres").HasMaxLength(20).HasDefaultValue("Simple");
             entity.Property(e => e.FrecuenciaPago).HasColumnName("frecuenciapago").HasMaxLength(20);
+            entity.Property(e => e.DiaSemana).HasColumnName("diasemana");
             entity.Property(e => e.NumeroCuotas).HasColumnName("numerocuotas");
             entity.Property(e => e.FechaPrestamo).HasColumnName("fechaprestamo");
             entity.Property(e => e.FechaVencimiento).HasColumnName("fechavencimiento");
