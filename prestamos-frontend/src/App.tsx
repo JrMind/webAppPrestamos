@@ -119,10 +119,18 @@ function App() {
     } catch (error) { console.error('Error loading usuarios:', error); }
   };
 
+  const loadClientes = async () => {
+    try {
+      const data = await clientesApi.getAll();
+      setClientes(data);
+    } catch (error) { console.error('Error loading clientes:', error); }
+  };
+
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => { if (activeTab === 'cobros') loadCobros(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'socios') loadBalanceSocios(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'usuarios') loadUsuarios(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'clientes') loadClientes(); }, [activeTab]);
 
   // Client search handler with debounce
   const handleClienteSearch = (value: string) => {
