@@ -26,12 +26,18 @@ public class DashboardController : ControllerBase
         // KPIs básicos
         var totalPrestado = await _context.Prestamos.SumAsync(p => p.MontoPrestado);
         
-        var totalACobrar = await _context.Prestamos
-            .Where(p => p.EstadoPrestamo == "Activo")
-            .SumAsync(p => p.MontoTotal);
+        // Total a cobrar = suma de saldos pendientes de cuotas de préstamos activos
+        var totalACobrar = await _context.CuotasPrestamo
+            .Include(c => c.Prestamo)
+            .Where(c => c.Prestamo!.EstadoPrestamo == "Activo")
+            .SumAsync(c => c.SaldoPendiente);
 
         var totalGanadoIntereses = await _context.Prestamos
             .Where(p => p.EstadoPrestamo == "Pagado")
+            .SumAsync(p => p.MontoIntereses);
+        
+        // Intereses proyectados = suma de intereses de TODOS los préstamos (activos + pagados)
+        var interesesProyectados = await _context.Prestamos
             .SumAsync(p => p.MontoIntereses);
 
         var prestamosActivos = await _context.Prestamos
@@ -42,17 +48,29 @@ public class DashboardController : ControllerBase
             .Where(p => p.EstadoPrestamo == "Activo")
             .SumAsync(p => p.MontoPrestado);
 
-        // Flujo de Capital - CORRECCIÓN
+        // Flujo de Capital
         var totalCobrado = await _context.Pagos.SumAsync(p => p.MontoPago);
         
-        // Saldo pendiente de préstamos activos (lo que falta por cobrar)
+        // Saldo pendiente de préstamos activos (lo que falta por cobrar - capital + intereses)
         var saldoPendienteActivos = await _context.CuotasPrestamo
             .Include(c => c.Prestamo)
             .Where(c => c.Prestamo!.EstadoPrestamo == "Activo")
             .SumAsync(c => c.SaldoPendiente);
         
-        // Dinero circulando = Lo que está prestado y aún no se ha cobrado (saldo pendiente)
-        var dineroCirculando = saldoPendienteActivos;
+        // Capital de préstamos activos que aún no se ha recuperado
+        // Dinero Circulando = Capital prestado activo - proporción de capital cobrado
+        var capitalPrestamosActivos = await _context.Prestamos
+            .Where(p => p.EstadoPrestamo == "Activo")
+            .SumAsync(p => p.MontoPrestado);
+        var totalAPagarActivos = await _context.Prestamos
+            .Where(p => p.EstadoPrestamo == "Activo")
+            .SumAsync(p => p.MontoTotal);
+        
+        // Proporción de capital en cada pago (capital / total)
+        var proporcionCapital = totalAPagarActivos > 0 ? capitalPrestamosActivos / totalAPagarActivos : 0;
+        var capitalRecuperado = totalCobrado * proporcionCapital;
+        var dineroCirculando = capitalPrestamosActivos - capitalRecuperado;
+        if (dineroCirculando < 0) dineroCirculando = 0;
         
         // Capital usado de la reserva para préstamos activos
         var capitalUsadoDeReserva = await _context.FuentesCapitalPrestamo
@@ -175,12 +193,12 @@ public class DashboardController : ControllerBase
                 : 0.15m;
 
             var interesesGanados = totalPagado * promedioInteres;
-            var capitalRecuperado = totalPagado - interesesGanados;
+            var capitalRecuperadoMes = totalPagado - interesesGanados;
 
             ingresosMensuales.Add(new IngresoMensualDto(
                 mesInicio.ToString("MMM yyyy"),
                 Math.Round(interesesGanados, 2),
-                Math.Round(capitalRecuperado, 2)
+                Math.Round(capitalRecuperadoMes, 2)
             ));
         }
 
@@ -207,6 +225,7 @@ public class DashboardController : ControllerBase
             totalPrestado,
             totalACobrar,
             totalGanadoIntereses,
+            interesesProyectados, // NUEVO
             prestamosActivos,
             montoPrestamosActivos,
             cantidadCuotasVencidasHoy,

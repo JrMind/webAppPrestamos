@@ -129,6 +129,7 @@ public record DashboardMetricasDto(
     decimal TotalPrestado,
     decimal TotalACobrar,
     decimal TotalGanadoIntereses,
+    decimal InteresesProyectados, // NUEVO: suma de intereses de todos los préstamos
     int PrestamosActivos,
     decimal MontoPrestamosActivos,
     int CuotasVencidasHoy,
