@@ -275,7 +275,7 @@ function App() {
 
         case 'clientes':
           console.log('📍 Tab: Clientes');
-          if (!isCacheValid('clientes') && clientes.length === 0) {
+          if (clientes.length === 0 || !isCacheValid('clientes')) {
             await refreshClientes();
           } else {
             console.log('📦 Usando clientes del caché');
@@ -289,7 +289,7 @@ function App() {
 
         case 'socios':
           console.log('📍 Tab: Socios/Aportadores');
-          if (!isCacheValid('balanceSocios') && balanceSocios.length === 0) {
+          if (balanceSocios.length === 0 || !isCacheValid('balanceSocios')) {
             await refreshBalanceSocios();
           } else {
             console.log('📦 Usando balance de socios del caché');
@@ -298,7 +298,7 @@ function App() {
 
         case 'usuarios':
           console.log('📍 Tab: Usuarios');
-          if (!isCacheValid('usuarios') && usuarios.length === 0) {
+          if (usuarios.length === 0 || !isCacheValid('usuarios')) {
             await refreshUsuarios();
           } else {
             console.log('📦 Usando usuarios del caché');
