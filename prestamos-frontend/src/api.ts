@@ -78,7 +78,7 @@ export const usuariosApi = {
     },
 
     getCobradores: async (): Promise<Cobrador[]> => {
-        const response = await fetch(`${API_URL}/usuarios/cobradores`);
+        const response = await fetch(`${API_URL}/usuarios/cobradores`, { headers: getHeaders() });
         return handleResponse<Cobrador[]>(response);
     },
 
