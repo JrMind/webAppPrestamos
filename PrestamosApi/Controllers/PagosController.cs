@@ -15,12 +15,18 @@ public class PagosController : ControllerBase
 {
     private readonly PrestamosDbContext _context;
     private readonly ITwilioService _twilioService;
+    private readonly IDistribucionGananciasService _distribucionService;
     private readonly ILogger<PagosController> _logger;
 
-    public PagosController(PrestamosDbContext context, ITwilioService twilioService, ILogger<PagosController> logger)
+    public PagosController(
+        PrestamosDbContext context, 
+        ITwilioService twilioService, 
+        IDistribucionGananciasService distribucionService,
+        ILogger<PagosController> logger)
     {
         _context = context;
         _twilioService = twilioService;
+        _distribucionService = distribucionService;
         _logger = logger;
     }
 
@@ -107,6 +113,16 @@ public class PagosController : ControllerBase
         }
 
         await _context.SaveChangesAsync();
+
+        // *** DISTRIBUIR GANANCIAS SEGÚN FUENTES DE CAPITAL ***
+        try
+        {
+            await _distribucionService.DistribuirGananciasPago(prestamo.Id, dto.MontoPago);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error distribuyendo ganancias para préstamo {PrestamoId}", prestamo.Id);
+        }
 
         // *** ENVIAR SMS AL CLIENTE ***
         // CRÍTICO: El teléfono es del CLIENTE del préstamo, NO del usuario logueado

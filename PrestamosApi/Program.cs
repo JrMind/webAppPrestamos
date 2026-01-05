@@ -61,6 +61,7 @@ builder.Services.AddAuthorization(options =>
 
 // Services
 builder.Services.AddScoped<IPrestamoService, PrestamoService>();
+builder.Services.AddScoped<IDistribucionGananciasService, DistribucionGananciasService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IGananciasService, GananciasService>();
 builder.Services.AddScoped<ITwilioService, TwilioService>();

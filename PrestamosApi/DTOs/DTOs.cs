@@ -180,3 +180,86 @@ public record CuotaProximaDetalleDto(
     string EstadoCuota,
     int DiasParaVencer
 );
+
+// Aportador Externo DTOs
+public record AportadorExternoDto(
+    int Id,
+    string Nombre,
+    string? Telefono,
+    string? Email,
+    decimal TasaInteres,
+    int DiasParaPago,
+    decimal MontoTotalAportado,
+    decimal MontoPagado,
+    decimal SaldoPendiente,
+    string Estado,
+    DateTime FechaCreacion,
+    string? Notas
+);
+
+public record CreateAportadorExternoDto(
+    string Nombre,
+    string? Telefono,
+    string? Email,
+    decimal TasaInteres,
+    int DiasParaPago,
+    string? Notas
+);
+
+public record UpdateAportadorExternoDto(
+    string Nombre,
+    string? Telefono,
+    string? Email,
+    decimal TasaInteres,
+    int DiasParaPago,
+    string Estado,
+    string? Notas
+);
+
+// Fuente de Capital DTOs
+public record FuenteCapitalDto(
+    string Tipo, // "Reserva" | "Interno" | "Externo"
+    int? UsuarioId, // Solo para Interno (socio)
+    int? AportadorExternoId, // Solo para Externo
+    decimal MontoAportado
+);
+
+// DTO para crear préstamo con fuentes de capital
+public record CreatePrestamoConFuentesDto(
+    int ClienteId,
+    decimal MontoPrestado,
+    decimal TasaInteres,
+    string TipoInteres,
+    string FrecuenciaPago,
+    int Duracion,
+    string UnidadDuracion,
+    DateTime FechaPrestamo,
+    string? Descripcion,
+    int? CobradorId,
+    decimal PorcentajeCobrador,
+    List<FuenteCapitalDto> FuentesCapital // Lista de fuentes
+);
+
+// Socio/Inversor interno DTOs
+public record SocioDto(
+    int Id,
+    string Nombre,
+    string? Telefono,
+    string Rol,
+    decimal TasaInteresMensual,
+    decimal PorcentajeParticipacion,
+    decimal CapitalActual,
+    decimal GananciasAcumuladas,
+    decimal SaldoTotal,
+    DateTime? UltimoCalculoInteres
+);
+
+// Balance de capital
+public record BalanceCapitalDto(
+    decimal ReservaDisponible,
+    decimal TotalCobrado,
+    decimal CapitalUsadoDeReserva,
+    List<SocioDto> Socios,
+    List<AportadorExternoDto> AportadoresExternos
+);
+
