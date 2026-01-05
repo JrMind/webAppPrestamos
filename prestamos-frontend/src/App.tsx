@@ -551,16 +551,12 @@ function App() {
           <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Total Cobrado</span></div><span className="kpi-value">{formatMoney(metricas?.totalCobrado || 0)}</span></div>
           <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Intereses Ganados</span></div><span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(metricas?.totalGanadoIntereses || 0)}</span></div>
           <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Intereses Proyectados</span></div><span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(metricas?.interesesProyectados || 0)}</span></div>
+          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Capital Proyectado</span></div><span className="kpi-value" style={{ color: '#8b5cf6' }}>{formatMoney((metricas?.totalPrestado || 0) + (metricas?.interesesProyectados || 0))}</span></div>
           <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Cuotas Vencidas</span></div><span className="kpi-value">{metricas?.cuotasVencidasHoy || 0}</span></div>
         </div>
 
         {/* Flujo de Capital */}
         <div className="kpi-grid" style={{ marginTop: '1rem' }}>
-          <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b', background: 'linear-gradient(135deg, rgba(245,158,11,0.1) 0%, transparent 100%)' }}>
-            <div className="kpi-header"><span className="kpi-title">💰 Dinero Circulando</span></div>
-            <span className="kpi-value" style={{ color: '#f59e0b' }}>{formatMoney(metricas?.dineroCirculando || 0)}</span>
-            <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Capital prestado aún no recuperado</span>
-          </div>
           <div className="kpi-card" style={{ borderLeft: '4px solid #10b981', background: 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, transparent 100%)' }}>
             <div className="kpi-header"><span className="kpi-title">🏦 Reserva Disponible</span></div>
             <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(metricas?.reservaDisponible || 0)}</span>
