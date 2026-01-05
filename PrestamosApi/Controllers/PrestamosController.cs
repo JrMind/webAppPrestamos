@@ -245,7 +245,10 @@ public class PrestamosController : BaseApiController
                 prestamo.NumeroCuotas, prestamo.FechaPrestamo, prestamo.FechaVencimiento,
                 prestamo.MontoTotal, prestamo.MontoIntereses, prestamo.MontoCuota,
                 prestamo.EstadoPrestamo, prestamo.Descripcion, 0, prestamo.MontoTotal, 0,
-                new CuotaProximaDto(cuotas.First().FechaCobro, cuotas.First().SaldoPendiente)
+                new CuotaProximaDto(cuotas.First().FechaCobro, cuotas.First().SaldoPendiente),
+                prestamo.CobradorId,
+                null, // CobradorNombre - no se carga aquí para evitar query extra
+                prestamo.PorcentajeCobrador
             ));
     }
 
