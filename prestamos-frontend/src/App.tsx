@@ -21,7 +21,6 @@ function App() {
   const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
   const [prestamos, setPrestamos] = useState<Prestamo[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
-  const [cobradores, setCobradores] = useState<Cobrador[]>([]);
   const [cobrosHoy, setCobrosHoy] = useState<CobrosHoy | null>(null);
   const [balanceSocios, setBalanceSocios] = useState<BalanceSocio[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -50,6 +49,13 @@ function App() {
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [showClienteDropdown, setShowClienteDropdown] = useState(false);
   const searchTimeoutRef = useRef<number | null>(null);
+
+  // Cobrador search state
+  const [cobradorSearch, setCobradorSearch] = useState('');
+  const [cobradorSearchResults, setCobradorSearchResults] = useState<Cobrador[]>([]);
+  const [selectedCobrador, setSelectedCobrador] = useState<Cobrador | null>(null);
+  const [showCobradorDropdown, setShowCobradorDropdown] = useState(false);
+  const cobradorSearchTimeoutRef = useRef<number | null>(null);
 
   // Login form
   const [loginForm, setLoginForm] = useState({ email: '', password: '' });
@@ -83,14 +89,12 @@ function App() {
   const loadData = useCallback(async () => {
     if (!isAuthenticated) { setLoading(false); return; }
     try {
-      const [metricasData, prestamosData, cobradoresData] = await Promise.all([
+      const [metricasData, prestamosData] = await Promise.all([
         dashboardApi.getMetricas(),
-        prestamosApi.getAll({ estado: filtroEstado !== 'Todos' ? filtroEstado : undefined, frecuencia: filtroFrecuencia !== 'Todos' ? filtroFrecuencia : undefined, busqueda: filtroBusqueda || undefined, clienteId: filtroClienteId }),
-        usuariosApi.getCobradores()
+        prestamosApi.getAll({ estado: filtroEstado !== 'Todos' ? filtroEstado : undefined, frecuencia: filtroFrecuencia !== 'Todos' ? filtroFrecuencia : undefined, busqueda: filtroBusqueda || undefined, clienteId: filtroClienteId })
       ]);
       setMetricas(metricasData);
       setPrestamos(prestamosData);
-      setCobradores(cobradoresData);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally { setLoading(false); }
@@ -167,6 +171,73 @@ function App() {
     setClienteSearch('');
     setPrestamoForm({ ...prestamoForm, clienteId: 0 });
     setClienteSearchResults([]);
+  };
+
+  // Cobrador search handler with debounce
+  const handleCobradorSearch = (value: string) => {
+    setCobradorSearch(value);
+    setShowCobradorDropdown(true);
+
+    if (cobradorSearchTimeoutRef.current) {
+      clearTimeout(cobradorSearchTimeoutRef.current);
+    }
+
+    if (value.length >= 2) {
+      cobradorSearchTimeoutRef.current = setTimeout(async () => {
+        try {
+          const allCobradores = await usuariosApi.getCobradores();
+          // Filtrar cobradores por nombre
+          const filtered = allCobradores.filter(c =>
+            c.nombre.toLowerCase().includes(value.toLowerCase())
+          );
+          setCobradorSearchResults(filtered);
+        } catch (error) {
+          console.error('Error searching cobradores:', error);
+          setCobradorSearchResults([]);
+        }
+      }, 300);
+    } else if (value.length === 0) {
+      // Si está vacío, mostrar todos los cobradores
+      cobradorSearchTimeoutRef.current = setTimeout(async () => {
+        try {
+          const allCobradores = await usuariosApi.getCobradores();
+          setCobradorSearchResults(allCobradores);
+        } catch (error) {
+          console.error('Error loading cobradores:', error);
+          setCobradorSearchResults([]);
+        }
+      }, 300);
+    } else {
+      setCobradorSearchResults([]);
+    }
+  };
+
+  const selectCobrador = (cobrador: Cobrador) => {
+    setSelectedCobrador(cobrador);
+    setCobradorSearch(cobrador.nombre);
+    setPrestamoForm({ ...prestamoForm, cobradorId: cobrador.id });
+    setShowCobradorDropdown(false);
+    setCobradorSearchResults([]);
+  };
+
+  const clearCobradorSelection = () => {
+    setSelectedCobrador(null);
+    setCobradorSearch('');
+    setPrestamoForm({ ...prestamoForm, cobradorId: undefined });
+    setCobradorSearchResults([]);
+  };
+
+  // Load cobradores when focusing the input
+  const handleCobradorFocus = async () => {
+    setShowCobradorDropdown(true);
+    if (cobradorSearchResults.length === 0) {
+      try {
+        const allCobradores = await usuariosApi.getCobradores();
+        setCobradorSearchResults(allCobradores);
+      } catch (error) {
+        console.error('Error loading cobradores:', error);
+      }
+    }
   };
 
   // Forms
@@ -642,7 +713,47 @@ function App() {
                   <div className="form-group"><label>Tasa Interés (%) *</label><input type="number" min="0" step="0.1" required value={prestamoForm.tasaInteres} onChange={e => setPrestamoForm({ ...prestamoForm, tasaInteres: Number(e.target.value) })} /></div>
                   <div className="form-group"><label>Frecuencia *</label><select value={prestamoForm.frecuenciaPago} onChange={e => setPrestamoForm({ ...prestamoForm, frecuenciaPago: e.target.value })}><option>Diario</option><option>Semanal</option><option>Quincenal</option><option>Mensual</option></select></div>
                   <div className="form-group"><label>Duración *</label><div style={{ display: 'flex', gap: '0.5rem' }}><input type="number" min="1" required value={prestamoForm.duracion} onChange={e => setPrestamoForm({ ...prestamoForm, duracion: Number(e.target.value) })} style={{ width: '80px' }} /><select value={prestamoForm.unidadDuracion} onChange={e => setPrestamoForm({ ...prestamoForm, unidadDuracion: e.target.value })}><option>Dias</option><option>Semanas</option><option>Quincenas</option><option>Meses</option></select></div></div>
-                  <div className="form-group"><label>Cobrador (Referido)</label><select value={prestamoForm.cobradorId || ''} onChange={e => setPrestamoForm({ ...prestamoForm, cobradorId: e.target.value ? Number(e.target.value) : undefined })}><option value="">Sin asignar</option>{cobradores.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></div>
+                  <div className="form-group" style={{ position: 'relative' }}>
+                    <label>Cobrador (Referido)</label>
+                    <div style={{ position: 'relative' }}>
+                      <input
+                        type="text"
+                        placeholder="Buscar cobrador..."
+                        value={cobradorSearch}
+                        onChange={e => handleCobradorSearch(e.target.value)}
+                        onFocus={handleCobradorFocus}
+                        style={{ paddingRight: selectedCobrador ? '40px' : undefined }}
+                      />
+                      {selectedCobrador && (
+                        <button
+                          type="button"
+                          onClick={clearCobradorSelection}
+                          style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)', background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.2rem', color: '#888' }}
+                        >×</button>
+                      )}
+                      {showCobradorDropdown && cobradorSearchResults.length > 0 && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', maxHeight: '200px', overflow: 'auto', zIndex: 1000, boxShadow: '0 4px 12px rgba(0,0,0,0.15)' }}>
+                          {cobradorSearchResults.map(c => (
+                            <div
+                              key={c.id}
+                              onClick={() => selectCobrador(c)}
+                              style={{ padding: '0.75rem 1rem', cursor: 'pointer', borderBottom: '1px solid var(--border)' }}
+                              onMouseEnter={e => (e.currentTarget.style.background = 'var(--primary)', e.currentTarget.style.color = 'white')}
+                              onMouseLeave={e => (e.currentTarget.style.background = 'transparent', e.currentTarget.style.color = 'inherit')}
+                            >
+                              <strong>{c.nombre}</strong>
+                              {c.telefono && <span style={{ marginLeft: '0.5rem', opacity: 0.7 }}>({c.telefono})</span>}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {cobradorSearch.length >= 1 && cobradorSearchResults.length === 0 && showCobradorDropdown && (
+                        <div style={{ position: 'absolute', top: '100%', left: 0, right: 0, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '8px', padding: '0.75rem 1rem', color: '#888' }}>
+                          No se encontraron cobradores
+                        </div>
+                      )}
+                    </div>
+                  </div>
                   {prestamoForm.tasaInteres >= 15 && <div className="form-group"><label>% Cobrador</label><input type="number" min="0" max="15" step="0.5" value={prestamoForm.porcentajeCobrador} onChange={e => setPrestamoForm({ ...prestamoForm, porcentajeCobrador: Number(e.target.value) })} /></div>}
                   <div className="form-group"><label>Fecha *</label><input type="date" required value={prestamoForm.fechaPrestamo} onChange={e => setPrestamoForm({ ...prestamoForm, fechaPrestamo: e.target.value })} /></div>
                 </div>
