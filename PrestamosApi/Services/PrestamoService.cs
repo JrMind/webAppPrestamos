@@ -96,6 +96,13 @@ public class PrestamoService : IPrestamoService
         if (unidadDuracion == "Semanas" && frecuenciaPago == "Semanal") return duracion;
         if (unidadDuracion == "Dias" && frecuenciaPago == "Diario") return duracion;
         
+        // Ajustes específicos por negocio
+        if (unidadDuracion == "Meses")
+        {
+            if (frecuenciaPago == "Semanal") return duracion * 4; // 1 mes = 4 semanas
+            if (frecuenciaPago == "Quincenal") return duracion * 2; // 1 mes = 2 quincenas
+        }
+
         // Calcular basado en días totales
         int diasEntreCuotas = CalcularDiasEntreCuotas(frecuenciaPago);
         return Math.Max(1, (int)Math.Ceiling((double)diasTotales / diasEntreCuotas));
