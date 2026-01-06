@@ -110,6 +110,7 @@ function App() {
   const [editMode, setEditMode] = useState(false);
   const [editingPrestamoId, setEditingPrestamoId] = useState<number | null>(null);
   const [editingClienteId, setEditingClienteId] = useState<number | null>(null);
+  const [loadingCobros, setLoadingCobros] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!isAuthenticated) { setLoading(false); return; }
@@ -174,10 +175,16 @@ function App() {
   };
 
   const loadCobrosDelMes = async () => {
+    setLoadingCobros(true);
     try {
       const data = await cobrosDelMesApi.getCobrosDelMes();
       setCobrosDelMes(data);
-    } catch (error) { console.error('Error loading cobros del mes:', error); }
+    } catch (error) {
+      console.error('Error loading cobros del mes:', error);
+      showToast('Error al cargar cobros', 'error');
+    } finally {
+      setLoadingCobros(false);
+    }
   };
 
   const loadMiBalance = async () => {
@@ -884,61 +891,67 @@ function App() {
           )}
 
           {/* Cobros Tab */}
-          {activeTab === 'cobros' && cobrosDelMes && (
+          {activeTab === 'cobros' && (
             <div>
-              <div className="kpi-grid" style={{ marginBottom: '1rem' }}>
-                <div className="kpi-card"><span className="kpi-title">📅 Hoy ({cobrosDelMes.resumen.totalCuotasHoy})</span><span className="kpi-value">{formatMoney(cobrosDelMes.resumen.montoTotalHoy)}</span></div>
-                <div className="kpi-card" style={{ borderColor: '#ef4444' }}><span className="kpi-title">⚠️ Vencidas ({cobrosDelMes.resumen.totalCuotasVencidas})</span><span className="kpi-value" style={{ color: '#ef4444' }}>{formatMoney(cobrosDelMes.resumen.montoTotalVencido)}</span></div>
-                <div className="kpi-card" style={{ borderColor: '#3b82f6' }}><span className="kpi-title">📆 Próximas ({cobrosDelMes.resumen.totalCuotasProximas})</span><span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(cobrosDelMes.resumen.montoTotalProximas)}</span></div>
-              </div>
-              <h4 style={{ color: '#10b981', margin: '1rem 0 0.5rem' }}>📅 Cobros de Hoy</h4>
-              <div className="table-container">
-                <table><thead><tr><th>✓</th><th>Cliente</th><th>Cuota</th><th>Monto</th><th>Cobrador</th></tr></thead>
-                  <tbody>{cobrosDelMes.cuotasHoy.map(c => (
-                    <tr key={c.id} style={{ opacity: c.cobrado ? 0.6 : 1 }}>
-                      <td><input type="checkbox" checked={c.cobrado} onChange={e => handleMarcarCobrado(c.id, e.target.checked)} /></td>
-                      <td><strong>{c.clienteNombre}</strong><div style={{ fontSize: '0.75rem' }}>{c.clienteTelefono}</div></td>
-                      <td>#{c.numeroCuota}</td>
-                      <td className="money">{formatMoney(c.saldoPendiente)}</td>
-                      <td>{c.cobradorNombre || '-'}</td>
-                    </tr>
-                  ))}{cobrosDelMes.cuotasHoy.length === 0 && <tr><td colSpan={5} className="empty-state">No hay cuotas para hoy</td></tr>}</tbody>
-                </table>
-              </div>
-
-              <h4 style={{ color: '#3b82f6', margin: '1rem 0 0.5rem' }}>📆 Próximas del Mes</h4>
-              <div className="table-container">
-                <table><thead><tr><th>Cliente</th><th>Fecha</th><th>En</th><th>Monto</th><th>Cobrador</th></tr></thead>
-                  <tbody>{cobrosDelMes.cuotasProximas.map(c => (
-                    <tr key={c.id}>
-                      <td><strong>{c.clienteNombre}</strong><div style={{ fontSize: '0.75rem' }}>{c.clienteTelefono}</div></td>
-                      <td>{formatDate(c.fechaCobro)}</td>
-                      <td><span className="badge badge-blue">{c.diasParaVencer}d</span></td>
-                      <td className="money">{formatMoney(c.saldoPendiente)}</td>
-                      <td>{c.cobradorNombre || '-'}</td>
-                    </tr>
-                  ))}{cobrosDelMes.cuotasProximas.length === 0 && <tr><td colSpan={5} className="empty-state">No hay cuotas próximas este mes</td></tr>}</tbody>
-                </table>
-              </div>
-
-              {cobrosDelMes.cuotasVencidas.length > 0 && (
+              {loadingCobros ? (
+                <div className="loading"><div className="spinner"></div></div>
+              ) : cobrosDelMes ? (
                 <>
-                  <h4 style={{ color: '#ef4444', margin: '1rem 0 0.5rem' }}>⚠️ Cuotas Vencidas</h4>
+                  <div className="kpi-grid" style={{ marginBottom: '1rem' }}>
+                    <div className="kpi-card"><span className="kpi-title">📅 Hoy ({cobrosDelMes.resumen.totalCuotasHoy})</span><span className="kpi-value">{formatMoney(cobrosDelMes.resumen.montoTotalHoy)}</span></div>
+                    <div className="kpi-card" style={{ borderColor: '#ef4444' }}><span className="kpi-title">⚠️ Vencidas ({cobrosDelMes.resumen.totalCuotasVencidas})</span><span className="kpi-value" style={{ color: '#ef4444' }}>{formatMoney(cobrosDelMes.resumen.montoTotalVencido)}</span></div>
+                    <div className="kpi-card" style={{ borderColor: '#3b82f6' }}><span className="kpi-title">📆 Próximas ({cobrosDelMes.resumen.totalCuotasProximas})</span><span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(cobrosDelMes.resumen.montoTotalProximas)}</span></div>
+                  </div>
+                  <h4 style={{ color: '#10b981', margin: '1rem 0 0.5rem' }}>📅 Cobros de Hoy</h4>
                   <div className="table-container">
-                    <table><thead><tr><th>✓</th><th>Cliente</th><th>Fecha</th><th>Días</th><th>Monto</th></tr></thead>
-                      <tbody>{cobrosDelMes.cuotasVencidas.map(c => (
-                        <tr key={c.id} style={{ background: 'rgba(239,68,68,0.1)' }}>
+                    <table><thead><tr><th>✓</th><th>Cliente</th><th>Cuota</th><th>Monto</th><th>Cobrador</th></tr></thead>
+                      <tbody>{cobrosDelMes.cuotasHoy.map(c => (
+                        <tr key={c.id} style={{ opacity: c.cobrado ? 0.6 : 1 }}>
                           <td><input type="checkbox" checked={c.cobrado} onChange={e => handleMarcarCobrado(c.id, e.target.checked)} /></td>
                           <td><strong>{c.clienteNombre}</strong><div style={{ fontSize: '0.75rem' }}>{c.clienteTelefono}</div></td>
-                          <td style={{ color: '#ef4444' }}>{formatDate(c.fechaCobro)}</td>
-                          <td><span className="badge badge-red">{Math.abs(c.diasParaVencer)}d</span></td>
+                          <td>#{c.numeroCuota}</td>
                           <td className="money">{formatMoney(c.saldoPendiente)}</td>
+                          <td>{c.cobradorNombre || '-'}</td>
                         </tr>
-                      ))}</tbody>
+                      ))}{cobrosDelMes.cuotasHoy.length === 0 && <tr><td colSpan={5} className="empty-state">No hay cuotas para hoy</td></tr>}</tbody>
                     </table>
                   </div>
+
+                  <h4 style={{ color: '#3b82f6', margin: '1rem 0 0.5rem' }}>📆 Próximas del Mes</h4>
+                  <div className="table-container">
+                    <table><thead><tr><th>Cliente</th><th>Fecha</th><th>En</th><th>Monto</th><th>Cobrador</th></tr></thead>
+                      <tbody>{cobrosDelMes.cuotasProximas.map(c => (
+                        <tr key={c.id}>
+                          <td><strong>{c.clienteNombre}</strong><div style={{ fontSize: '0.75rem' }}>{c.clienteTelefono}</div></td>
+                          <td>{formatDate(c.fechaCobro)}</td>
+                          <td><span className="badge badge-blue">{c.diasParaVencer}d</span></td>
+                          <td className="money">{formatMoney(c.saldoPendiente)}</td>
+                          <td>{c.cobradorNombre || '-'}</td>
+                        </tr>
+                      ))}{cobrosDelMes.cuotasProximas.length === 0 && <tr><td colSpan={5} className="empty-state">No hay cuotas próximas este mes</td></tr>}</tbody>
+                    </table>
+                  </div>
+
+                  {cobrosDelMes.cuotasVencidas.length > 0 && (
+                    <>
+                      <h4 style={{ color: '#ef4444', margin: '1rem 0 0.5rem' }}>⚠️ Cuotas Vencidas</h4>
+                      <div className="table-container">
+                        <table><thead><tr><th>✓</th><th>Cliente</th><th>Fecha</th><th>Días</th><th>Monto</th></tr></thead>
+                          <tbody>{cobrosDelMes.cuotasVencidas.map(c => (
+                            <tr key={c.id} style={{ background: 'rgba(239,68,68,0.1)' }}>
+                              <td><input type="checkbox" checked={c.cobrado} onChange={e => handleMarcarCobrado(c.id, e.target.checked)} /></td>
+                              <td><strong>{c.clienteNombre}</strong><div style={{ fontSize: '0.75rem' }}>{c.clienteTelefono}</div></td>
+                              <td style={{ color: '#ef4444' }}>{formatDate(c.fechaCobro)}</td>
+                              <td><span className="badge badge-red">{Math.abs(c.diasParaVencer)}d</span></td>
+                              <td className="money">{formatMoney(c.saldoPendiente)}</td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    </>
+                  )}
                 </>
-              )}
+              ) : null}
             </div>
           )}
 
