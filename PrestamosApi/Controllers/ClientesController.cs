@@ -133,6 +133,16 @@ public class ClientesController : BaseApiController
         if (cliente == null)
             return NotFound(new { message = "Cliente no encontrado" });
 
+        // Update Cedula if provided and different
+        if (!string.IsNullOrEmpty(dto.Cedula) && dto.Cedula != cliente.Cedula)
+        {
+            if (await _context.Clientes.AnyAsync(c => c.Cedula == dto.Cedula && c.Id != id))
+            {
+                return BadRequest(new { message = "Ya existe otro cliente con esta cédula" });
+            }
+            cliente.Cedula = dto.Cedula;
+        }
+
         cliente.Nombre = dto.Nombre;
         cliente.Telefono = dto.Telefono;
         cliente.Direccion = dto.Direccion;

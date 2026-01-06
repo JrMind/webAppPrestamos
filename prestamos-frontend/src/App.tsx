@@ -109,6 +109,7 @@ function App() {
   // Edición de Préstamo
   const [editMode, setEditMode] = useState(false);
   const [editingPrestamoId, setEditingPrestamoId] = useState<number | null>(null);
+  const [editingClienteId, setEditingClienteId] = useState<number | null>(null);
 
   const loadData = useCallback(async () => {
     if (!isAuthenticated) { setLoading(false); return; }
@@ -442,12 +443,36 @@ function App() {
   const [usuarioForm, setUsuarioForm] = useState({ nombre: '', email: '', password: '', telefono: '', rol: 'Socio', porcentajeParticipacion: 0, tasaInteresMensual: 3 });
   const [aporteForm, setAporteForm] = useState({ usuarioId: 0, monto: 0, descripcion: '', tipo: 'aporte' });
 
+  const openEditCliente = (cliente: Cliente) => {
+    setEditingClienteId(cliente.id);
+    setClienteForm({
+      nombre: cliente.nombre,
+      cedula: cliente.cedula,
+      telefono: cliente.telefono || '',
+      direccion: cliente.direccion || '',
+      email: cliente.email || ''
+    });
+    setShowClienteModal(true);
+  };
+
   const handleCreateCliente = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await clientesApi.create(clienteForm);
-      showToast('Cliente creado exitosamente', 'success');
+      if (editingClienteId) {
+        const currentCliente = clientes.find(c => c.id === editingClienteId);
+        if (!currentCliente) throw new Error('Cliente no encontrado');
+
+        await clientesApi.update(editingClienteId, {
+          ...clienteForm,
+          estado: currentCliente.estado
+        });
+        showToast('Cliente actualizado exitosamente', 'success');
+      } else {
+        await clientesApi.create(clienteForm);
+        showToast('Cliente creado exitosamente', 'success');
+      }
       setShowClienteModal(false);
+      setEditingClienteId(null);
       setClienteForm({ nombre: '', cedula: '', telefono: '', direccion: '', email: '' });
       loadData();
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
@@ -807,6 +832,7 @@ function App() {
                     <th>Préstamos</th>
                     <th>Total</th>
                     <th>Estado</th>
+                    <th>Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -823,11 +849,16 @@ function App() {
                           {c.estado}
                         </span>
                       </td>
+                      <td>
+                        <button className="btn btn-secondary btn-sm" onClick={() => openEditCliente(c)}>
+                          ✏️ Editar
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   {clientes.length === 0 && (
                     <tr>
-                      <td colSpan={7} className="empty-state">No hay clientes</td>
+                      <td colSpan={8} className="empty-state">No hay clientes</td>
                     </tr>
                   )}
                 </tbody>
@@ -1058,9 +1089,9 @@ function App() {
 
       {/* Modals */}
       {showClienteModal && (
-        <div className="modal-overlay" onClick={() => setShowClienteModal(false)}>
+        <div className="modal-overlay" onClick={() => { setShowClienteModal(false); setEditingClienteId(null); setClienteForm({ nombre: '', cedula: '', telefono: '', direccion: '', email: '' }); }}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header"><h2>Nuevo Cliente</h2><button className="modal-close" onClick={() => setShowClienteModal(false)}>×</button></div>
+            <div className="modal-header"><h2>{editingClienteId ? 'Editar Cliente' : 'Nuevo Cliente'}</h2><button className="modal-close" onClick={() => { setShowClienteModal(false); setEditingClienteId(null); setClienteForm({ nombre: '', cedula: '', telefono: '', direccion: '', email: '' }); }}>×</button></div>
             <form onSubmit={handleCreateCliente}>
               <div className="modal-body">
                 <div className="form-grid">
@@ -1068,9 +1099,10 @@ function App() {
                   <div className="form-group"><label>Cédula *</label><input type="text" required value={clienteForm.cedula} onChange={e => setClienteForm({ ...clienteForm, cedula: e.target.value })} /></div>
                   <div className="form-group"><label>Teléfono</label><input type="tel" value={clienteForm.telefono || ''} onChange={e => setClienteForm({ ...clienteForm, telefono: e.target.value })} /></div>
                   <div className="form-group"><label>Email</label><input type="email" value={clienteForm.email || ''} onChange={e => setClienteForm({ ...clienteForm, email: e.target.value })} /></div>
+                  <div className="form-group full-width"><label>Dirección</label><input type="text" value={clienteForm.direccion || ''} onChange={e => setClienteForm({ ...clienteForm, direccion: e.target.value })} /></div>
                 </div>
               </div>
-              <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowClienteModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">Guardar</button></div>
+              <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => { setShowClienteModal(false); setEditingClienteId(null); setClienteForm({ nombre: '', cedula: '', telefono: '', direccion: '', email: '' }); }}>Cancelar</button><button type="submit" className="btn btn-primary">{editingClienteId ? 'Actualizar' : 'Guardar'}</button></div>
             </form>
           </div>
         </div>

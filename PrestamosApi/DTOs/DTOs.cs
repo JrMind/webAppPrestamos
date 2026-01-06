@@ -24,6 +24,7 @@ public record CreateClienteDto(
 
 public record UpdateClienteDto(
     string Nombre,
+    string? Cedula,
     string? Telefono,
     string? Direccion,
     string? Email,

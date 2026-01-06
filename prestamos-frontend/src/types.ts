@@ -120,6 +120,15 @@ export interface CreateClienteDto {
   email?: string;
 }
 
+export interface UpdateClienteDto {
+  nombre: string;
+  cedula?: string;
+  telefono?: string;
+  direccion?: string;
+  email?: string;
+  estado: string;
+}
+
 export interface CuotaProxima {
   fechaCobro: string;
   monto: number;
