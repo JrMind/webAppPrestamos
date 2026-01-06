@@ -22,5 +22,6 @@ public enum TipoDestinatarioSms
     CuotasHoy,
     CuotasVencidas,
     TodosClientesActivos,
-    ProximasVencer // 3 días antes
+    ProximasVencer, // 3 días antes
+    ConfirmacionPago // Se envía cuando se marca como pagada una cuota
 }
