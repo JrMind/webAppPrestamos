@@ -218,6 +218,35 @@ public class UsuariosController : BaseApiController
 
         return NoContent();
     }
+
+    /// <summary>
+    /// Cambiar contraseña de un usuario (solo Socio puede hacerlo)
+    /// </summary>
+    [HttpPut("{id}/cambiar-password")]
+    public async Task<IActionResult> CambiarPassword(int id, [FromBody] CambiarPasswordDto dto)
+    {
+        var currentRole = GetCurrentUserRole();
+        if (currentRole != RolUsuario.Socio)
+        {
+            return Forbid();
+        }
+
+        var usuario = await _context.Usuarios.FindAsync(id);
+        if (usuario == null)
+        {
+            return NotFound(new { message = "Usuario no encontrado" });
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.NuevaPassword) || dto.NuevaPassword.Length < 6)
+        {
+            return BadRequest(new { message = "La contraseña debe tener al menos 6 caracteres" });
+        }
+
+        usuario.PasswordHash = _authService.HashPassword(dto.NuevaPassword);
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = $"Contraseña actualizada para {usuario.Nombre}" });
+    }
 }
 
 public class CreateUsuarioDto
@@ -247,3 +276,7 @@ public class AsignarRolDto
     public decimal? TasaInteresMensual { get; set; }
 }
 
+public class CambiarPasswordDto
+{
+    public string NuevaPassword { get; set; } = string.Empty;
+}

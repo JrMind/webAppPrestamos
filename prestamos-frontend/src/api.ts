@@ -106,6 +106,19 @@ export const usuariosApi = {
             headers: getHeaders(),
         });
         if (!response.ok) throw new Error('Error al eliminar usuario');
+    },
+
+    cambiarPassword: async (id: number, nuevaPassword: string): Promise<{ message: string }> => {
+        const response = await fetch(`${API_URL}/usuarios/${id}/cambiar-password`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({ nuevaPassword }),
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ message: 'Error al cambiar contraseña' }));
+            throw new Error(error.message);
+        }
+        return response.json();
     }
 };
 

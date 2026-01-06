@@ -36,6 +36,9 @@ function App() {
   const [smsCampaignForm, setSmsCampaignForm] = useState<CreateSmsCampaignDto>({
     nombre: '', mensaje: '', activo: true, diasEnvio: '[]', horasEnvio: '[]', vecesPorDia: 1, tipoDestinatario: 'CuotasHoy'
   });
+  const [showPasswordModal, setShowPasswordModal] = useState(false);
+  const [passwordChangeUserId, setPasswordChangeUserId] = useState<number | null>(null);
+  const [newPassword, setNewPassword] = useState('');
 
   // Filters
   const [filtroEstado, setFiltroEstado] = useState('Todos');
@@ -208,6 +211,24 @@ function App() {
       showToast('Campaña eliminada', 'success');
       loadSmsCampaigns();
     } catch (error) { showToast('Error al eliminar', 'error'); }
+  };
+
+  const openPasswordModal = (userId: number) => {
+    setPasswordChangeUserId(userId);
+    setNewPassword('');
+    setShowPasswordModal(true);
+  };
+
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!passwordChangeUserId) return;
+    try {
+      await usuariosApi.cambiarPassword(passwordChangeUserId, newPassword);
+      showToast('Contraseña actualizada exitosamente', 'success');
+      setShowPasswordModal(false);
+      setPasswordChangeUserId(null);
+      setNewPassword('');
+    } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
   const loadAportadoresExternos = async () => {
@@ -902,7 +923,7 @@ function App() {
                 <button className="btn btn-primary" onClick={() => setShowUsuarioModal(true)}>+ Nuevo Usuario</button>
               </div>
               <div className="table-container">
-                <table><thead><tr><th>Nombre</th><th>Email</th><th>Teléfono</th><th>Rol</th><th>% Participación</th><th>Estado</th></tr></thead>
+                <table><thead><tr><th>Nombre</th><th>Email</th><th>Teléfono</th><th>Rol</th><th>%</th><th>Estado</th><th>Acciones</th></tr></thead>
                   <tbody>{usuarios.map(u => (
                     <tr key={u.id}>
                       <td><strong>{u.nombre}</strong></td>
@@ -911,6 +932,7 @@ function App() {
                       <td><span className="badge badge-blue">{u.rol}</span></td>
                       <td>{u.porcentajeParticipacion}%</td>
                       <td><span className={`badge ${u.activo ? 'badge-green' : 'badge-gray'}`}>{u.activo ? 'Activo' : 'Inactivo'}</span></td>
+                      <td><button className="btn btn-secondary btn-sm" onClick={() => openPasswordModal(u.id)}>🔑 Cambiar Contraseña</button></td>
                     </tr>
                   ))}</tbody>
                 </table>
@@ -1474,6 +1496,24 @@ function App() {
                 </div>
               </div>
               <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowSmsCampaignModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">Crear Campaña</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Password Change Modal */}
+      {showPasswordModal && (
+        <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '400px' }}>
+            <div className="modal-header"><h2>🔑 Cambiar Contraseña</h2><button className="modal-close" onClick={() => setShowPasswordModal(false)}>×</button></div>
+            <form onSubmit={handleChangePassword}>
+              <div className="modal-body">
+                <div className="form-group">
+                  <label>Nueva Contraseña *</label>
+                  <input type="password" required minLength={6} value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Mínimo 6 caracteres" />
+                </div>
+              </div>
+              <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowPasswordModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">Guardar</button></div>
             </form>
           </div>
         </div>
