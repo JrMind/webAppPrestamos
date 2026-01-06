@@ -200,7 +200,9 @@ public class CobrosController : BaseApiController
     [HttpGet("resumen-diario")]
     public async Task<ActionResult<object>> GetResumenDiario([FromQuery] DateTime? fecha)
     {
-        var targetDate = fecha?.Date ?? DateTime.UtcNow.Date;
+        var targetDate = fecha.HasValue 
+            ? DateTime.SpecifyKind(fecha.Value.Date, DateTimeKind.Utc) 
+            : DateTime.UtcNow.Date;
 
         var cuotasCobradas = await _context.CuotasPrestamo
             .Where(c => c.FechaPago.HasValue && c.FechaPago.Value.Date == targetDate && c.Cobrado)
@@ -227,7 +229,7 @@ public class CobrosController : BaseApiController
     public async Task<ActionResult<object>> GetCobrosDelMes()
     {
         var today = DateTime.UtcNow.Date;
-        var startOfMonth = new DateTime(today.Year, today.Month, 1);
+        var startOfMonth = new DateTime(today.Year, today.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         var endOfMonth = startOfMonth.AddMonths(1).AddDays(-1);
         var userId = GetCurrentUserId();
         var isCobrador = IsCobrador();
