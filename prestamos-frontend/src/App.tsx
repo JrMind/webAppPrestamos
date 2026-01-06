@@ -769,18 +769,35 @@ function App() {
         <div className="charts-grid">
           <div className="chart-container">
             <h3 className="chart-title">Evolución</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={metricas?.evolucionPrestamos || []}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" /><XAxis dataKey="fecha" tickFormatter={v => new Date(v).toLocaleDateString('es-CO', { month: 'short' })} stroke="#666" /><YAxis stroke="#666" tickFormatter={v => `${(v / 1000000).toFixed(0)}M`} />
-                <Tooltip formatter={v => formatMoney(Number(v || 0))} contentStyle={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }} />
-                <Line type="monotone" dataKey="montoPrestadoAcumulado" stroke="#3b82f6" strokeWidth={2} /><Line type="monotone" dataKey="montoCobradoAcumulado" stroke="#10b981" strokeWidth={2} />
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={metricas?.evolucionPrestamos || []} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#2a2a2a" />
+                <XAxis dataKey="fecha" tickFormatter={v => new Date(v).toLocaleDateString('es-CO', { month: 'short' })} stroke="#666" style={{ fontSize: '0.7rem' }} />
+                <YAxis stroke="#666" tickFormatter={v => `${(v / 1000000).toFixed(1)}M`} style={{ fontSize: '0.7rem' }} width={30} />
+                <Tooltip formatter={v => formatMoney(Number(v || 0))} contentStyle={{ background: '#1a1a1a', border: '1px solid #2a2a2a', fontSize: '0.8rem' }} />
+                <Line type="monotone" dataKey="montoPrestadoAcumulado" stroke="#3b82f6" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="montoCobradoAcumulado" stroke="#10b981" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
           </div>
           <div className="chart-container">
             <h3 className="chart-title">Estados</h3>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart><Pie data={[{ name: 'Activos', value: metricas?.distribucionEstados?.activos || 0 }, { name: 'Pagados', value: metricas?.distribucionEstados?.pagados || 0 }, { name: 'Vencidos', value: metricas?.distribucionEstados?.vencidos || 0 }]} cx="50%" cy="50%" outerRadius={60} dataKey="value" label>{COLORS.map((c, i) => <Cell key={i} fill={c} />)}</Pie><Legend /><Tooltip contentStyle={{ background: '#1a1a1a', border: '1px solid #2a2a2a' }} /></PieChart>
+            <ResponsiveContainer width="100%" height={250}>
+              <PieChart margin={{ top: 0, bottom: 0, left: 0, right: 0 }}>
+                <Pie
+                  data={[{ name: 'Activos', value: metricas?.distribucionEstados?.activos || 0 }, { name: 'Pagados', value: metricas?.distribucionEstados?.pagados || 0 }, { name: 'Vencidos', value: metricas?.distribucionEstados?.vencidos || 0 }]}
+                  cx="50%"
+                  cy="50%"
+                  innerRadius={50}
+                  outerRadius={80}
+                  dataKey="value"
+                  paddingAngle={5}
+                >
+                  {COLORS.map((c, i) => <Cell key={i} fill={c} />)}
+                </Pie>
+                <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: '0.8rem' }} />
+                <Tooltip contentStyle={{ background: '#1a1a1a', border: '1px solid #2a2a2a', fontSize: '0.8rem' }} />
+              </PieChart>
             </ResponsiveContainer>
           </div>
         </div>

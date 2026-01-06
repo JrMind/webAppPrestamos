@@ -1086,7 +1086,8 @@ tr:hover td {
   }
 
   .chart-container {
-    height: 180px;
+    min-height: 250px;
+    padding: 0.75rem;
   }
 
   /* Main content padding */
