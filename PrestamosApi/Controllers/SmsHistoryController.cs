@@ -74,7 +74,8 @@ public class SmsHistoryController : ControllerBase
     [HttpGet("stats")]
     public async Task<ActionResult<object>> GetStats([FromQuery] int? days = 30)
     {
-        var desde = DateTime.UtcNow.AddDays(-days.Value);
+        var limit = days ?? 30;
+        var desde = DateTime.UtcNow.AddDays(-limit);
 
         var stats = await _context.SmsHistories
             .Where(h => h.FechaEnvio >= desde)

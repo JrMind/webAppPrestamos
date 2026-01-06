@@ -12,10 +12,12 @@ namespace PrestamosApi.Controllers;
 public class CobrosController : BaseApiController
 {
     private readonly PrestamosDbContext _context;
+    private readonly Services.ITwilioService _twilioService;
 
-    public CobrosController(PrestamosDbContext context)
+    public CobrosController(PrestamosDbContext context, Services.ITwilioService twilioService)
     {
         _context = context;
+        _twilioService = twilioService;
     }
 
     [HttpGet("hoy")]
@@ -107,7 +109,13 @@ public class CobrosController : BaseApiController
     [HttpPut("{cuotaId}/marcar")]
     public async Task<IActionResult> MarcarCobrado(int cuotaId, [FromBody] MarcarCobradoDto dto)
     {
-        var cuota = await _context.CuotasPrestamo.FindAsync(cuotaId);
+        var cuota = await _context.CuotasPrestamo
+            .Include(c => c.Prestamo)
+                .ThenInclude(p => p!.Cliente)
+            .Include(c => c.Prestamo)
+                .ThenInclude(p => p!.Cuotas)
+            .FirstOrDefaultAsync(c => c.Id == cuotaId);
+
         if (cuota == null)
         {
             return NotFound();
@@ -119,9 +127,72 @@ public class CobrosController : BaseApiController
         if (dto.Cobrado && !cuota.FechaPago.HasValue)
         {
             cuota.FechaPago = DateTime.UtcNow;
+            cuota.MontoPagado = cuota.MontoCuota; // Asumir pago completo por defecto al marcar
+            cuota.EstadoCuota = "Pagada";
+        }
+        else if (!dto.Cobrado)
+        {
+            cuota.FechaPago = null;
+            cuota.MontoPagado = 0;
+            cuota.EstadoCuota = "Pendiente";
         }
 
         await _context.SaveChangesAsync();
+
+        // Enviar SMS si es marcado como cobrado
+        if (dto.Cobrado && cuota.Prestamo?.Cliente?.Telefono != null)
+        {
+            try 
+            {
+                var campaign = await _context.SmsCampaigns
+                    .FirstOrDefaultAsync(c => c.Activo && c.TipoDestinatario == TipoDestinatarioSms.ConfirmacionPago);
+
+                if (campaign != null)
+                {
+                    var prestamo = cuota.Prestamo;
+                    var cuotasTotales = prestamo.Cuotas.Count;
+                    var cuotasPagadas = prestamo.Cuotas.Count(c => c.Cobrado);
+                    var cuotasRestantes = cuotasTotales - cuotasPagadas;
+                    
+                    var proximaCuotaEntity = prestamo.Cuotas
+                        .Where(c => !c.Cobrado && c.Id != cuota.Id)
+                        .OrderBy(c => c.FechaCobro)
+                        .FirstOrDefault();
+                    
+                    var saldoPendiente = prestamo.Cuotas.Where(c => !c.Cobrado).Sum(c => c.SaldoPendiente);
+
+                    var mensaje = campaign.Mensaje
+                        .Replace("{cliente}", prestamo.Cliente.Nombre)
+                        .Replace("{monto}", cuota.MontoPagado.ToString("N0"))
+                        .Replace("{cuotasPagadas}", cuotasPagadas.ToString())
+                        .Replace("{cuotasRestantes}", cuotasRestantes.ToString())
+                        .Replace("{proximaCuota}", proximaCuotaEntity?.MontoCuota.ToString("N0") ?? "0")
+                        .Replace("{fechaProxima}", proximaCuotaEntity?.FechaCobro.ToString("dd/MM/yyyy") ?? "-")
+                        .Replace("{saldoPendiente}", saldoPendiente.ToString("N0"));
+
+                    var sent = await _twilioService.SendSmsAsync(prestamo.Cliente.Telefono, mensaje);
+
+                    var history = new SmsHistory
+                    {
+                        SmsCampaignId = campaign.Id,
+                        ClienteId = prestamo.ClienteId,
+                        NumeroTelefono = prestamo.Cliente.Telefono,
+                        Mensaje = mensaje,
+                        FechaEnvio = DateTime.UtcNow,
+                        Estado = sent ? EstadoSms.Enviado : EstadoSms.Fallido,
+                        TwilioSid = sent ? "SentAPI" : null
+                    };
+
+                    _context.SmsHistories.Add(history);
+                    await _context.SaveChangesAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                // Log error but don't fail the request
+                Console.WriteLine($"Error sending SMS: {ex.Message}");
+            }
+        }
 
         return Ok(new { message = dto.Cobrado ? "Cuota marcada como cobrada" : "Cuota desmarcada" });
     }

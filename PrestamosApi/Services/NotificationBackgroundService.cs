@@ -137,6 +137,110 @@ public class NotificationBackgroundService : BackgroundService
             }
         }
 
+        // ... (Existing admin notification logic remains)
+        
+        // ---------------------------------------------------------
+        // PROCESAR CAMPAÑAS DE SMS PARA CLIENTES
+        // ---------------------------------------------------------
+        try 
+        {
+            var activeCampaigns = await context.SmsCampaigns
+                .Where(c => c.Activo && c.TipoDestinatario != TipoDestinatarioSms.ConfirmacionPago)
+                .ToListAsync();
+
+            var dayName = today.ToString("dddd", new System.Globalization.CultureInfo("es-ES"));
+            // Capitalize first letter: lunes -> Lunes
+            if (!string.IsNullOrEmpty(dayName)) dayName = char.ToUpper(dayName[0]) + dayName.Substring(1);
+
+            foreach (var campaign in activeCampaigns)
+            {
+                // Verificar Días de Envio
+                if (!string.IsNullOrEmpty(campaign.DiasEnvio) && campaign.DiasEnvio != "[]")
+                {
+                    if (!campaign.DiasEnvio.Contains(dayName)) continue;
+                }
+
+                List<CuotaPrestamo> targetCuotas = new List<CuotaPrestamo>();
+
+                if (campaign.TipoDestinatario == TipoDestinatarioSms.CuotasHoy)
+                {
+                    targetCuotas = await context.CuotasPrestamo
+                        .Include(c => c.Prestamo).ThenInclude(p => p!.Cliente)
+                        .Where(c => c.FechaCobro.Date == today && c.EstadoCuota != "Pagada")
+                        .ToListAsync();
+                }
+                else if (campaign.TipoDestinatario == TipoDestinatarioSms.CuotasVencidas)
+                {
+                    targetCuotas = await context.CuotasPrestamo
+                        .Include(c => c.Prestamo).ThenInclude(p => p!.Cliente)
+                        .Where(c => c.FechaCobro.Date < today && c.EstadoCuota != "Pagada")
+                        .ToListAsync();
+                }
+                else if (campaign.TipoDestinatario == TipoDestinatarioSms.ProximasVencer)
+                {
+                    var targetDate = today.AddDays(3); // Default 3 días
+                    targetCuotas = await context.CuotasPrestamo
+                        .Include(c => c.Prestamo).ThenInclude(p => p!.Cliente)
+                        .Where(c => c.FechaCobro.Date == targetDate && c.EstadoCuota != "Pagada")
+                        .ToListAsync();
+                }
+                else if (campaign.TipoDestinatario == TipoDestinatarioSms.TodosClientesActivos)
+                {
+                   // Logic for all active clients (might need distinct loans)
+                   var activeLoans = await context.Prestamos
+                       .Include(p => p.Cliente)
+                       .Include(p => p.Cuotas)
+                       .Where(p => p.EstadoPrestamo == "Activo")
+                       .ToListAsync();
+
+                   foreach(var loan in activeLoans)
+                   {
+                       if (string.IsNullOrEmpty(loan.Cliente?.Telefono)) continue;
+                       
+                       // Create dummy cuota for template or handle differently
+                       var proxima = loan.Cuotas.Where(c => !c.Cobrado).OrderBy(c => c.FechaCobro).FirstOrDefault();
+                       if (proxima != null) targetCuotas.Add(proxima);
+                   }
+                }
+
+                // Enviar SMS
+                foreach (var cuota in targetCuotas)
+                {
+                    if (cuota.Prestamo?.Cliente?.Telefono == null) continue;
+
+                    var prestamo = cuota.Prestamo;
+                    // Calcular variables para template
+                    var cuotasPagadas = prestamo.Cuotas.Count(c => c.Cobrado);
+                    var saldoPendiente = prestamo.Cuotas.Where(c => !c.Cobrado).Sum(c => c.SaldoPendiente);
+                    
+                    var mensaje = campaign.Mensaje
+                        .Replace("{cliente}", prestamo.Cliente.Nombre)
+                        .Replace("{monto}", cuota.MontoCuota.ToString("N0")) // Monto de la cuota actual/próxima
+                        .Replace("{fecha}", cuota.FechaCobro.ToString("dd/MM/yyyy"))
+                        .Replace("{cuotasPagadas}", cuotasPagadas.ToString())
+                        .Replace("{saldoPendiente}", saldoPendiente.ToString("N0"));
+
+                    var sent = await twilioService.SendSmsAsync(prestamo.Cliente.Telefono, mensaje);
+
+                    context.SmsHistories.Add(new SmsHistory
+                    {
+                        SmsCampaignId = campaign.Id,
+                        ClienteId = prestamo.ClienteId,
+                        NumeroTelefono = prestamo.Cliente.Telefono,
+                        Mensaje = mensaje,
+                        FechaEnvio = DateTime.UtcNow,
+                        Estado = sent ? EstadoSms.Enviado : EstadoSms.Fallido,
+                        TwilioSid = sent ? "SentBackground" : null
+                    });
+                }
+                await context.SaveChangesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error processing SMS campaigns");
+        }
+
         _logger.LogInformation("Notificaciones enviadas: {Socios} socios, {Cobradores} cobradores", 
             destinatarios.Count(d => d.Rol == RolUsuario.Socio),
             destinatarios.Count(d => d.Rol == RolUsuario.Cobrador));
