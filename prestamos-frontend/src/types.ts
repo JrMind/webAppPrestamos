@@ -334,3 +334,107 @@ export interface CreatePrestamoConFuentesDto {
   fuentesCapital: FuenteCapital[];
 }
 
+// SMS Campaign Types
+export interface SmsCampaign {
+  id: number;
+  nombre: string;
+  mensaje: string;
+  activo: boolean;
+  diasEnvio: string;
+  horasEnvio: string;
+  vecesPorDia: number;
+  tipoDestinatario: string;
+  fechaCreacion: string;
+  fechaModificacion?: string;
+  smsEnviados?: number;
+}
+
+export interface CreateSmsCampaignDto {
+  nombre: string;
+  mensaje: string;
+  activo: boolean;
+  diasEnvio: string;
+  horasEnvio: string;
+  vecesPorDia: number;
+  tipoDestinatario: string;
+}
+
+export interface SmsHistory {
+  id: number;
+  smsCampaignId?: number;
+  campaignNombre?: string;
+  clienteId?: number;
+  clienteNombre?: string;
+  numeroTelefono: string;
+  mensaje: string;
+  fechaEnvio: string;
+  estado: string;
+  twilioSid?: string;
+  errorMessage?: string;
+}
+
+export interface SmsHistoryResponse {
+  data: SmsHistory[];
+  total: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+}
+
+// Extended Cuota for Cobros del Mes
+export interface CuotaCobroMes {
+  id: number;
+  prestamoId: number;
+  numeroCuota: number;
+  fechaCobro: string;
+  montoCuota: number;
+  montoPagado: number;
+  saldoPendiente: number;
+  estadoCuota: string;
+  cobrado: boolean;
+  clienteNombre: string;
+  clienteTelefono?: string;
+  cobradorNombre?: string;
+  diasParaVencer: number;
+}
+
+export interface CobrosDelMes {
+  fecha: string;
+  mesActual: string;
+  cuotasHoy: CuotaCobroMes[];
+  cuotasVencidas: CuotaCobroMes[];
+  cuotasProximas: CuotaCobroMes[];
+  resumen: {
+    totalCuotasHoy: number;
+    totalCuotasVencidas: number;
+    totalCuotasProximas: number;
+    montoTotalHoy: number;
+    montoTotalVencido: number;
+    montoTotalProximas: number;
+  };
+}
+
+// Mi Balance Types
+export interface AporteDetalle {
+  id: number;
+  montoInicial: number;
+  montoActual: number;
+  fechaAporte: string;
+  descripcion?: string;
+  mesesTranscurridos: number;
+  interesGenerado: number;
+}
+
+export interface MiBalance {
+  usuarioId: number;
+  nombreUsuario: string;
+  tasaInteresMensual: number;
+  capitalAportado: number;
+  interesGanado: number;
+  capitalConInteres: number;
+  fechaInicio?: string;
+  mesesTranscurridos: number;
+  totalCapitalNegocio: number;
+  restoTorta: number;
+  aportes: AporteDetalle[];
+}

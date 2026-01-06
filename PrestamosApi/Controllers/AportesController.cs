@@ -99,6 +99,96 @@ public class AportesController : ControllerBase
         await _gananciasService.AplicarInteresMensualAsync();
         return Ok(new { message = "Interés mensual aplicado exitosamente" });
     }
+
+    [HttpGet("mi-balance")]
+    public async Task<ActionResult<object>> GetMiBalance([FromQuery] int? usuarioId)
+    {
+        // Si no se especifica usuarioId, intentar obtener del token
+        var targetUserId = usuarioId;
+        if (!targetUserId.HasValue)
+        {
+            var userIdClaim = User.FindFirst("UserId")?.Value;
+            if (int.TryParse(userIdClaim, out var parsedId))
+                targetUserId = parsedId;
+        }
+
+        if (!targetUserId.HasValue)
+            return BadRequest(new { message = "Se requiere especificar el usuario" });
+
+        var usuario = await _context.Usuarios.FindAsync(targetUserId.Value);
+        if (usuario == null)
+            return NotFound(new { message = "Usuario no encontrado" });
+
+        // Obtener aportes del usuario
+        var aportes = await _context.Aportes
+            .Where(a => a.UsuarioId == targetUserId.Value)
+            .OrderBy(a => a.FechaAporte)
+            .ToListAsync();
+
+        // Calcular interés ganado basado en 3% mensual desde fecha de aporte
+        decimal interesGanado = 0;
+        decimal capitalAportado = 0;
+        var today = DateTime.UtcNow;
+        var tasaMensual = usuario.TasaInteresMensual / 100; // 3% = 0.03
+
+        var aportesDetalle = new List<object>();
+        DateTime? fechaInicioMasAntigua = null;
+
+        foreach (var aporte in aportes)
+        {
+            capitalAportado += aporte.MontoInicial;
+            
+            // Calcular meses transcurridos desde aporte
+            var mesesTranscurridos = (int)((today - aporte.FechaAporte).TotalDays / 30);
+            if (mesesTranscurridos > 0)
+            {
+                // Interés simple: capital * tasa * meses
+                var interesAporte = aporte.MontoInicial * tasaMensual * mesesTranscurridos;
+                interesGanado += interesAporte;
+            }
+
+            if (fechaInicioMasAntigua == null || aporte.FechaAporte < fechaInicioMasAntigua)
+                fechaInicioMasAntigua = aporte.FechaAporte;
+
+            aportesDetalle.Add(new
+            {
+                aporte.Id,
+                aporte.MontoInicial,
+                aporte.MontoActual,
+                aporte.FechaAporte,
+                aporte.Descripcion,
+                MesesTranscurridos = mesesTranscurridos,
+                InteresGenerado = aporte.MontoInicial * tasaMensual * mesesTranscurridos
+            });
+        }
+
+        // Calcular resto de la torta
+        // Capital total de TODO el negocio (de todos los usuarios/aportadores)
+        var totalCapitalNegocio = await _context.Aportes.SumAsync(a => a.MontoInicial);
+        
+        // Resto de la torta = (total - mi aporte) / 3 (según indicación del usuario)
+        var capitalOtros = totalCapitalNegocio - capitalAportado;
+        var restoTorta = capitalOtros > 0 ? capitalOtros / 3 : 0;
+
+        var mesesTotales = fechaInicioMasAntigua.HasValue 
+            ? (int)((today - fechaInicioMasAntigua.Value).TotalDays / 30) 
+            : 0;
+
+        return Ok(new
+        {
+            usuarioId = targetUserId.Value,
+            nombreUsuario = usuario.Nombre,
+            tasaInteresMensual = usuario.TasaInteresMensual,
+            capitalAportado,
+            interesGanado,
+            capitalConInteres = capitalAportado + interesGanado,
+            fechaInicio = fechaInicioMasAntigua,
+            mesesTranscurridos = mesesTotales,
+            totalCapitalNegocio,
+            restoTorta,
+            aportes = aportesDetalle
+        });
+    }
 }
 
 public class AporteDto
@@ -107,3 +197,4 @@ public class AporteDto
     public decimal Monto { get; set; }
     public string? Descripcion { get; set; }
 }
+

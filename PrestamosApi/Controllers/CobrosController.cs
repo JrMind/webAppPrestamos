@@ -151,9 +151,122 @@ public class CobrosController : BaseApiController
             montoVencido = cuotasVencidas
         });
     }
+
+    [HttpGet("mes")]
+    public async Task<ActionResult<object>> GetCobrosDelMes()
+    {
+        var today = DateTime.UtcNow.Date;
+        var startOfMonth = new DateTime(today.Year, today.Month, 1);
+        var endOfMonth = startOfMonth.AddMonths(1).AddDays(-1);
+        var userId = GetCurrentUserId();
+        var isCobrador = IsCobrador();
+
+        // Base query
+        var baseQuery = _context.CuotasPrestamo
+            .Include(c => c.Prestamo)
+                .ThenInclude(p => p!.Cliente)
+            .Include(c => c.Prestamo)
+                .ThenInclude(p => p!.Cobrador)
+            .Where(c => c.EstadoCuota != "Pagada")
+            .AsQueryable();
+
+        // Si es cobrador, filtrar solo sus préstamos asignados
+        if (isCobrador && userId.HasValue)
+        {
+            baseQuery = baseQuery.Where(c => c.Prestamo!.CobradorId == userId.Value);
+        }
+
+        // Cuotas de hoy
+        var cuotasHoy = await baseQuery
+            .Where(c => c.FechaCobro.Date == today)
+            .OrderBy(c => c.Cobrado)
+            .ThenBy(c => c.Prestamo!.Cliente!.Nombre)
+            .Select(c => new
+            {
+                c.Id,
+                c.PrestamoId,
+                c.NumeroCuota,
+                c.FechaCobro,
+                c.MontoCuota,
+                c.MontoPagado,
+                c.SaldoPendiente,
+                c.EstadoCuota,
+                c.Cobrado,
+                ClienteNombre = c.Prestamo!.Cliente!.Nombre,
+                ClienteTelefono = c.Prestamo.Cliente.Telefono,
+                CobradorNombre = c.Prestamo.Cobrador != null ? c.Prestamo.Cobrador.Nombre : null,
+                DiasParaVencer = 0
+            })
+            .ToListAsync();
+
+        // Cuotas vencidas (días anteriores no pagadas)
+        var cuotasVencidas = await baseQuery
+            .Where(c => c.FechaCobro.Date < today && !c.Cobrado)
+            .OrderBy(c => c.FechaCobro)
+            .ThenBy(c => c.Prestamo!.Cliente!.Nombre)
+            .Select(c => new
+            {
+                c.Id,
+                c.PrestamoId,
+                c.NumeroCuota,
+                c.FechaCobro,
+                c.MontoCuota,
+                c.MontoPagado,
+                c.SaldoPendiente,
+                c.EstadoCuota,
+                c.Cobrado,
+                ClienteNombre = c.Prestamo!.Cliente!.Nombre,
+                ClienteTelefono = c.Prestamo.Cliente.Telefono,
+                CobradorNombre = c.Prestamo.Cobrador != null ? c.Prestamo.Cobrador.Nombre : null,
+                DiasParaVencer = (int)(today - c.FechaCobro.Date).TotalDays * -1
+            })
+            .ToListAsync();
+
+        // Cuotas próximas del mes (después de hoy, hasta fin de mes)
+        var cuotasProximas = await baseQuery
+            .Where(c => c.FechaCobro.Date > today && c.FechaCobro.Date <= endOfMonth)
+            .OrderBy(c => c.FechaCobro)
+            .ThenBy(c => c.Prestamo!.Cliente!.Nombre)
+            .Select(c => new
+            {
+                c.Id,
+                c.PrestamoId,
+                c.NumeroCuota,
+                c.FechaCobro,
+                c.MontoCuota,
+                c.MontoPagado,
+                c.SaldoPendiente,
+                c.EstadoCuota,
+                c.Cobrado,
+                ClienteNombre = c.Prestamo!.Cliente!.Nombre,
+                ClienteTelefono = c.Prestamo.Cliente.Telefono,
+                CobradorNombre = c.Prestamo.Cobrador != null ? c.Prestamo.Cobrador.Nombre : null,
+                DiasParaVencer = (int)(c.FechaCobro.Date - today).TotalDays
+            })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            fecha = today,
+            mesActual = today.ToString("MMMM yyyy"),
+            cuotasHoy,
+            cuotasVencidas,
+            cuotasProximas,
+            resumen = new
+            {
+                totalCuotasHoy = cuotasHoy.Count,
+                totalCuotasVencidas = cuotasVencidas.Count,
+                totalCuotasProximas = cuotasProximas.Count,
+                montoTotalHoy = cuotasHoy.Sum(c => c.SaldoPendiente),
+                montoTotalVencido = cuotasVencidas.Sum(c => c.SaldoPendiente),
+                montoTotalProximas = cuotasProximas.Sum(c => c.SaldoPendiente)
+            }
+        });
+    }
 }
 
 public class MarcarCobradoDto
 {
     public bool Cobrado { get; set; }
 }
+

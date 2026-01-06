@@ -20,6 +20,8 @@ public class PrestamosDbContext : DbContext
     public DbSet<AportadorExterno> AportadoresExternos => Set<AportadorExterno>();
     public DbSet<FuenteCapitalPrestamo> FuentesCapitalPrestamo => Set<FuenteCapitalPrestamo>();
     public DbSet<PagoAportadorExterno> PagosAportadoresExternos => Set<PagoAportadorExterno>();
+    public DbSet<SmsCampaign> SmsCampaigns => Set<SmsCampaign>();
+    public DbSet<SmsHistory> SmsHistories => Set<SmsHistory>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -289,6 +291,50 @@ public class PrestamosDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
 
             entity.HasIndex(e => e.AportadorExternoId).HasDatabaseName("idx_pagosaportadores_aportador");
+        });
+
+        // SmsCampaign
+        modelBuilder.Entity<SmsCampaign>(entity =>
+        {
+            entity.ToTable("smscampaigns");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Nombre).HasColumnName("nombre").HasMaxLength(200).IsRequired();
+            entity.Property(e => e.Mensaje).HasColumnName("mensaje").IsRequired();
+            entity.Property(e => e.Activo).HasColumnName("activo").HasDefaultValue(true);
+            entity.Property(e => e.DiasEnvio).HasColumnName("diasenvio").HasDefaultValue("[]");
+            entity.Property(e => e.HorasEnvio).HasColumnName("horasenvio").HasDefaultValue("[]");
+            entity.Property(e => e.VecesPorDia).HasColumnName("vecespordia").HasDefaultValue(1);
+            entity.Property(e => e.TipoDestinatario).HasColumnName("tipodestinatario").HasConversion<string>().HasMaxLength(50);
+            entity.Property(e => e.FechaCreacion).HasColumnName("fechacreacion").HasDefaultValueSql("NOW()");
+            entity.Property(e => e.FechaModificacion).HasColumnName("fechamodificacion");
+        });
+
+        // SmsHistory
+        modelBuilder.Entity<SmsHistory>(entity =>
+        {
+            entity.ToTable("smshistory");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.SmsCampaignId).HasColumnName("smscampaignid");
+            entity.Property(e => e.ClienteId).HasColumnName("clienteid");
+            entity.Property(e => e.NumeroTelefono).HasColumnName("numerotelefono").HasMaxLength(50).IsRequired();
+            entity.Property(e => e.Mensaje).HasColumnName("mensaje").IsRequired();
+            entity.Property(e => e.FechaEnvio).HasColumnName("fechaenvio").HasDefaultValueSql("NOW()");
+            entity.Property(e => e.Estado).HasColumnName("estado").HasConversion<string>().HasMaxLength(20);
+            entity.Property(e => e.TwilioSid).HasColumnName("twiliosid").HasMaxLength(100);
+            entity.Property(e => e.ErrorMessage).HasColumnName("errormessage");
+
+            entity.HasOne(e => e.SmsCampaign)
+                .WithMany(c => c.HistorialSms)
+                .HasForeignKey(e => e.SmsCampaignId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasOne(e => e.Cliente)
+                .WithMany()
+                .HasForeignKey(e => e.ClienteId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(e => e.SmsCampaignId).HasDatabaseName("idx_smshistory_campaign");
+            entity.HasIndex(e => e.FechaEnvio).HasDatabaseName("idx_smshistory_fecha");
         });
     }
 }

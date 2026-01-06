@@ -451,3 +451,88 @@ export const prestamosConFuentesApi = {
     },
 };
 
+// SMS Campaigns
+import type { SmsCampaign, CreateSmsCampaignDto, SmsHistoryResponse, CobrosDelMes, MiBalance as MiBalanceType } from './types';
+
+export const smsCampaignsApi = {
+    getAll: async (): Promise<SmsCampaign[]> => {
+        const response = await fetch(`${API_URL}/smscampaigns`, { headers: getHeaders() });
+        return handleResponse<SmsCampaign[]>(response);
+    },
+
+    getById: async (id: number): Promise<SmsCampaign> => {
+        const response = await fetch(`${API_URL}/smscampaigns/${id}`, { headers: getHeaders() });
+        return handleResponse<SmsCampaign>(response);
+    },
+
+    create: async (data: CreateSmsCampaignDto): Promise<{ message: string; id: number }> => {
+        const response = await fetch(`${API_URL}/smscampaigns`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return handleResponse(response);
+    },
+
+    update: async (id: number, data: Partial<CreateSmsCampaignDto>): Promise<void> => {
+        const response = await fetch(`${API_URL}/smscampaigns/${id}`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        if (!response.ok) throw new Error('Error al actualizar campaña');
+    },
+
+    toggle: async (id: number): Promise<{ activo: boolean }> => {
+        const response = await fetch(`${API_URL}/smscampaigns/${id}/toggle`, {
+            method: 'PUT',
+            headers: getHeaders(),
+        });
+        return handleResponse(response);
+    },
+
+    delete: async (id: number): Promise<void> => {
+        const response = await fetch(`${API_URL}/smscampaigns/${id}`, {
+            method: 'DELETE',
+            headers: getHeaders(),
+        });
+        if (!response.ok) throw new Error('Error al eliminar campaña');
+    },
+};
+
+export const smsHistoryApi = {
+    getAll: async (params?: { fechaDesde?: string; fechaHasta?: string; campaignId?: number; page?: number; pageSize?: number }): Promise<SmsHistoryResponse> => {
+        const searchParams = new URLSearchParams();
+        if (params) {
+            Object.entries(params).forEach(([key, value]) => {
+                if (value !== undefined) searchParams.append(key, String(value));
+            });
+        }
+        const url = `${API_URL}/smshistory${searchParams.toString() ? '?' + searchParams.toString() : ''}`;
+        const response = await fetch(url, { headers: getHeaders() });
+        return handleResponse<SmsHistoryResponse>(response);
+    },
+
+    getStats: async (days?: number): Promise<{ totalEnviados: number; porEstado: Array<{ Estado: string; Count: number }> }> => {
+        const url = `${API_URL}/smshistory/stats${days ? '?days=' + days : ''}`;
+        const response = await fetch(url, { headers: getHeaders() });
+        return handleResponse(response);
+    },
+};
+
+// Cobros del Mes (Tareas Diarias)
+export const cobrosDelMesApi = {
+    getCobrosDelMes: async (): Promise<CobrosDelMes> => {
+        const response = await fetch(`${API_URL}/cobros/mes`, { headers: getHeaders() });
+        return handleResponse<CobrosDelMes>(response);
+    },
+};
+
+// Mi Balance (nuevo endpoint para balance personal con cálculo de interés)
+export const miBalanceApi = {
+    getMiBalance: async (usuarioId?: number): Promise<MiBalanceType> => {
+        const url = usuarioId ? `${API_URL}/aportes/mi-balance?usuarioId=${usuarioId}` : `${API_URL}/aportes/mi-balance`;
+        const response = await fetch(url, { headers: getHeaders() });
+        return handleResponse<MiBalanceType>(response);
+    },
+};

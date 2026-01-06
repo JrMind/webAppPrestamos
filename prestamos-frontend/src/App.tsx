@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi } from './api';
-import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, CobrosHoy, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto } from './types';
+import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, miBalanceApi } from './api';
+import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, CobrosHoy, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MiBalance } from './types';
 import './App.css';
 
 const formatMoney = (amount: number): string => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount);
@@ -15,7 +15,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'socios' | 'usuarios' | 'aportadores'>('prestamos');
+  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'tareas' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores'>('prestamos');
 
   // Data states
   const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
@@ -27,6 +27,16 @@ function App() {
   const [showAportadorModal, setShowAportadorModal] = useState(false);
   const [aportadorForm, setAportadorForm] = useState<CreateAportadorExternoDto>({ nombre: '', telefono: '', email: '', tasaInteres: 3, diasParaPago: 30, notas: '' });
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+
+  // New feature states
+  const [smsCampaigns, setSmsCampaigns] = useState<SmsCampaign[]>([]);
+  const [smsHistoryData, setSmsHistoryData] = useState<SmsHistory[]>([]);
+  const [cobrosDelMes, setCobrosDelMes] = useState<CobrosDelMes | null>(null);
+  const [miBalance, setMiBalance] = useState<MiBalance | null>(null);
+  const [showSmsCampaignModal, setShowSmsCampaignModal] = useState(false);
+  const [smsCampaignForm, setSmsCampaignForm] = useState<CreateSmsCampaignDto>({
+    nombre: '', mensaje: '', activo: true, diasEnvio: '[]', horasEnvio: '[]', vecesPorDia: 1, tipoDestinatario: 'CuotasHoy'
+  });
 
   // Filters
   const [filtroEstado, setFiltroEstado] = useState('Todos');
@@ -146,6 +156,66 @@ function App() {
   useEffect(() => { if (activeTab === 'usuarios') loadUsuarios(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'clientes') loadClientes(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'aportadores') loadAportadoresExternos(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'sms') loadSmsCampaigns(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'smshistory') loadSmsHistory(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'tareas') loadCobrosDelMes(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'balance') loadMiBalance(); }, [activeTab]);
+
+  // New feature loaders
+  const loadSmsCampaigns = async () => {
+    try {
+      const data = await smsCampaignsApi.getAll();
+      setSmsCampaigns(data);
+    } catch (error) { console.error('Error loading SMS campaigns:', error); }
+  };
+
+  const loadSmsHistory = async () => {
+    try {
+      const data = await smsHistoryApi.getAll();
+      setSmsHistoryData(data.data);
+    } catch (error) { console.error('Error loading SMS history:', error); }
+  };
+
+  const loadCobrosDelMes = async () => {
+    try {
+      const data = await cobrosDelMesApi.getCobrosDelMes();
+      setCobrosDelMes(data);
+    } catch (error) { console.error('Error loading cobros del mes:', error); }
+  };
+
+  const loadMiBalance = async () => {
+    try {
+      const data = await miBalanceApi.getMiBalance(currentUser?.id);
+      setMiBalance(data);
+    } catch (error) { console.error('Error loading balance:', error); }
+  };
+
+  const handleCreateSmsCampaign = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await smsCampaignsApi.create(smsCampaignForm);
+      showToast('Campaña SMS creada exitosamente', 'success');
+      setShowSmsCampaignModal(false);
+      setSmsCampaignForm({ nombre: '', mensaje: '', activo: true, diasEnvio: '[]', horasEnvio: '[]', vecesPorDia: 1, tipoDestinatario: 'CuotasHoy' });
+      loadSmsCampaigns();
+    } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
+  };
+
+  const handleToggleSmsCampaign = async (id: number) => {
+    try {
+      await smsCampaignsApi.toggle(id);
+      loadSmsCampaigns();
+    } catch (error) { showToast('Error al cambiar estado', 'error'); }
+  };
+
+  const handleDeleteSmsCampaign = async (id: number) => {
+    if (!confirm('¿Eliminar esta campaña SMS?')) return;
+    try {
+      await smsCampaignsApi.delete(id);
+      showToast('Campaña eliminada', 'success');
+      loadSmsCampaigns();
+    } catch (error) { showToast('Error al eliminar', 'error'); }
+  };
 
   const loadAportadoresExternos = async () => {
     try {
@@ -681,10 +751,14 @@ function App() {
           <div className="tabs">
             <button className={`tab ${activeTab === 'prestamos' ? 'active' : ''}`} onClick={() => setActiveTab('prestamos')}>Préstamos</button>
             <button className={`tab ${activeTab === 'clientes' ? 'active' : ''}`} onClick={() => setActiveTab('clientes')}>Clientes</button>
-            <button className={`tab ${activeTab === 'cobros' ? 'active' : ''}`} onClick={() => setActiveTab('cobros')}>Cobros del Día</button>
-            <button className={`tab ${activeTab === 'socios' ? 'active' : ''}`} onClick={() => setActiveTab('socios')}>Socios/Aportadores</button>
+            <button className={`tab ${activeTab === 'tareas' ? 'active' : ''}`} onClick={() => setActiveTab('tareas')}>📋 Tareas</button>
+            <button className={`tab ${activeTab === 'cobros' ? 'active' : ''}`} onClick={() => setActiveTab('cobros')}>Cobros Día</button>
+            <button className={`tab ${activeTab === 'socios' ? 'active' : ''}`} onClick={() => setActiveTab('socios')}>Socios</button>
+            <button className={`tab ${activeTab === 'balance' ? 'active' : ''}`} onClick={() => setActiveTab('balance')}>💰 Mi Balance</button>
+            <button className={`tab ${activeTab === 'sms' ? 'active' : ''}`} onClick={() => setActiveTab('sms')}>📱 SMS</button>
+            <button className={`tab ${activeTab === 'smshistory' ? 'active' : ''}`} onClick={() => setActiveTab('smshistory')}>📨 Historial</button>
             <button className={`tab ${activeTab === 'usuarios' ? 'active' : ''}`} onClick={() => setActiveTab('usuarios')}>Usuarios</button>
-            <button className={`tab ${activeTab === 'aportadores' ? 'active' : ''}`} onClick={() => setActiveTab('aportadores')}>Aportadores Ext</button>
+            <button className={`tab ${activeTab === 'aportadores' ? 'active' : ''}`} onClick={() => setActiveTab('aportadores')}>Aportadores</button>
           </div>
 
           {/* Prestamos Tab */}
@@ -857,6 +931,149 @@ function App() {
                       <td>
                         <button className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }} onClick={() => handleDeleteAportador(a.id)}>Eliminar</button>
                       </td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Tareas Diarias Tab */}
+          {activeTab === 'tareas' && cobrosDelMes && (
+            <div>
+              <div className="kpi-grid" style={{ marginBottom: '1rem' }}>
+                <div className="kpi-card"><span className="kpi-title">📅 Hoy ({cobrosDelMes.resumen.totalCuotasHoy})</span><span className="kpi-value">{formatMoney(cobrosDelMes.resumen.montoTotalHoy)}</span></div>
+                <div className="kpi-card" style={{ borderColor: '#ef4444' }}><span className="kpi-title">⚠️ Vencidas ({cobrosDelMes.resumen.totalCuotasVencidas})</span><span className="kpi-value" style={{ color: '#ef4444' }}>{formatMoney(cobrosDelMes.resumen.montoTotalVencido)}</span></div>
+                <div className="kpi-card" style={{ borderColor: '#3b82f6' }}><span className="kpi-title">📆 Próximas ({cobrosDelMes.resumen.totalCuotasProximas})</span><span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(cobrosDelMes.resumen.montoTotalProximas)}</span></div>
+              </div>
+              <h4 style={{ color: '#10b981', margin: '1rem 0 0.5rem' }}>📅 Cobros de Hoy</h4>
+              <div className="table-container">
+                <table><thead><tr><th>✓</th><th>Cliente</th><th>Cuota</th><th>Monto</th><th>Cobrador</th></tr></thead>
+                  <tbody>{cobrosDelMes.cuotasHoy.map(c => (
+                    <tr key={c.id} style={{ opacity: c.cobrado ? 0.6 : 1 }}>
+                      <td><input type="checkbox" checked={c.cobrado} onChange={e => handleMarcarCobrado(c.id, e.target.checked)} /></td>
+                      <td><strong>{c.clienteNombre}</strong><div style={{ fontSize: '0.75rem' }}>{c.clienteTelefono}</div></td>
+                      <td>#{c.numeroCuota}</td>
+                      <td className="money">{formatMoney(c.saldoPendiente)}</td>
+                      <td>{c.cobradorNombre || '-'}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+              {cobrosDelMes.cuotasVencidas.length > 0 && (
+                <>
+                  <h4 style={{ color: '#ef4444', margin: '1rem 0 0.5rem' }}>⚠️ Cuotas Vencidas</h4>
+                  <div className="table-container">
+                    <table><thead><tr><th>✓</th><th>Cliente</th><th>Fecha</th><th>Días</th><th>Monto</th></tr></thead>
+                      <tbody>{cobrosDelMes.cuotasVencidas.map(c => (
+                        <tr key={c.id} style={{ background: 'rgba(239,68,68,0.1)' }}>
+                          <td><input type="checkbox" checked={c.cobrado} onChange={e => handleMarcarCobrado(c.id, e.target.checked)} /></td>
+                          <td><strong>{c.clienteNombre}</strong></td>
+                          <td style={{ color: '#ef4444' }}>{formatDate(c.fechaCobro)}</td>
+                          <td><span className="badge badge-red">{Math.abs(c.diasParaVencer)}d</span></td>
+                          <td className="money">{formatMoney(c.saldoPendiente)}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                </>
+              )}
+              <h4 style={{ color: '#3b82f6', margin: '1rem 0 0.5rem' }}>📆 Próximas del Mes</h4>
+              <div className="table-container">
+                <table><thead><tr><th>Cliente</th><th>Fecha</th><th>En</th><th>Monto</th><th>Cobrador</th></tr></thead>
+                  <tbody>{cobrosDelMes.cuotasProximas.map(c => (
+                    <tr key={c.id}>
+                      <td><strong>{c.clienteNombre}</strong></td>
+                      <td>{formatDate(c.fechaCobro)}</td>
+                      <td><span className="badge badge-blue">{c.diasParaVencer}d</span></td>
+                      <td className="money">{formatMoney(c.saldoPendiente)}</td>
+                      <td>{c.cobradorNombre || '-'}</td>
+                    </tr>
+                  ))}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* SMS Campaigns Tab */}
+          {activeTab === 'sms' && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
+                <button className="btn btn-primary" onClick={() => setShowSmsCampaignModal(true)}>+ Nueva Campaña</button>
+              </div>
+              <div className="table-container">
+                <table><thead><tr><th>Nombre</th><th>Mensaje</th><th>Destinatarios</th><th>Días</th><th>Enviados</th><th>Estado</th><th>Acciones</th></tr></thead>
+                  <tbody>{smsCampaigns.map(c => (
+                    <tr key={c.id}>
+                      <td><strong>{c.nombre}</strong></td>
+                      <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{c.mensaje}</td>
+                      <td><span className="badge badge-blue">{c.tipoDestinatario}</span></td>
+                      <td>{JSON.parse(c.diasEnvio).join(', ') || 'Todos'}</td>
+                      <td>{c.smsEnviados || 0}</td>
+                      <td><span className={`badge ${c.activo ? 'badge-green' : 'badge-gray'}`} onClick={() => handleToggleSmsCampaign(c.id)} style={{ cursor: 'pointer' }}>{c.activo ? 'Activo' : 'Inactivo'}</span></td>
+                      <td><button className="btn btn-danger btn-sm" onClick={() => handleDeleteSmsCampaign(c.id)}>✕</button></td>
+                    </tr>
+                  ))}{smsCampaigns.length === 0 && <tr><td colSpan={7} className="empty-state">No hay campañas SMS configuradas</td></tr>}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* SMS History Tab */}
+          {activeTab === 'smshistory' && (
+            <div>
+              <div className="table-container">
+                <table><thead><tr><th>Fecha</th><th>Campaña</th><th>Cliente</th><th>Teléfono</th><th>Mensaje</th><th>Estado</th></tr></thead>
+                  <tbody>{smsHistoryData.map(h => (
+                    <tr key={h.id}>
+                      <td>{formatDate(h.fechaEnvio)}</td>
+                      <td>{h.campaignNombre || '-'}</td>
+                      <td>{h.clienteNombre || '-'}</td>
+                      <td>{h.numeroTelefono}</td>
+                      <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{h.mensaje}</td>
+                      <td><span className={`badge ${h.estado === 'Enviado' || h.estado === 'Entregado' ? 'badge-green' : h.estado === 'Fallido' ? 'badge-red' : 'badge-yellow'}`}>{h.estado}</span></td>
+                    </tr>
+                  ))}{smsHistoryData.length === 0 && <tr><td colSpan={6} className="empty-state">No hay mensajes SMS enviados</td></tr>}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Mi Balance Tab */}
+          {activeTab === 'balance' && miBalance && (
+            <div>
+              <div className="kpi-grid" style={{ marginBottom: '1rem' }}>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
+                  <span className="kpi-title">💰 Capital Aportado</span>
+                  <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(miBalance.capitalAportado)}</span>
+                  <span className="kpi-sub">Desde {miBalance.fechaInicio ? formatDate(miBalance.fechaInicio) : 'N/A'}</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #3b82f6' }}>
+                  <span className="kpi-title">📈 Interés Ganado ({miBalance.tasaInteresMensual}% mensual)</span>
+                  <span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(miBalance.interesGanado)}</span>
+                  <span className="kpi-sub">{miBalance.mesesTranscurridos} meses</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #8b5cf6' }}>
+                  <span className="kpi-title">🎯 Capital + Intereses</span>
+                  <span className="kpi-value" style={{ color: '#8b5cf6' }}>{formatMoney(miBalance.capitalConInteres)}</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+                  <span className="kpi-title">🥧 Resto de la Torta</span>
+                  <span className="kpi-value" style={{ color: '#f59e0b' }}>{formatMoney(miBalance.restoTorta)}</span>
+                  <span className="kpi-sub">Total negocio: {formatMoney(miBalance.totalCapitalNegocio)}</span>
+                </div>
+              </div>
+              <h4 style={{ margin: '1.5rem 0 0.5rem' }}>📋 Detalle de Aportes</h4>
+              <div className="table-container">
+                <table><thead><tr><th>Fecha</th><th>Monto Inicial</th><th>Monto Actual</th><th>Meses</th><th>Interés Generado</th><th>Descripción</th></tr></thead>
+                  <tbody>{miBalance.aportes.map(a => (
+                    <tr key={a.id}>
+                      <td>{formatDate(a.fechaAporte)}</td>
+                      <td className="money">{formatMoney(a.montoInicial)}</td>
+                      <td className="money" style={{ color: '#10b981' }}>{formatMoney(a.montoActual)}</td>
+                      <td>{a.mesesTranscurridos}</td>
+                      <td className="money" style={{ color: '#3b82f6' }}>{formatMoney(a.interesGenerado)}</td>
+                      <td>{a.descripcion || '-'}</td>
                     </tr>
                   ))}</tbody>
                 </table>
@@ -1272,6 +1489,39 @@ function App() {
                 </div>
               </div>
               <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowAportadorModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">Crear</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* SMS Campaign Modal */}
+      {showSmsCampaignModal && (
+        <div className="modal-overlay" onClick={() => setShowSmsCampaignModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header"><h2>Nueva Campaña SMS</h2><button className="modal-close" onClick={() => setShowSmsCampaignModal(false)}>×</button></div>
+            <form onSubmit={handleCreateSmsCampaign}>
+              <div className="modal-body">
+                <div className="form-grid">
+                  <div className="form-group full-width"><label>Nombre *</label><input type="text" required value={smsCampaignForm.nombre} onChange={e => setSmsCampaignForm({ ...smsCampaignForm, nombre: e.target.value })} placeholder="Recordatorio de pago" /></div>
+                  <div className="form-group full-width"><label>Mensaje *</label><textarea required value={smsCampaignForm.mensaje} onChange={e => setSmsCampaignForm({ ...smsCampaignForm, mensaje: e.target.value })} placeholder="Hola {cliente}, recuerda tu cuota de {monto} para hoy." rows={3} /></div>
+                  <div className="form-group"><label>Tipo Destinatario</label>
+                    <select value={smsCampaignForm.tipoDestinatario} onChange={e => setSmsCampaignForm({ ...smsCampaignForm, tipoDestinatario: e.target.value })}>
+                      <option value="CuotasHoy">Cuotas de Hoy</option>
+                      <option value="CuotasVencidas">Cuotas Vencidas</option>
+                      <option value="ProximasVencer">Próximas a Vencer</option>
+                      <option value="TodosClientesActivos">Todos los Clientes</option>
+                    </select>
+                  </div>
+                  <div className="form-group"><label>Veces por Día</label><input type="number" min="1" max="3" value={smsCampaignForm.vecesPorDia} onChange={e => setSmsCampaignForm({ ...smsCampaignForm, vecesPorDia: Number(e.target.value) })} /></div>
+                  <div className="form-group"><label>Activo</label>
+                    <select value={smsCampaignForm.activo ? 'true' : 'false'} onChange={e => setSmsCampaignForm({ ...smsCampaignForm, activo: e.target.value === 'true' })}>
+                      <option value="true">Sí</option>
+                      <option value="false">No</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+              <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowSmsCampaignModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">Crear Campaña</button></div>
             </form>
           </div>
         </div>
