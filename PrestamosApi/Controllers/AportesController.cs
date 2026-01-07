@@ -1,3 +1,4 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -107,7 +108,7 @@ public class AportesController : ControllerBase
         var targetUserId = usuarioId;
         if (!targetUserId.HasValue)
         {
-            var userIdClaim = User.FindFirst("UserId")?.Value;
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (int.TryParse(userIdClaim, out var parsedId))
                 targetUserId = parsedId;
         }
