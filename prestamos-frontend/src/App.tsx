@@ -585,10 +585,12 @@ function App() {
 
     try {
       if (editMode && editingPrestamoId) {
-        // MODO EDICIÓN
+        // MODO EDICIÓN - Obtener el préstamo actual para preservar el estado
+        const prestamoActual = prestamos.find(p => p.id === editingPrestamoId);
         await prestamosApi.updateCompleto(editingPrestamoId, {
           ...prestamoForm,
           numeroCuotas: prestamoForm.duracion, // Asumiendo duracion = numeroCuotas
+          estadoPrestamo: prestamoActual?.estadoPrestamo || 'Activo', // Preservar estado existente
           // La fecha del formulario se envía como FechaPrestamo Y como FechaPrimerPago si queremos forzar el inicio
           // Para que el servicio sepa que queremos iniciar en esa fecha, la pasamos como FechaPrimerPago
           fechaPrimerPago: prestamoForm.fechaPrestamo // Enviamos la fecha seleccionada como inicio explicito
