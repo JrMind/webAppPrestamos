@@ -494,15 +494,21 @@ function App() {
     const diasEntreCuotas = frecuenciaDias[prestamoForm.frecuenciaPago] || 15;
 
     let numeroCuotas = 0;
-    // Ajuste específico de negocio para Meses (Sync con Backend)
-    if (prestamoForm.unidadDuracion === 'Meses') {
-      if (prestamoForm.frecuenciaPago === 'Semanal') numeroCuotas = prestamoForm.duracion * 4;
-      else if (prestamoForm.frecuenciaPago === 'Quincenal') numeroCuotas = prestamoForm.duracion * 2;
-      else if (prestamoForm.frecuenciaPago === 'Mensual') numeroCuotas = prestamoForm.duracion;
-    }
 
-    if (numeroCuotas === 0) {
-      numeroCuotas = Math.max(1, Math.ceil(diasTotales / diasEntreCuotas));
+    // Si el usuario especificó cuotas directamente, usarlas
+    if ((prestamoForm as any).numeroCuotasDirecto && (prestamoForm as any).numeroCuotasDirecto > 0) {
+      numeroCuotas = (prestamoForm as any).numeroCuotasDirecto;
+    } else {
+      // Ajuste específico de negocio para Meses (Sync con Backend)
+      if (prestamoForm.unidadDuracion === 'Meses') {
+        if (prestamoForm.frecuenciaPago === 'Semanal') numeroCuotas = prestamoForm.duracion * 4;
+        else if (prestamoForm.frecuenciaPago === 'Quincenal') numeroCuotas = prestamoForm.duracion * 2;
+        else if (prestamoForm.frecuenciaPago === 'Mensual') numeroCuotas = prestamoForm.duracion;
+      }
+
+      if (numeroCuotas === 0) {
+        numeroCuotas = Math.max(1, Math.ceil(diasTotales / diasEntreCuotas));
+      }
     }
 
     let montoIntereses: number, montoTotal: number, montoCuota: number;
@@ -1285,6 +1291,20 @@ function App() {
                           <option>Dias</option><option>Semanas</option><option>Quincenas</option><option>Meses</option>
                         </select>
                       </div>
+                    </div>
+                  )}
+                  {!prestamoForm.esCongelado && (
+                    <div className="form-group">
+                      <label>Cuotas <span style={{ fontSize: '0.7rem', color: '#888' }}>(opcional)</span></label>
+                      <input
+                        type="number"
+                        min="1"
+                        placeholder="Auto"
+                        value={(prestamoForm as any).numeroCuotasDirecto || ''}
+                        onChange={e => setPrestamoForm({ ...prestamoForm, numeroCuotasDirecto: e.target.value ? Number(e.target.value) : undefined } as any)}
+                        style={{ width: '100%' }}
+                      />
+                      <small style={{ display: 'block', fontSize: '0.7rem', color: '#666', marginTop: '2px' }}>Dejar vacío = calcular automático</small>
                     </div>
                   )}
                   <div className="form-group" style={{ position: 'relative' }}>

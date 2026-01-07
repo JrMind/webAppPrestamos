@@ -208,12 +208,12 @@ public class PrestamosController : BaseApiController
         if (dto.MontoPrestado < 50)
             return BadRequest(new { message = "El monto mínimo del préstamo es 50$" });
 
-        // Calcular préstamo (con soporte para congelado)
+        // Calcular préstamo (con soporte para congelado y cuotas directas)
         var (montoTotal, montoIntereses, montoCuota, numeroCuotas, fechaVencimiento) = 
             _prestamoService.CalcularPrestamo(
                 dto.MontoPrestado, dto.TasaInteres, dto.TipoInteres,
                 dto.FrecuenciaPago, dto.Duracion, dto.UnidadDuracion, dto.FechaPrestamo,
-                dto.EsCongelado);
+                dto.EsCongelado, dto.NumeroCuotasDirecto);
 
         // Convertir fechas a UTC para PostgreSQL
         var fechaPrestamoUtc = DateTime.SpecifyKind(dto.FechaPrestamo, DateTimeKind.Utc);
@@ -298,12 +298,12 @@ public class PrestamosController : BaseApiController
                 return BadRequest(new { message = $"Reserva insuficiente. Disponible: {reservaDisponible:N0}, Solicitado: {fuentesReserva:N0}" });
         }
 
-        // Calcular préstamo (con soporte para congelado)
+        // Calcular préstamo (con soporte para congelado y cuotas directas)
         var (montoTotal, montoIntereses, montoCuota, numeroCuotas, fechaVencimiento) = 
             _prestamoService.CalcularPrestamo(
                 dto.MontoPrestado, dto.TasaInteres, dto.TipoInteres,
                 dto.FrecuenciaPago, dto.Duracion, dto.UnidadDuracion, dto.FechaPrestamo,
-                dto.EsCongelado);
+                dto.EsCongelado, dto.NumeroCuotasDirecto);
 
         // Convertir fechas a UTC para PostgreSQL
         var fechaPrestamoUtc = DateTime.SpecifyKind(dto.FechaPrestamo, DateTimeKind.Utc);

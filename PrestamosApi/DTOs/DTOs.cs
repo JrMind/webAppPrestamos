@@ -78,7 +78,8 @@ public record CreatePrestamoDto(
     int? CobradorId = null,
     decimal PorcentajeCobrador = 5,
     string? DiaSemana = null, // Para Semanal: Lunes, Martes, etc.
-    bool EsCongelado = false // Préstamo congelado: solo intereses
+    bool EsCongelado = false, // Préstamo congelado: solo intereses
+    int? NumeroCuotasDirecto = null // Override: usar X cuotas en vez de calcular
 );
 
 public record UpdatePrestamoDto(
@@ -254,7 +255,8 @@ public record CreatePrestamoConFuentesDto(
     int? CobradorId,
     decimal PorcentajeCobrador,
     List<FuenteCapitalDto> FuentesCapital, // Lista de fuentes
-    bool EsCongelado = false
+    bool EsCongelado = false,
+    int? NumeroCuotasDirecto = null // Override: usar X cuotas
 );
 
 // Socio/Inversor interno DTOs

@@ -8,7 +8,7 @@ public interface IPrestamoService
     (decimal MontoTotal, decimal MontoIntereses, decimal MontoCuota, int NumeroCuotas, DateTime FechaVencimiento) 
         CalcularPrestamo(decimal montoPrestado, decimal tasaInteres, string tipoInteres, 
                          string frecuenciaPago, int duracion, string unidadDuracion, DateTime fechaPrestamo,
-                         bool esCongelado = false);
+                         bool esCongelado = false, int? numeroCuotasDirecto = null);
 }
 
 public class PrestamoService : IPrestamoService
@@ -16,13 +16,13 @@ public class PrestamoService : IPrestamoService
     public (decimal MontoTotal, decimal MontoIntereses, decimal MontoCuota, int NumeroCuotas, DateTime FechaVencimiento) 
         CalcularPrestamo(decimal montoPrestado, decimal tasaInteres, string tipoInteres, 
                          string frecuenciaPago, int duracion, string unidadDuracion, DateTime fechaPrestamo,
-                         bool esCongelado = false)
+                         bool esCongelado = false, int? numeroCuotasDirecto = null)
     {
         // Calcular días totales
         int diasTotales = CalcularDiasTotales(duracion, unidadDuracion);
         
-        // Calcular número de cuotas según frecuencia
-        int numeroCuotas = CalcularNumeroCuotas(diasTotales, frecuenciaPago, duracion, unidadDuracion);
+        // Calcular número de cuotas según frecuencia, o usar el valor directo si se especificó
+        int numeroCuotas = numeroCuotasDirecto ?? CalcularNumeroCuotas(diasTotales, frecuenciaPago, duracion, unidadDuracion);
         
         decimal montoIntereses;
         decimal montoTotal;
