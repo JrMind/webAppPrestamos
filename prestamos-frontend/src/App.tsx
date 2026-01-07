@@ -403,7 +403,8 @@ function App() {
       fechaPrestamo: new Date().toISOString().split('T')[0],
       descripcion: '',
       porcentajeCobrador: 5,
-      diaSemana: undefined
+      diaSemana: undefined,
+      esCongelado: false
     });
     setFuentesCapital([]);
     clearClienteSelection();
@@ -441,7 +442,7 @@ function App() {
     clienteId: 0, montoPrestado: 0, tasaInteres: 15, tipoInteres: 'Simple',
     frecuenciaPago: 'Quincenal', duracion: 3, unidadDuracion: 'Meses',
     fechaPrestamo: formatDateInput(new Date()), descripcion: '',
-    cobradorId: undefined, porcentajeCobrador: 5
+    cobradorId: undefined, porcentajeCobrador: 5, esCongelado: false
   });
   const [pagoForm, setPagoForm] = useState<CreatePagoDto>({
     prestamoId: 0, cuotaId: undefined, montoPago: 0,
@@ -503,22 +504,35 @@ function App() {
     if (numeroCuotas === 0) {
       numeroCuotas = Math.max(1, Math.ceil(diasTotales / diasEntreCuotas));
     }
-    let montoIntereses: number, montoTotal: number;
-    if (prestamoForm.tipoInteres === 'Simple') {
+
+    let montoIntereses: number, montoTotal: number, montoCuota: number;
+
+    if (prestamoForm.esCongelado) {
+      // PRÉSTAMO CONGELADO: Cuota = solo interés por período
+      const factorFrecuencia = prestamoForm.frecuenciaPago === 'Diario' ? 1 / 30
+        : prestamoForm.frecuenciaPago === 'Semanal' ? 7 / 30
+          : prestamoForm.frecuenciaPago === 'Quincenal' ? 15 / 30
+            : 1; // Mensual
+      montoCuota = Math.round(prestamoForm.montoPrestado * (prestamoForm.tasaInteres / 100) * factorFrecuencia);
+      montoTotal = prestamoForm.montoPrestado; // Capital no se suma a intereses
+      montoIntereses = montoCuota * numeroCuotas; // Intereses proyectados
+    } else if (prestamoForm.tipoInteres === 'Simple') {
       // Convertir días a meses (tasa es mensual)
       const meses = diasTotales / 30;
       // Interés Simple: I = P * (r/100) * meses
       montoIntereses = prestamoForm.montoPrestado * (prestamoForm.tasaInteres / 100) * meses;
       montoTotal = prestamoForm.montoPrestado + montoIntereses;
+      montoCuota = montoTotal / numeroCuotas;
     } else {
       const tasaPorPeriodo = (prestamoForm.tasaInteres / 100) / (365 / diasEntreCuotas);
       montoTotal = prestamoForm.montoPrestado * Math.pow(1 + tasaPorPeriodo, numeroCuotas);
       montoIntereses = montoTotal - prestamoForm.montoPrestado;
+      montoCuota = montoTotal / numeroCuotas;
     }
-    const montoCuota = montoTotal / numeroCuotas;
+
     const fechaVencimiento = new Date(prestamoForm.fechaPrestamo);
     fechaVencimiento.setDate(fechaVencimiento.getDate() + diasTotales);
-    return { numeroCuotas, montoIntereses, montoTotal, montoCuota, fechaVencimiento: fechaVencimiento.toISOString() };
+    return { numeroCuotas, montoIntereses, montoTotal, montoCuota, fechaVencimiento: fechaVencimiento.toISOString(), esCongelado: prestamoForm.esCongelado };
   };
   const preview = calcularPreview();
 
@@ -904,7 +918,7 @@ function App() {
                   </div>
                   <h4 style={{ color: '#10b981', margin: '1rem 0 0.5rem' }}>📅 Cobros de Hoy</h4>
                   <div className="table-container">
-                    <table><thead><tr><th>✓</th><th>Cliente</th><th>Cuota</th><th>Monto</th><th>Cobrador</th></tr></thead>
+                    <table><thead><tr><th>✓</th><th>Cliente</th><th>Cuota</th><th>Monto</th><th>Cobrador</th><th>Acciones</th></tr></thead>
                       <tbody>{cobrosDelMes.cuotasHoy.map(c => (
                         <tr key={c.id} style={{ opacity: c.cobrado ? 0.6 : 1 }}>
                           <td><input type="checkbox" checked={c.cobrado} onChange={e => handleMarcarCobrado(c.id, e.target.checked)} /></td>
@@ -912,14 +926,28 @@ function App() {
                           <td>#{c.numeroCuota}</td>
                           <td className="money">{formatMoney(c.saldoPendiente)}</td>
                           <td>{c.cobradorNombre || '-'}</td>
+                          <td>
+                            <div className="actions">
+                              <button className="btn btn-secondary btn-sm" onClick={async () => {
+                                const p = await prestamosApi.getById(c.prestamoId);
+                                openDetalle(p);
+                              }}>Ver</button>
+                              <button className="btn btn-primary btn-sm" title="Enviar SMS recordatorio" onClick={async () => {
+                                try {
+                                  await cobrosApi.enviarRecordatorio(c.id);
+                                  showToast('SMS enviado', 'success');
+                                } catch (e: any) { showToast(e.message || 'Error', 'error'); }
+                              }}>📱</button>
+                            </div>
+                          </td>
                         </tr>
-                      ))}{cobrosDelMes.cuotasHoy.length === 0 && <tr><td colSpan={5} className="empty-state">No hay cuotas para hoy</td></tr>}</tbody>
+                      ))}{cobrosDelMes.cuotasHoy.length === 0 && <tr><td colSpan={6} className="empty-state">No hay cuotas para hoy</td></tr>}</tbody>
                     </table>
                   </div>
 
                   <h4 style={{ color: '#3b82f6', margin: '1rem 0 0.5rem' }}>📆 Próximas del Mes</h4>
                   <div className="table-container">
-                    <table><thead><tr><th>Cliente</th><th>Fecha</th><th>En</th><th>Monto</th><th>Cobrador</th></tr></thead>
+                    <table><thead><tr><th>Cliente</th><th>Fecha</th><th>En</th><th>Monto</th><th>Cobrador</th><th>Acciones</th></tr></thead>
                       <tbody>{cobrosDelMes.cuotasProximas.map(c => (
                         <tr key={c.id}>
                           <td><strong>{c.clienteNombre}</strong><div style={{ fontSize: '0.75rem' }}>{c.clienteTelefono}</div></td>
@@ -927,8 +955,22 @@ function App() {
                           <td><span className="badge badge-blue">{c.diasParaVencer}d</span></td>
                           <td className="money">{formatMoney(c.saldoPendiente)}</td>
                           <td>{c.cobradorNombre || '-'}</td>
+                          <td>
+                            <div className="actions">
+                              <button className="btn btn-secondary btn-sm" onClick={async () => {
+                                const p = await prestamosApi.getById(c.prestamoId);
+                                openDetalle(p);
+                              }}>Ver</button>
+                              <button className="btn btn-primary btn-sm" title="Enviar SMS recordatorio" onClick={async () => {
+                                try {
+                                  await cobrosApi.enviarRecordatorio(c.id);
+                                  showToast('SMS recordatorio enviado', 'success');
+                                } catch (e: any) { showToast(e.message || 'Error', 'error'); }
+                              }}>📱 Recordar</button>
+                            </div>
+                          </td>
                         </tr>
-                      ))}{cobrosDelMes.cuotasProximas.length === 0 && <tr><td colSpan={5} className="empty-state">No hay cuotas próximas este mes</td></tr>}</tbody>
+                      ))}{cobrosDelMes.cuotasProximas.length === 0 && <tr><td colSpan={6} className="empty-state">No hay cuotas próximas este mes</td></tr>}</tbody>
                     </table>
                   </div>
 
@@ -936,7 +978,7 @@ function App() {
                     <>
                       <h4 style={{ color: '#ef4444', margin: '1rem 0 0.5rem' }}>⚠️ Cuotas Vencidas</h4>
                       <div className="table-container">
-                        <table><thead><tr><th>✓</th><th>Cliente</th><th>Fecha</th><th>Días</th><th>Monto</th></tr></thead>
+                        <table><thead><tr><th>✓</th><th>Cliente</th><th>Fecha</th><th>Días</th><th>Monto</th><th>Acciones</th></tr></thead>
                           <tbody>{cobrosDelMes.cuotasVencidas.map(c => (
                             <tr key={c.id} style={{ background: 'rgba(239,68,68,0.1)' }}>
                               <td><input type="checkbox" checked={c.cobrado} onChange={e => handleMarcarCobrado(c.id, e.target.checked)} /></td>
@@ -944,6 +986,20 @@ function App() {
                               <td style={{ color: '#ef4444' }}>{formatDate(c.fechaCobro)}</td>
                               <td><span className="badge badge-red">{Math.abs(c.diasParaVencer)}d</span></td>
                               <td className="money">{formatMoney(c.saldoPendiente)}</td>
+                              <td>
+                                <div className="actions">
+                                  <button className="btn btn-secondary btn-sm" onClick={async () => {
+                                    const p = await prestamosApi.getById(c.prestamoId);
+                                    openDetalle(p);
+                                  }}>Ver</button>
+                                  <button className="btn btn-danger btn-sm" title="Enviar SMS recordatorio" onClick={async () => {
+                                    try {
+                                      await cobrosApi.enviarRecordatorio(c.id);
+                                      showToast('SMS recordatorio enviado', 'success');
+                                    } catch (e: any) { showToast(e.message || 'Error', 'error'); }
+                                  }}>📱 Cobrar</button>
+                                </div>
+                              </td>
                             </tr>
                           ))}</tbody>
                         </table>
@@ -1255,6 +1311,18 @@ function App() {
                     <input type="date" required value={prestamoForm.fechaPrestamo} onChange={e => setPrestamoForm({ ...prestamoForm, fechaPrestamo: e.target.value })} />
                     <small style={{ display: 'block', fontSize: '0.75rem', color: '#666', marginTop: '2px' }}>Fecha inicio de pagos</small>
                   </div>
+                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={prestamoForm.esCongelado || false}
+                        onChange={e => setPrestamoForm({ ...prestamoForm, esCongelado: e.target.checked })}
+                        style={{ width: '18px', height: '18px' }}
+                      />
+                      <span>❄️ Préstamo Congelado</span>
+                      <span style={{ fontSize: '0.75rem', color: '#888', fontWeight: 'normal' }}>(Solo paga intereses, capital no reduce)</span>
+                    </label>
+                  </div>
                 </div>
 
                 {/* Sección de Fuentes de Capital */}
@@ -1358,8 +1426,19 @@ function App() {
                 <div className="detail-item"><label>Pendiente</label><span style={{ color: '#ef4444' }}>{formatMoney(selectedPrestamo.saldoPendiente)}</span></div>
                 <div className="detail-item"><label>Estado</label><span className={`badge ${selectedPrestamo.estadoPrestamo === 'Activo' ? 'badge-green' : selectedPrestamo.estadoPrestamo === 'Pagado' ? 'badge-blue' : 'badge-red'}`}>{selectedPrestamo.estadoPrestamo}</span></div>
                 <div className="detail-item"><label>Cobrador</label><span>{selectedPrestamo.cobradorNombre || 'No asignado'}</span></div>
-                <div style={{ marginTop: '1rem', gridColumn: '1 / -1' }}>
+                {selectedPrestamo.esCongelado && (
+                  <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
+                    <span className="badge" style={{ background: '#0ea5e9', color: 'white', padding: '0.5rem 1rem' }}>❄️ Préstamo Congelado - Solo intereses, capital no reduce</span>
+                  </div>
+                )}
+                <div style={{ marginTop: '1rem', gridColumn: '1 / -1', display: 'flex', gap: '0.5rem' }}>
                   <button className="btn btn-primary btn-sm" onClick={() => { setShowDetalleModal(false); openEditPrestamo(selectedPrestamo); }}>✏️ Editar Préstamo</button>
+                  <button className="btn btn-secondary btn-sm" onClick={async () => {
+                    try {
+                      await cobrosApi.enviarBalanceSms(selectedPrestamo.id);
+                      showToast('SMS de balance enviado', 'success');
+                    } catch (e: any) { showToast(e.message || 'Error al enviar SMS', 'error'); }
+                  }}>📱 Enviar Balance SMS</button>
                 </div>
               </div>
               <div className="progress-bar" style={{ margin: '1rem 0' }}><div className="progress-fill" style={{ width: `${(selectedPrestamo.totalPagado / selectedPrestamo.montoTotal) * 100}%` }}></div></div>

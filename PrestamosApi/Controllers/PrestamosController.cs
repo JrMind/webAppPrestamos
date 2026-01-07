@@ -97,7 +97,8 @@ public class PrestamosController : BaseApiController
                     .FirstOrDefault(),
                 p.CobradorId,
                 p.Cobrador != null ? p.Cobrador.Nombre : null,
-                p.PorcentajeCobrador
+                p.PorcentajeCobrador,
+                p.EsCongelado
             ))
             .ToListAsync();
 
@@ -140,7 +141,8 @@ public class PrestamosController : BaseApiController
                     .FirstOrDefault(),
                 p.CobradorId,
                 p.Cobrador != null ? p.Cobrador.Nombre : null,
-                p.PorcentajeCobrador
+                p.PorcentajeCobrador,
+                p.EsCongelado
             ))
             .FirstOrDefaultAsync();
 
@@ -186,7 +188,8 @@ public class PrestamosController : BaseApiController
                     .FirstOrDefault(),
                 p.CobradorId,
                 p.Cobrador != null ? p.Cobrador.Nombre : null,
-                p.PorcentajeCobrador
+                p.PorcentajeCobrador,
+                p.EsCongelado
             ))
             .ToListAsync();
 
@@ -205,11 +208,12 @@ public class PrestamosController : BaseApiController
         if (dto.MontoPrestado < 50)
             return BadRequest(new { message = "El monto mínimo del préstamo es 50$" });
 
-        // Calcular préstamo
+        // Calcular préstamo (con soporte para congelado)
         var (montoTotal, montoIntereses, montoCuota, numeroCuotas, fechaVencimiento) = 
             _prestamoService.CalcularPrestamo(
                 dto.MontoPrestado, dto.TasaInteres, dto.TipoInteres,
-                dto.FrecuenciaPago, dto.Duracion, dto.UnidadDuracion, dto.FechaPrestamo);
+                dto.FrecuenciaPago, dto.Duracion, dto.UnidadDuracion, dto.FechaPrestamo,
+                dto.EsCongelado);
 
         // Convertir fechas a UTC para PostgreSQL
         var fechaPrestamoUtc = DateTime.SpecifyKind(dto.FechaPrestamo, DateTimeKind.Utc);
@@ -232,7 +236,8 @@ public class PrestamosController : BaseApiController
             MontoCuota = montoCuota,
             EstadoPrestamo = "Activo",
             Descripcion = dto.Descripcion,
-            PorcentajeCobrador = dto.PorcentajeCobrador
+            PorcentajeCobrador = dto.PorcentajeCobrador,
+            EsCongelado = dto.EsCongelado
         };
 
         _context.Prestamos.Add(prestamo);
@@ -253,7 +258,8 @@ public class PrestamosController : BaseApiController
                 new CuotaProximaDto(cuotas.First().FechaCobro, cuotas.First().SaldoPendiente),
                 prestamo.CobradorId,
                 null, // CobradorNombre - no se carga aquí para evitar query extra
-                prestamo.PorcentajeCobrador
+                prestamo.PorcentajeCobrador,
+                prestamo.EsCongelado
             ));
     }
 
@@ -292,11 +298,12 @@ public class PrestamosController : BaseApiController
                 return BadRequest(new { message = $"Reserva insuficiente. Disponible: {reservaDisponible:N0}, Solicitado: {fuentesReserva:N0}" });
         }
 
-        // Calcular préstamo
+        // Calcular préstamo (con soporte para congelado)
         var (montoTotal, montoIntereses, montoCuota, numeroCuotas, fechaVencimiento) = 
             _prestamoService.CalcularPrestamo(
                 dto.MontoPrestado, dto.TasaInteres, dto.TipoInteres,
-                dto.FrecuenciaPago, dto.Duracion, dto.UnidadDuracion, dto.FechaPrestamo);
+                dto.FrecuenciaPago, dto.Duracion, dto.UnidadDuracion, dto.FechaPrestamo,
+                dto.EsCongelado);
 
         // Convertir fechas a UTC para PostgreSQL
         var fechaPrestamoUtc = DateTime.SpecifyKind(dto.FechaPrestamo, DateTimeKind.Utc);
@@ -318,7 +325,8 @@ public class PrestamosController : BaseApiController
             MontoCuota = montoCuota,
             EstadoPrestamo = "Activo",
             Descripcion = dto.Descripcion,
-            PorcentajeCobrador = dto.PorcentajeCobrador
+            PorcentajeCobrador = dto.PorcentajeCobrador,
+            EsCongelado = dto.EsCongelado
         };
 
         _context.Prestamos.Add(prestamo);
@@ -378,7 +386,8 @@ public class PrestamosController : BaseApiController
                 new CuotaProximaDto(cuotas.First().FechaCobro, cuotas.First().SaldoPendiente),
                 prestamo.CobradorId,
                 null,
-                prestamo.PorcentajeCobrador
+                prestamo.PorcentajeCobrador,
+                prestamo.EsCongelado
             ));
     }
 

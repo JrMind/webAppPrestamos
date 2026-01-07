@@ -336,6 +336,131 @@ public class CobrosController : BaseApiController
             }
         });
     }
+
+    /// <summary>
+    /// Envía un SMS recordatorio al cliente para una cuota específica
+    /// </summary>
+    [HttpPost("{cuotaId}/enviar-recordatorio")]
+    public async Task<IActionResult> EnviarRecordatorio(int cuotaId)
+    {
+        var cuota = await _context.CuotasPrestamo
+            .Include(c => c.Prestamo)
+                .ThenInclude(p => p!.Cliente)
+            .FirstOrDefaultAsync(c => c.Id == cuotaId);
+
+        if (cuota == null)
+            return NotFound(new { message = "Cuota no encontrada" });
+
+        var prestamo = cuota.Prestamo;
+        var cliente = prestamo?.Cliente;
+
+        if (cliente == null || string.IsNullOrEmpty(cliente.Telefono))
+            return BadRequest(new { message = "El cliente no tiene teléfono registrado" });
+
+        var diasParaVencer = (cuota.FechaCobro.Date - DateTime.UtcNow.Date).Days;
+        var estadoTiempo = diasParaVencer < 0 
+            ? $"⚠️ Vencida hace {Math.Abs(diasParaVencer)} días" 
+            : diasParaVencer == 0 
+                ? "📅 Vence HOY" 
+                : $"📆 Vence en {diasParaVencer} días";
+
+        var mensaje = $"📱 Recordatorio de pago\n" +
+            $"Hola {cliente.Nombre},\n" +
+            $"{estadoTiempo}\n" +
+            $"💰 Monto: ${cuota.SaldoPendiente:N0}\n" +
+            $"📊 Cuota #{cuota.NumeroCuota} de {prestamo!.NumeroCuotas}\n" +
+            $"📅 Fecha: {cuota.FechaCobro:dd/MM/yyyy}";
+
+        try
+        {
+            var sent = await _twilioService.SendSmsAsync(cliente.Telefono, mensaje);
+
+            // Registrar en historial
+            var history = new SmsHistory
+            {
+                ClienteId = cliente.Id,
+                NumeroTelefono = cliente.Telefono,
+                Mensaje = mensaje,
+                FechaEnvio = DateTime.UtcNow,
+                Estado = sent ? EstadoSms.Enviado : EstadoSms.Fallido
+            };
+            _context.SmsHistories.Add(history);
+            await _context.SaveChangesAsync();
+
+            return sent 
+                ? Ok(new { message = "SMS enviado exitosamente" })
+                : BadRequest(new { message = "Error al enviar SMS" });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = $"Error: {ex.Message}" });
+        }
+    }
+
+    /// <summary>
+    /// Envía un SMS con el balance actual del préstamo al cliente
+    /// </summary>
+    [HttpPost("{prestamoId}/enviar-balance")]
+    public async Task<IActionResult> EnviarBalanceSms(int prestamoId)
+    {
+        var prestamo = await _context.Prestamos
+            .Include(p => p.Cliente)
+            .Include(p => p.Cuotas)
+            .FirstOrDefaultAsync(p => p.Id == prestamoId);
+
+        if (prestamo == null)
+            return NotFound(new { message = "Préstamo no encontrado" });
+
+        var cliente = prestamo.Cliente;
+        if (cliente == null || string.IsNullOrEmpty(cliente.Telefono))
+            return BadRequest(new { message = "El cliente no tiene teléfono registrado" });
+
+        var cuotasPagadas = prestamo.Cuotas.Count(c => c.EstadoCuota == "Pagada");
+        var cuotasRestantes = prestamo.NumeroCuotas - cuotasPagadas;
+        var saldoPendiente = prestamo.Cuotas.Sum(c => c.SaldoPendiente);
+        var totalPagado = prestamo.Cuotas.Sum(c => c.MontoPagado);
+
+        var proximaCuota = prestamo.Cuotas
+            .Where(c => c.EstadoCuota != "Pagada")
+            .OrderBy(c => c.FechaCobro)
+            .FirstOrDefault();
+
+        var mensaje = $"📊 Balance de su préstamo\n" +
+            $"Hola {cliente.Nombre},\n" +
+            $"💵 Capital: ${prestamo.MontoPrestado:N0}\n" +
+            $"✅ Pagado: ${totalPagado:N0}\n" +
+            $"📝 Pendiente: ${saldoPendiente:N0}\n" +
+            $"📊 Cuotas: {cuotasPagadas}/{prestamo.NumeroCuotas}";
+
+        if (proximaCuota != null)
+        {
+            mensaje += $"\n📅 Próxima: ${proximaCuota.SaldoPendiente:N0} el {proximaCuota.FechaCobro:dd/MM/yyyy}";
+        }
+
+        try
+        {
+            var sent = await _twilioService.SendSmsAsync(cliente.Telefono, mensaje);
+
+            var history = new SmsHistory
+            {
+                ClienteId = cliente.Id,
+                NumeroTelefono = cliente.Telefono,
+                Mensaje = mensaje,
+                FechaEnvio = DateTime.UtcNow,
+                Estado = sent ? EstadoSms.Enviado : EstadoSms.Fallido
+            };
+            _context.SmsHistories.Add(history);
+            await _context.SaveChangesAsync();
+
+            return sent 
+                ? Ok(new { message = "SMS de balance enviado exitosamente" })
+                : BadRequest(new { message = "Error al enviar SMS" });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = $"Error: {ex.Message}" });
+        }
+    }
 }
 
 public class MarcarCobradoDto

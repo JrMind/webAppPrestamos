@@ -172,6 +172,22 @@ export const cobrosApi = {
             body: JSON.stringify({ cobrado }),
         });
         if (!response.ok) throw new Error('Error al marcar cuota');
+    },
+
+    enviarRecordatorio: async (cuotaId: number): Promise<{ message: string }> => {
+        const response = await fetch(`${API_URL}/cobros/${cuotaId}/enviar-recordatorio`, {
+            method: 'POST',
+            headers: getHeaders(),
+        });
+        return handleResponse(response);
+    },
+
+    enviarBalanceSms: async (prestamoId: number): Promise<{ message: string }> => {
+        const response = await fetch(`${API_URL}/cobros/${prestamoId}/enviar-balance`, {
+            method: 'POST',
+            headers: getHeaders(),
+        });
+        return handleResponse(response);
     }
 };
 

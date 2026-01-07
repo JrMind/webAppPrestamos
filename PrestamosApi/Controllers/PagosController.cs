@@ -87,29 +87,96 @@ public class PagosController : ControllerBase
             var cuota = await _context.CuotasPrestamo.FindAsync(dto.CuotaId.Value);
             if (cuota != null)
             {
-                cuota.MontoPagado += dto.MontoPago;
-                cuota.SaldoPendiente = cuota.MontoCuota - cuota.MontoPagado;
-
-                if (cuota.SaldoPendiente <= 0)
+                // Para préstamos congelados, manejar lógica especial de sobrepago
+                if (prestamo.EsCongelado)
                 {
+                    // Calcular el interés que corresponde a esta cuota
+                    decimal interesCuota = cuota.MontoCuota; // En préstamos congelados, la cuota ES el interés
+                    
+                    if (dto.MontoPago > interesCuota)
+                    {
+                        // Sobrepago: el exceso reduce el capital
+                        decimal abonoCapital = dto.MontoPago - interesCuota;
+                        prestamo.MontoPrestado -= abonoCapital;
+                        
+                        if (prestamo.MontoPrestado <= 0)
+                        {
+                            // Se pagó todo el capital, préstamo saldado
+                            prestamo.MontoPrestado = 0;
+                            prestamo.EstadoPrestamo = "Pagado";
+                            
+                            // Marcar todas las cuotas pendientes como pagadas
+                            foreach (var c in prestamo.Cuotas.Where(c => c.EstadoCuota != "Pagada"))
+                            {
+                                c.EstadoCuota = "Pagada";
+                                c.FechaPago = fechaPagoUtc;
+                                c.SaldoPendiente = 0;
+                            }
+                        }
+                        else
+                        {
+                            // Recalcular montos de cuotas futuras basado en nuevo capital
+                            decimal factorFrecuencia = prestamo.FrecuenciaPago switch
+                            {
+                                "Diario" => 1m / 30m,
+                                "Semanal" => 7m / 30m,
+                                "Quincenal" => 15m / 30m,
+                                "Mensual" => 1m,
+                                _ => 1m
+                            };
+                            decimal nuevaCuota = Math.Round(prestamo.MontoPrestado * (prestamo.TasaInteres / 100m) * factorFrecuencia, 0);
+                            
+                            // Actualizar cuotas pendientes con el nuevo monto
+                            foreach (var c in prestamo.Cuotas.Where(c => c.EstadoCuota != "Pagada" && c.Id != cuota.Id))
+                            {
+                                c.MontoCuota = nuevaCuota;
+                                c.SaldoPendiente = nuevaCuota - c.MontoPagado;
+                            }
+                            
+                            // Actualizar MontoCuota del préstamo
+                            prestamo.MontoCuota = nuevaCuota;
+                            
+                            _logger.LogInformation("Préstamo congelado #{PrestamoId}: Abono capital ${AbonoCapital}, Nuevo capital ${NuevoCapital}, Nueva cuota ${NuevaCuota}", 
+                                prestamo.Id, abonoCapital, prestamo.MontoPrestado, nuevaCuota);
+                        }
+                    }
+                    
+                    // Marcar la cuota actual como pagada
+                    cuota.MontoPagado = cuota.MontoCuota;
                     cuota.SaldoPendiente = 0;
                     cuota.EstadoCuota = "Pagada";
                     cuota.FechaPago = fechaPagoUtc;
                 }
-                else if (cuota.MontoPagado > 0)
+                else
                 {
-                    cuota.EstadoCuota = "Parcial";
+                    // Lógica normal para préstamos no congelados
+                    cuota.MontoPagado += dto.MontoPago;
+                    cuota.SaldoPendiente = cuota.MontoCuota - cuota.MontoPagado;
+
+                    if (cuota.SaldoPendiente <= 0)
+                    {
+                        cuota.SaldoPendiente = 0;
+                        cuota.EstadoCuota = "Pagada";
+                        cuota.FechaPago = fechaPagoUtc;
+                    }
+                    else if (cuota.MontoPagado > 0)
+                    {
+                        cuota.EstadoCuota = "Parcial";
+                    }
                 }
             }
         }
 
-        // Verificar si todas las cuotas están pagadas
-        var todasPagadas = prestamo.Cuotas.All(c => 
-            c.Id == dto.CuotaId ? (c.MontoCuota - c.MontoPagado - dto.MontoPago <= 0) : c.EstadoCuota == "Pagada");
-        
-        if (todasPagadas)
+        // Verificar si todas las cuotas están pagadas (solo para préstamos no congelados)
+        if (!prestamo.EsCongelado)
         {
-            prestamo.EstadoPrestamo = "Pagado";
+            var todasPagadas = prestamo.Cuotas.All(c => 
+                c.Id == dto.CuotaId ? (c.MontoCuota - c.MontoPagado - dto.MontoPago <= 0) : c.EstadoCuota == "Pagada");
+            
+            if (todasPagadas)
+            {
+                prestamo.EstadoPrestamo = "Pagado";
+            }
         }
 
         await _context.SaveChangesAsync();

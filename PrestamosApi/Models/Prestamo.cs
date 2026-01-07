@@ -19,6 +19,7 @@ public class Prestamo
     public string EstadoPrestamo { get; set; } = "Activo"; // Activo, Pagado, Vencido
     public string? Descripcion { get; set; }
     public decimal PorcentajeCobrador { get; set; } = 5; // % para el cobrador
+    public bool EsCongelado { get; set; } = false; // Préstamo congelado: solo paga intereses, capital no reduce salvo sobrepago
 
     // Navegación
     public Cliente? Cliente { get; set; }

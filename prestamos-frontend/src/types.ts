@@ -160,6 +160,7 @@ export interface Prestamo {
   cobradorNombre?: string;
   porcentajeCobrador: number;
   diaSemana?: string;
+  esCongelado?: boolean; // Préstamo congelado: solo paga intereses
 }
 
 export interface CreatePrestamoDto {
@@ -175,6 +176,7 @@ export interface CreatePrestamoDto {
   cobradorId?: number;
   porcentajeCobrador: number;
   diaSemana?: string; // Para frecuencia Semanal: Lunes, Martes, etc.
+  esCongelado?: boolean; // Préstamo congelado: solo intereses
 }
 
 export interface Cuota {

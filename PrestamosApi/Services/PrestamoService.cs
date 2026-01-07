@@ -7,14 +7,16 @@ public interface IPrestamoService
     List<CuotaPrestamo> GenerarCuotas(Prestamo prestamo, DateTime? fechaPrimerPago = null);
     (decimal MontoTotal, decimal MontoIntereses, decimal MontoCuota, int NumeroCuotas, DateTime FechaVencimiento) 
         CalcularPrestamo(decimal montoPrestado, decimal tasaInteres, string tipoInteres, 
-                         string frecuenciaPago, int duracion, string unidadDuracion, DateTime fechaPrestamo);
+                         string frecuenciaPago, int duracion, string unidadDuracion, DateTime fechaPrestamo,
+                         bool esCongelado = false);
 }
 
 public class PrestamoService : IPrestamoService
 {
     public (decimal MontoTotal, decimal MontoIntereses, decimal MontoCuota, int NumeroCuotas, DateTime FechaVencimiento) 
         CalcularPrestamo(decimal montoPrestado, decimal tasaInteres, string tipoInteres, 
-                         string frecuenciaPago, int duracion, string unidadDuracion, DateTime fechaPrestamo)
+                         string frecuenciaPago, int duracion, string unidadDuracion, DateTime fechaPrestamo,
+                         bool esCongelado = false)
     {
         // Calcular días totales
         int diasTotales = CalcularDiasTotales(duracion, unidadDuracion);
@@ -22,17 +24,40 @@ public class PrestamoService : IPrestamoService
         // Calcular número de cuotas según frecuencia
         int numeroCuotas = CalcularNumeroCuotas(diasTotales, frecuenciaPago, duracion, unidadDuracion);
         
-        // Calcular intereses
         decimal montoIntereses;
         decimal montoTotal;
+        decimal montoCuota;
         
-        if (tipoInteres == "Simple")
+        if (esCongelado)
+        {
+            // PRÉSTAMO CONGELADO: Solo paga intereses, capital no reduce
+            // Cuota = interés por período (mensual, quincenal, etc.)
+            // La tasa es mensual, ajustar según frecuencia
+            decimal factorFrecuencia = frecuenciaPago switch
+            {
+                "Diario" => 1m / 30m,      // 1/30 del interés mensual
+                "Semanal" => 7m / 30m,     // 7/30 del interés mensual  
+                "Quincenal" => 15m / 30m,  // 15/30 = 0.5 del interés mensual
+                "Mensual" => 1m,           // Interés mensual completo
+                _ => 1m
+            };
+            
+            // Cuota = Capital * (Tasa/100) * factor de frecuencia
+            montoCuota = Math.Round(montoPrestado * (tasaInteres / 100m) * factorFrecuencia, 0);
+            
+            // Para préstamos congelados, el "MontoTotal" es teóricamente infinito
+            // pero usamos el capital como referencia (se paga cuando abonan extra)
+            montoTotal = montoPrestado; // Solo el capital, intereses son recurrentes
+            montoIntereses = montoCuota * numeroCuotas; // Intereses proyectados para el período inicial
+        }
+        else if (tipoInteres == "Simple")
         {
             // Convertir días a meses para el cálculo (tasa es mensual)
             decimal meses = diasTotales / 30m;
             // Interés Simple con tasa mensual: I = P * (r/100) * meses
             montoIntereses = montoPrestado * (tasaInteres / 100m) * meses;
             montoTotal = montoPrestado + montoIntereses;
+            montoCuota = Math.Round(montoTotal / numeroCuotas, 2);
         }
         else // Compuesto
         {
@@ -43,9 +68,8 @@ public class PrestamoService : IPrestamoService
             // Interés Compuesto: M = P * (1 + r)^n
             montoTotal = montoPrestado * (decimal)Math.Pow((double)(1 + tasaPorPeriodo), numeroCuotas);
             montoIntereses = montoTotal - montoPrestado;
+            montoCuota = Math.Round(montoTotal / numeroCuotas, 2);
         }
-        
-        decimal montoCuota = Math.Round(montoTotal / numeroCuotas, 2);
         
         // Calcular fecha de vencimiento (fecha de la última cuota)
         DateTime fechaVencimiento = CalcularFechaCuota(fechaPrestamo, frecuenciaPago, numeroCuotas);

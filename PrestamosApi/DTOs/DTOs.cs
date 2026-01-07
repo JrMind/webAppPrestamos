@@ -56,7 +56,8 @@ public record PrestamoDto(
     CuotaProximaDto? ProximaCuota,
     int? CobradorId = null,
     string? CobradorNombre = null,
-    decimal PorcentajeCobrador = 5
+    decimal PorcentajeCobrador = 5,
+    bool EsCongelado = false
 );
 
 public record CuotaProximaDto(
@@ -76,7 +77,8 @@ public record CreatePrestamoDto(
     string? Descripcion,
     int? CobradorId = null,
     decimal PorcentajeCobrador = 5,
-    string? DiaSemana = null // Para Semanal: Lunes, Martes, etc.
+    string? DiaSemana = null, // Para Semanal: Lunes, Martes, etc.
+    bool EsCongelado = false // Préstamo congelado: solo intereses
 );
 
 public record UpdatePrestamoDto(
@@ -91,7 +93,8 @@ public record UpdatePrestamoDto(
     string? Descripcion,
     int? CobradorId,
     decimal PorcentajeCobrador,
-    string? DiaSemana
+    string? DiaSemana,
+    bool EsCongelado = false
 );
 
 // Cuota DTOs
@@ -250,7 +253,8 @@ public record CreatePrestamoConFuentesDto(
     string? Descripcion,
     int? CobradorId,
     decimal PorcentajeCobrador,
-    List<FuenteCapitalDto> FuentesCapital // Lista de fuentes
+    List<FuenteCapitalDto> FuentesCapital, // Lista de fuentes
+    bool EsCongelado = false
 );
 
 // Socio/Inversor interno DTOs
