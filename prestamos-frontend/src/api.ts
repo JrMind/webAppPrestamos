@@ -353,6 +353,21 @@ export const pagosApi = {
         });
         if (!response.ok) throw new Error('Error al eliminar pago');
     },
+
+    abonoCapital: async (prestamoId: number, monto: number, metodoPago?: string): Promise<{
+        message: string;
+        capitalAnterior: number;
+        nuevoCapital: number;
+        nuevaCuota: number;
+        estadoPrestamo: string;
+    }> => {
+        const response = await fetch(`${API_URL}/pagos/abono-capital/${prestamoId}`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ monto, metodoPago }),
+        });
+        return handleResponse(response);
+    }
 };
 
 // Dashboard

@@ -282,4 +282,80 @@ public class PagosController : ControllerBase
 
         return NoContent();
     }
+
+    /// <summary>
+    /// Abono al capital para préstamos congelados - reduce el capital adeudado
+    /// </summary>
+    [HttpPost("abono-capital/{prestamoId}")]
+    public async Task<IActionResult> AbonoCapital(int prestamoId, [FromBody] AbonoCapitalDto dto)
+    {
+        var prestamo = await _context.Prestamos
+            .Include(p => p.Cliente)
+            .Include(p => p.Cuotas)
+            .FirstOrDefaultAsync(p => p.Id == prestamoId);
+
+        if (prestamo == null)
+            return NotFound(new { message = "Préstamo no encontrado" });
+
+        if (!prestamo.EsCongelado)
+            return BadRequest(new { message = "Solo préstamos congelados pueden recibir abonos al capital" });
+
+        if (dto.Monto <= 0)
+            return BadRequest(new { message = "El monto debe ser mayor a 0" });
+
+        if (dto.Monto > prestamo.MontoPrestado)
+            return BadRequest(new { message = $"El abono ({dto.Monto:N0}) no puede ser mayor al capital adeudado ({prestamo.MontoPrestado:N0})" });
+
+        // Reducir el capital
+        var capitalAnterior = prestamo.MontoPrestado;
+        prestamo.MontoPrestado -= dto.Monto;
+
+        // Registrar el pago como abono al capital
+        var pago = new Pago
+        {
+            PrestamoId = prestamoId,
+            MontoPago = dto.Monto,
+            FechaPago = DateTime.UtcNow,
+            MetodoPago = dto.MetodoPago ?? "Efectivo",
+            Observaciones = $"Abono al capital. Capital anterior: ${capitalAnterior:N0}, Nuevo capital: ${prestamo.MontoPrestado:N0}"
+        };
+        _context.Pagos.Add(pago);
+
+        if (prestamo.MontoPrestado <= 0)
+        {
+            // Capital pagado completamente
+            prestamo.MontoPrestado = 0;
+            prestamo.EstadoPrestamo = "Pagado";
+            _logger.LogInformation("Préstamo congelado #{PrestamoId} liquidado con abono de ${Monto}", prestamoId, dto.Monto);
+        }
+        else
+        {
+            // Recalcular el monto de cuota para el nuevo capital
+            decimal factorFrecuencia = prestamo.FrecuenciaPago switch
+            {
+                "Diario" => 1m / 30m,
+                "Semanal" => 7m / 30m,
+                "Quincenal" => 15m / 30m,
+                "Mensual" => 1m,
+                _ => 1m
+            };
+            decimal nuevaCuota = Math.Round(prestamo.MontoPrestado * (prestamo.TasaInteres / 100m) * factorFrecuencia, 0);
+            prestamo.MontoCuota = nuevaCuota;
+
+            _logger.LogInformation("Préstamo congelado #{PrestamoId}: Abono capital ${Monto}, Nuevo capital ${NuevoCapital}, Nueva cuota interés ${NuevaCuota}", 
+                prestamoId, dto.Monto, prestamo.MontoPrestado, nuevaCuota);
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { 
+            message = $"Abono de ${dto.Monto:N0} aplicado exitosamente",
+            capitalAnterior = capitalAnterior,
+            nuevoCapital = prestamo.MontoPrestado,
+            nuevaCuota = prestamo.MontoCuota,
+            estadoPrestamo = prestamo.EstadoPrestamo
+        });
+    }
 }
+
+public record AbonoCapitalDto(decimal Monto, string? MetodoPago = null);

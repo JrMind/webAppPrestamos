@@ -1249,9 +1249,44 @@ function App() {
                     <input type="hidden" value={prestamoForm.clienteId || ''} required />
                   </div>
                   <div className="form-group"><label>Monto ($) *</label><input type="number" min="50" required value={prestamoForm.montoPrestado || ''} onChange={e => setPrestamoForm({ ...prestamoForm, montoPrestado: Number(e.target.value) })} /></div>
+                  <div className="form-group" style={{ display: 'flex', alignItems: 'center' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', margin: 0 }}>
+                      <input
+                        type="checkbox"
+                        checked={prestamoForm.esCongelado || false}
+                        onChange={e => {
+                          setPrestamoForm({
+                            ...prestamoForm,
+                            esCongelado: e.target.checked,
+                            frecuenciaPago: e.target.checked && (prestamoForm.frecuenciaPago === 'Diario' || prestamoForm.frecuenciaPago === 'Semanal') ? 'Mensual' : prestamoForm.frecuenciaPago
+                          });
+                        }}
+                        style={{ width: '18px', height: '18px' }}
+                      />
+                      <span>❄️ Congelado</span>
+                    </label>
+                  </div>
                   <div className="form-group"><label>Tasa Interés (%) *</label><input type="number" min="0" step="0.1" required value={prestamoForm.tasaInteres} onChange={e => setPrestamoForm({ ...prestamoForm, tasaInteres: Number(e.target.value) })} /></div>
-                  <div className="form-group"><label>Frecuencia *</label><select value={prestamoForm.frecuenciaPago} onChange={e => setPrestamoForm({ ...prestamoForm, frecuenciaPago: e.target.value })}><option>Diario</option><option>Semanal</option><option>Quincenal</option><option>Mensual</option></select></div>
-                  <div className="form-group"><label>Duración *</label><div style={{ display: 'flex', gap: '0.5rem' }}><input type="number" min="1" required value={prestamoForm.duracion} onChange={e => setPrestamoForm({ ...prestamoForm, duracion: Number(e.target.value) })} style={{ width: '80px' }} /><select value={prestamoForm.unidadDuracion} onChange={e => setPrestamoForm({ ...prestamoForm, unidadDuracion: e.target.value })}><option>Dias</option><option>Semanas</option><option>Quincenas</option><option>Meses</option></select></div></div>
+                  <div className="form-group">
+                    <label>Frecuencia *</label>
+                    <select value={prestamoForm.frecuenciaPago} onChange={e => setPrestamoForm({ ...prestamoForm, frecuenciaPago: e.target.value })}>
+                      {!prestamoForm.esCongelado && <option>Diario</option>}
+                      {!prestamoForm.esCongelado && <option>Semanal</option>}
+                      <option>Quincenal</option>
+                      <option>Mensual</option>
+                    </select>
+                  </div>
+                  {!prestamoForm.esCongelado && (
+                    <div className="form-group">
+                      <label>Duración *</label>
+                      <div style={{ display: 'flex', gap: '0.5rem' }}>
+                        <input type="number" min="1" required value={prestamoForm.duracion} onChange={e => setPrestamoForm({ ...prestamoForm, duracion: Number(e.target.value) })} style={{ width: '80px' }} />
+                        <select value={prestamoForm.unidadDuracion} onChange={e => setPrestamoForm({ ...prestamoForm, unidadDuracion: e.target.value })}>
+                          <option>Dias</option><option>Semanas</option><option>Quincenas</option><option>Meses</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                   <div className="form-group" style={{ position: 'relative' }}>
                     <label>Cobrador (Referido)</label>
                     <div style={{ position: 'relative' }}>
@@ -1313,18 +1348,7 @@ function App() {
                     <input type="date" required value={prestamoForm.fechaPrestamo} onChange={e => setPrestamoForm({ ...prestamoForm, fechaPrestamo: e.target.value })} />
                     <small style={{ display: 'block', fontSize: '0.75rem', color: '#666', marginTop: '2px' }}>Fecha inicio de pagos</small>
                   </div>
-                  <div className="form-group" style={{ gridColumn: '1 / -1' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer' }}>
-                      <input
-                        type="checkbox"
-                        checked={prestamoForm.esCongelado || false}
-                        onChange={e => setPrestamoForm({ ...prestamoForm, esCongelado: e.target.checked })}
-                        style={{ width: '18px', height: '18px' }}
-                      />
-                      <span>❄️ Préstamo Congelado</span>
-                      <span style={{ fontSize: '0.75rem', color: '#888', fontWeight: 'normal' }}>(Solo paga intereses, capital no reduce)</span>
-                    </label>
-                  </div>
+
                 </div>
 
                 {/* Sección de Fuentes de Capital */}
@@ -1404,7 +1428,25 @@ function App() {
                   </div>
                 )}
 
-                {preview && <div className="preview-card"><h4>Vista Previa</h4><div className="preview-grid"><div className="preview-item"><span>Cuotas</span><strong>{preview.numeroCuotas}</strong></div><div className="preview-item"><span>Intereses</span><strong style={{ color: '#10b981' }}>{formatMoney(preview.montoIntereses)}</strong></div><div className="preview-item"><span>Total</span><strong>{formatMoney(preview.montoTotal)}</strong></div><div className="preview-item"><span>Por Cuota</span><strong style={{ color: '#3b82f6' }}>{formatMoney(preview.montoCuota)}</strong></div></div></div>}
+                {preview && (
+                  <div className="preview-card">
+                    <h4>Vista Previa {preview.esCongelado && <span style={{ fontSize: '0.8rem', color: '#0ea5e9' }}>❄️ Congelado</span>}</h4>
+                    {preview.esCongelado ? (
+                      <div className="preview-grid">
+                        <div className="preview-item"><span>Capital</span><strong>{formatMoney(prestamoForm.montoPrestado)}</strong></div>
+                        <div className="preview-item"><span>Interés por {prestamoForm.frecuenciaPago === 'Mensual' ? 'Mes' : 'Quincena'}</span><strong style={{ color: '#0ea5e9' }}>{formatMoney(preview.montoCuota)}</strong></div>
+                        <div className="preview-item" style={{ gridColumn: '1 / -1' }}><span style={{ fontSize: '0.75rem', color: '#888' }}>Pago de solo intereses cada período. Capital se reduce solo con abonos adicionales.</span></div>
+                      </div>
+                    ) : (
+                      <div className="preview-grid">
+                        <div className="preview-item"><span>Cuotas</span><strong>{preview.numeroCuotas}</strong></div>
+                        <div className="preview-item"><span>Intereses</span><strong style={{ color: '#10b981' }}>{formatMoney(preview.montoIntereses)}</strong></div>
+                        <div className="preview-item"><span>Total</span><strong>{formatMoney(preview.montoTotal)}</strong></div>
+                        <div className="preview-item"><span>Por Cuota</span><strong style={{ color: '#3b82f6' }}>{formatMoney(preview.montoCuota)}</strong></div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowPrestamoModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">{editMode ? 'Guardar Cambios' : 'Crear'}</button></div>
             </form>
@@ -1430,7 +1472,41 @@ function App() {
                 <div className="detail-item"><label>Cobrador</label><span>{selectedPrestamo.cobradorNombre || 'No asignado'}</span></div>
                 {selectedPrestamo.esCongelado && (
                   <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
-                    <span className="badge" style={{ background: '#0ea5e9', color: 'white', padding: '0.5rem 1rem' }}>❄️ Préstamo Congelado - Solo intereses, capital no reduce</span>
+                    <span className="badge" style={{ background: '#0ea5e9', color: 'white', padding: '0.5rem 1rem' }}>❄️ Préstamo Congelado - Solo intereses</span>
+                  </div>
+                )}
+                {selectedPrestamo.esCongelado && selectedPrestamo.estadoPrestamo !== 'Pagado' && (
+                  <div style={{ gridColumn: '1 / -1', padding: '1rem', background: 'rgba(14, 165, 233, 0.1)', borderRadius: '8px', border: '1px solid #0ea5e9' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                      <strong>💰 Abonar al Capital</strong>
+                      <span>Capital adeudado: <strong style={{ color: '#ef4444' }}>{formatMoney(selectedPrestamo.montoPrestado)}</strong></span>
+                    </div>
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                      <input
+                        type="number"
+                        placeholder="Monto abono..."
+                        min="1"
+                        max={selectedPrestamo.montoPrestado}
+                        id="abonoCapitalInput"
+                        style={{ flex: 1, padding: '0.5rem' }}
+                      />
+                      <button
+                        className="btn btn-primary btn-sm"
+                        onClick={async () => {
+                          const input = document.getElementById('abonoCapitalInput') as HTMLInputElement;
+                          const monto = Number(input?.value || 0);
+                          if (monto <= 0) { showToast('Ingrese un monto válido', 'warning'); return; }
+                          if (monto > selectedPrestamo.montoPrestado) { showToast('El abono no puede ser mayor al capital', 'warning'); return; }
+                          try {
+                            const result = await pagosApi.abonoCapital(selectedPrestamo.id, monto);
+                            showToast(`Abono aplicado. Nuevo capital: ${formatMoney(result.nuevoCapital)}`, 'success');
+                            // Refresh data
+                            loadData();
+                            setShowDetalleModal(false);
+                          } catch (e: any) { showToast(e.message || 'Error', 'error'); }
+                        }}
+                      >Aplicar Abono</button>
+                    </div>
                   </div>
                 )}
                 <div style={{ marginTop: '1rem', gridColumn: '1 / -1', display: 'flex', gap: '0.5rem' }}>
