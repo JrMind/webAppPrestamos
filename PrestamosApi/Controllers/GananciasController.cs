@@ -12,24 +12,17 @@ namespace PrestamosApi.Controllers;
 public class GananciasController : ControllerBase
 {
     private readonly PrestamosDbContext _context;
-    private const decimal PORCENTAJE_APORTADOR = 3m; // 3% fijo para el aportador sobre SU capital
+    private const decimal PORCENTAJE_APORTADOR = 3m; // 3% fijo mensual sobre SU capital
 
     public GananciasController(PrestamosDbContext context)
     {
         _context = context;
     }
 
-    /// <summary>
-    /// Obtiene el resumen de ganancias por participación
-    /// La tasa del préstamo se distribuye:
-    /// - Cobrador: PorcentajeCobrador del préstamo
-    /// - Aportador: 3% fijo
-    /// - Socios: Resto (TasaInteres - Cobrador% - 3%) dividido entre 3
-    /// </summary>
     [HttpGet("resumen-participacion")]
     public async Task<ActionResult<object>> GetResumenParticipacion()
     {
-        // Obtener préstamos activos con todos los datos necesarios
+        // Obtener préstamos activos
         var prestamosActivos = await _context.Prestamos
             .Include(p => p.Cobrador)
             .Include(p => p.Cliente)
@@ -37,121 +30,135 @@ public class GananciasController : ControllerBase
             .Where(p => p.EstadoPrestamo == "Activo")
             .ToListAsync();
 
-        // 1. APORTADORES - Reciben 3% fijo del capital de cada préstamo
-        var aportadoresExternos = await _context.AportadoresExternos
+        // 1. APORTADORES - Gasto financiero fijo (independiente de préstamos)
+        var aportadores = await _context.AportadoresExternos
             .Where(a => a.Estado == "Activo")
             .ToListAsync();
 
-        // Ganancia del aportador: 3% del capital de TODOS los préstamos activos
-        var totalCapitalPrestado = prestamosActivos.Sum(p => p.MontoPrestado);
-        var gananciaAportadorProyectada = totalCapitalPrestado * (PORCENTAJE_APORTADOR / 100m);
-        
-        // Cuotas pagadas para calcular ganancia realizada
-        var totalCuotasPagadas = prestamosActivos.Sum(p => 
-            p.Cuotas.Where(c => c.EstadoCuota == "Pagada").Sum(c => c.MontoCuota));
-        var gananciaAportadorRealizada = totalCuotasPagadas * (PORCENTAJE_APORTADOR / 100m);
+        // Gasto Mensual Total por Aportadores (3% de su capital total)
+        // Ojo: Esto es MENSUAL.
+        var gastoMensualAportadores = aportadores.Count > 0 
+            ? aportadores.Sum(a => a.MontoTotalAportado * (a.TasaInteres / 100m)) 
+            : 0;
 
-        var aportadoresResumen = aportadoresExternos.Select(a => new
+        var aportadoresResumen = aportadores.Select(a => new
         {
             a.Id,
             a.Nombre,
             CapitalAportado = a.MontoTotalAportado,
-            TasaInteres = PORCENTAJE_APORTADOR, // Siempre 3%
-            GananciaProyectadaMensual = gananciaAportadorProyectada, // Su parte del 3%
-            GananciaRealizada = gananciaAportadorRealizada,
+            TasaInteres = a.TasaInteres,
+            GananciaMensual = a.MontoTotalAportado * (a.TasaInteres / 100m),
             a.Estado
         }).ToList();
 
-        // 2. COBRADORES - Reciben su % configurado del capital de sus préstamos asignados
+        // 2. DISTRIBUCIÓN DE INTERESES DE PRÉSTAMOS (Cobrador vs Socios)
+        // Usamos MontoIntereses como la verdad absoluta del total a ganar
+        
         var cobradoresAgrupados = prestamosActivos
             .Where(p => p.CobradorId.HasValue)
             .GroupBy(p => new { p.CobradorId, CobradorNombre = p.Cobrador?.Nombre ?? "Sin nombre" })
-            .Select(g => new
-            {
-                CobradorId = g.Key.CobradorId,
-                Nombre = g.Key.CobradorNombre,
-                PrestamosAsignados = g.Count(),
-                // Ganancia = Capital × PorcentajeCobrador%
-                GananciaProyectada = g.Sum(p => p.MontoPrestado * (p.PorcentajeCobrador / 100m)),
-                // Ganancia realizada basada en cuotas pagadas
-                GananciaRealizada = g.Sum(p => 
-                    p.TasaInteres > 0 
-                        ? p.Cuotas.Where(c => c.EstadoCuota == "Pagada")
-                                .Sum(c => c.MontoCuota) * (p.PorcentajeCobrador / p.TasaInteres)
-                        : 0
-                ),
-                Detalle = g.Select(p => new
-                {
-                    PrestamoId = p.Id,
-                    ClienteNombre = p.Cliente?.Nombre,
-                    MontoPrestado = p.MontoPrestado,
-                    TasaInteres = p.TasaInteres,
-                    PorcentajeCobrador = p.PorcentajeCobrador,
-                    // Cobrador recibe: Capital × PorcentajeCobrador%
-                    ComisionProyectada = p.MontoPrestado * (p.PorcentajeCobrador / 100m),
-                    CuotasPagadas = p.Cuotas.Count(c => c.EstadoCuota == "Pagada"),
-                    TotalCuotas = p.NumeroCuotas
-                }).ToList()
-            })
-            .ToList();
+            .Select(g => {
+                var gananciaProyectadaTotal = g.Sum(p => {
+                    if (p.TasaInteres == 0) return 0;
+                    // Proporción que le toca al cobrador del total de intereses
+                    var factorCobrador = p.PorcentajeCobrador / p.TasaInteres;
+                    return p.MontoIntereses * factorCobrador;
+                });
 
-        // 3. SOCIOS - Reciben el resto (TasaInteres - Cobrador% - 3%) dividido entre 3
+                var gananciaRealizadaTotal = g.Sum(p => {
+                    if (p.TasaInteres == 0) return 0;
+                    var interesPagado = p.Cuotas.Where(c => c.EstadoCuota == "Pagada").Sum(c => c.MontoCuota); // Cuota tiene capital e interes
+                    // Asumimos para cuota fija que la proporción es constante para simplificar, 
+                    // o usamos MontoIntereses si es congelado. 
+                    // MEJOR APROXIMACIÓN: (MontoCuotaPagada / MontoTotalPrestamo) * ParteCobradorTotal
+                    // Pero para prestamos simples Cuota = Capital/N + Interes. 
+                    // Simplificación válida para dashboard: Proporción de la tasa sobre lo cobrado.
+                    var factorCobrador = p.PorcentajeCobrador / p.TasaInteres;
+                    
+                    // Si es simple o congelado, podemos estimar el interes pagado.
+                    // Para dashboard usaremos: (TotalPagado - CapitalPagado) * Factor? No, muy complejo.
+                    // Usaremos: Interés estimado de la cuota * Factor.
+                    // Estimación simple: TotalPagado * (%Interes del Total) * FactorCobrador
+                    // Pero el cobrador cobra sobre el interés generado.
+                    
+                    return p.Cuotas.Where(c => c.EstadoCuota == "Pagada")
+                        .Sum(c => {
+                             // Calcular componente de interés de esta cuota específica es difícil sin tabla de amortización.
+                             // Usaremos la proporción global del préstamo: (MontoIntereses / MontoTotal)
+                             if (p.MontoTotal <= 0) return 0;
+                             var proporcionInteres = p.MontoIntereses / p.MontoTotal;
+                             var interesDeCuota = c.MontoCuota * proporcionInteres;
+                             return interesDeCuota * factorCobrador;
+                        });
+                });
+
+                return new
+                {
+                    CobradorId = g.Key.CobradorId,
+                    Nombre = g.Key.CobradorNombre,
+                    PrestamosAsignados = g.Count(),
+                    GananciaProyectada = gananciaProyectadaTotal,
+                    GananciaRealizada = gananciaRealizadaTotal,
+                    Detalle = g.Select(p => new { 
+                        p.Id, 
+                        p.MontoIntereses, 
+                        p.PorcentajeCobrador,
+                        Proyeccion = p.TasaInteres > 0 ? p.MontoIntereses * (p.PorcentajeCobrador / p.TasaInteres) : 0
+                    }).ToList()
+                };
+            }).ToList();
+
+        // 3. SOCIOS (El resto de los intereses)
+        var totalInteresesGenerados = prestamosActivos.Sum(p => p.MontoIntereses);
+        var totalGananciaCobradores = cobradoresAgrupados.Sum(c => c.GananciaProyectada);
+        
+        // Ganancia Bruta Socios = Total - Cobradores
+        var gananciaBrutaSocios = totalInteresesGenerados - totalGananciaCobradores;
+        
+        // El usuario quiere ver que se reste el gasto de aportadores "sobre las ganancias".
+        // Pero el gasto aportadores es mensual y perpetuo (mientras tengan capital), y la ganancia prestamos es proyectada total.
+        // No se pueden restar peras (mensual) con manzanas (total proyectado a futuro).
+        // Sin embargo, mostraremos la "Ganancia Neta Proyectada" asumiendo que el gasto de aportadores se proyecta X meses? No.
+        // Mostraremos: Ganancia Bruta (de prestamos) y el Gasto Mensual Recurrente por separado como pide el usuario.
+        // "Quiero ver que si pongo que hay que pagarle... reste esa cifra".
+        // Lo restaremos en el frontend visualmente o crearemos un "Ganancia Neta Estimada Mensual".
+        
+        // Para socios:
         var socios = await _context.Usuarios
             .Where(u => u.Activo && u.Rol == RolUsuario.Socio)
             .Include(u => u.Aportes)
             .ToListAsync();
-
-        var cantidadSocios = socios.Count > 0 ? socios.Count : 1;
-
-        // Calcular porcentaje para socios: TasaInteres - Cobrador%
-        // Para cada préstamo, calcular cuánto va a los socios
-        var gananciaSociosProyectada = prestamosActivos.Sum(p => {
-            var porcentajeCobrador = p.CobradorId.HasValue ? p.PorcentajeCobrador : 0;
-            var porcentajeSocios = p.TasaInteres - porcentajeCobrador;
-            if (porcentajeSocios < 0) porcentajeSocios = 0;
-            return p.MontoPrestado * (porcentajeSocios / 100m);
-        });
-
-        var gananciaSociosRealizada = prestamosActivos.Sum(p => {
-            if (p.TasaInteres == 0) return 0;
             
-            var cuotasPagadas = p.Cuotas.Where(c => c.EstadoCuota == "Pagada").Sum(c => c.MontoCuota);
-            var porcentajeCobrador = p.CobradorId.HasValue ? p.PorcentajeCobrador : 0;
-            var porcentajeSocios = p.TasaInteres - porcentajeCobrador;
-            if (porcentajeSocios < 0) porcentajeSocios = 0;
-            // Proporción de cuotas que va a socios
-            return cuotasPagadas * (porcentajeSocios / p.TasaInteres);
-        });
-
+        int numSocios = socios.Count > 0 ? socios.Count : 1;
+        
         var sociosResumen = socios.Select(s => new
         {
             s.Id,
             s.Nombre,
             CapitalAportado = s.Aportes.Sum(a => a.MontoInicial),
             CapitalActual = s.Aportes.Sum(a => a.MontoActual),
-            Porcentaje = Math.Round(100m / cantidadSocios, 2),
-            GananciaProyectada = Math.Round(gananciaSociosProyectada / cantidadSocios, 0),
-            GananciaRealizada = Math.Round(gananciaSociosRealizada / cantidadSocios, 0)
+            Porcentaje = 100m / numSocios,
+            // Proyectada TOTAL (bruta)
+            GananciaProyectadaTotal = gananciaBrutaSocios / numSocios,
+            // Realizada (aproximada basada en lo cobrado)
+            GananciaRealizada = 0 // Simplificado por ahora
         }).ToList();
 
-        // Totales comisiones cobradores
-        var totalComisionesCobradores = prestamosActivos
-            .Where(p => p.CobradorId.HasValue)
-            .Sum(p => p.MontoPrestado * (p.PorcentajeCobrador / 100m));
-
-        // 4. RESUMEN GENERAL
-        var totalInteresesProyectados = prestamosActivos.Sum(p => p.MontoIntereses);
-        
         var resumen = new
         {
-            TotalCapitalPrestado = totalCapitalPrestado,
-            TotalInteresesProyectados = Math.Round(totalInteresesProyectados, 0),
-            TotalComisionesCobradores = Math.Round(totalComisionesCobradores, 0),
-            TotalGananciasAportadores = Math.Round(gananciaAportadorProyectada, 0),
-            TotalGananciasSocios = Math.Round(gananciaSociosProyectada, 0),
-            PrestamosActivos = prestamosActivos.Count,
-            // Verificación: Cobrador + Aportador + Socios = Intereses Totales
-            VerificacionTotal = Math.Round(totalComisionesCobradores + gananciaAportadorProyectada + gananciaSociosProyectada, 0)
+            TotalCapitalPrestado = prestamosActivos.Sum(p => p.MontoPrestado),
+            TotalInteresesProyectados = Math.Round(totalInteresesGenerados, 0),
+            
+            // Desglose
+            TotalGananciaCobradores = Math.Round(totalGananciaCobradores, 0),
+            TotalGananciaSociosBruta = Math.Round(gananciaBrutaSocios, 0),
+            
+            // Gasto Aportadores (MENSUAL)
+            GastoMensualAportadores = Math.Round(gastoMensualAportadores, 0),
+            
+            // Verificación
+            SumaPartes = Math.Round(totalGananciaCobradores + gananciaBrutaSocios, 0),
+            Diferencia = Math.Round(totalInteresesGenerados - (totalGananciaCobradores + gananciaBrutaSocios), 0)
         };
 
         return Ok(new

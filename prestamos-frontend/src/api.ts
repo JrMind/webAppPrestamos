@@ -588,8 +588,7 @@ export interface ResumenParticipacion {
         nombre: string;
         capitalAportado: number;
         tasaInteres: number;
-        gananciaProyectadaMensual: number;
-        gananciaRealizada: number;
+        gananciaMensual: number;
         estado: string;
     }>;
     cobradores: Array<{
@@ -599,14 +598,10 @@ export interface ResumenParticipacion {
         gananciaProyectada: number;
         gananciaRealizada: number;
         detalle: Array<{
-            prestamoId: number;
-            clienteNombre: string;
-            montoPrestado: number;
-            tasaInteres: number;
+            id: number;
+            montoIntereses: number;
             porcentajeCobrador: number;
-            comisionProyectada: number;
-            cuotasPagadas: number;
-            totalCuotas: number;
+            proyeccion: number;
         }>;
     }>;
     socios: Array<{
@@ -615,17 +610,17 @@ export interface ResumenParticipacion {
         capitalAportado: number;
         capitalActual: number;
         porcentaje: number;
-        gananciaProyectada: number;
+        gananciaProyectadaTotal: number;
         gananciaRealizada: number;
     }>;
     resumen: {
         totalCapitalPrestado: number;
         totalInteresesProyectados: number;
-        totalComisionesCobradores: number;
-        totalGananciasAportadores: number;
-        totalGananciasSocios: number;
-        prestamosActivos: number;
-        verificacionTotal?: number;
+        totalGananciaCobradores: number;
+        totalGananciaSociosBruta: number;
+        gastoMensualAportadores: number;
+        sumaPartes: number;
+        diferencia: number;
     };
 }
 

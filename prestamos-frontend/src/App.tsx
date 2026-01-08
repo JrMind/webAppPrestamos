@@ -1262,24 +1262,21 @@ function App() {
               {/* Resumen General */}
               <div className="kpi-grid" style={{ marginBottom: '1.5rem' }}>
                 <div className="kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
-                  <span className="kpi-title">💰 Capital Prestado</span>
-                  <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(resumenParticipacion.resumen.totalCapitalPrestado)}</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #3b82f6' }}>
-                  <span className="kpi-title">📊 Intereses Proyectados</span>
-                  <span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(resumenParticipacion.resumen.totalInteresesProyectados)}</span>
+                  <span className="kpi-title">💰 Interés Total (Proyectado)</span>
+                  <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(resumenParticipacion.resumen.totalInteresesProyectados)}</span>
                 </div>
                 <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b' }}>
                   <span className="kpi-title">🏃 Comisiones Cobradores</span>
-                  <span className="kpi-value" style={{ color: '#f59e0b' }}>{formatMoney(resumenParticipacion.resumen.totalComisionesCobradores)}</span>
+                  <span className="kpi-value" style={{ color: '#f59e0b' }}>{formatMoney(resumenParticipacion.resumen.totalGananciaCobradores)}</span>
                 </div>
                 <div className="kpi-card" style={{ borderLeft: '4px solid #8b5cf6' }}>
-                  <span className="kpi-title">👥 Ganancias Socios</span>
-                  <span className="kpi-value" style={{ color: '#8b5cf6' }}>{formatMoney(resumenParticipacion.resumen.totalGananciasSocios)}</span>
+                  <span className="kpi-title">👥 Socios (Ganancia Bruta)</span>
+                  <span className="kpi-value" style={{ color: '#8b5cf6' }}>{formatMoney(resumenParticipacion.resumen.totalGananciaSociosBruta)}</span>
                 </div>
                 <div className="kpi-card" style={{ borderLeft: '4px solid #ec4899' }}>
-                  <span className="kpi-title">💸 Pago a Aportadores</span>
-                  <span className="kpi-value" style={{ color: '#ec4899' }}>{formatMoney(resumenParticipacion.resumen.totalGananciasAportadores)}</span>
+                  <span className="kpi-title">💸 Gasto Mensual Aportadores</span>
+                  <span className="kpi-value" style={{ color: '#ec4899' }}>{formatMoney(resumenParticipacion.resumen.gastoMensualAportadores)}</span>
+                  <span className="kpi-sub">Obligación Mensual Fija</span>
                 </div>
               </div>
 
@@ -1294,7 +1291,7 @@ function App() {
                         <td><strong>{a.nombre}</strong></td>
                         <td className="money">{formatMoney(a.capitalAportado)}</td>
                         <td>{a.tasaInteres}%</td>
-                        <td className="money" style={{ color: '#10b981' }}>{formatMoney(a.gananciaProyectadaMensual)}</td>
+                        <td className="money" style={{ color: '#10b981' }}>{formatMoney(a.gananciaMensual)}</td>
                         <td><span className={`badge ${a.estado === 'Activo' ? 'badge-green' : 'badge-gray'}`}>{a.estado}</span></td>
                       </tr>
                     ))}
@@ -1326,7 +1323,7 @@ function App() {
               <h4 style={{ margin: '1.5rem 0 0.5rem' }}>👥 Socios ({resumenParticipacion.socios.length})</h4>
               <div className="table-container">
                 <table>
-                  <thead><tr><th>Socio</th><th>Capital Aportado</th><th>Capital Actual</th><th>% Participación</th><th>Ganancia Proyectada</th><th>Ganancia Realizada</th></tr></thead>
+                  <thead><tr><th>Socio</th><th>Capital Aportado</th><th>Capital Actual</th><th>% Participación</th><th>Ganancia Proyectada Total</th><th>Ganancia Realizada</th></tr></thead>
                   <tbody>
                     {resumenParticipacion.socios.map(s => (
                       <tr key={s.id}>
@@ -1334,7 +1331,7 @@ function App() {
                         <td className="money">{formatMoney(s.capitalAportado)}</td>
                         <td className="money" style={{ color: '#10b981' }}>{formatMoney(s.capitalActual)}</td>
                         <td>{s.porcentaje.toFixed(1)}%</td>
-                        <td className="money" style={{ color: '#3b82f6' }}>{formatMoney(s.gananciaProyectada)}</td>
+                        <td className="money" style={{ color: '#3b82f6' }}>{formatMoney(s.gananciaProyectadaTotal)}</td>
                         <td className="money" style={{ color: '#8b5cf6' }}>{formatMoney(s.gananciaRealizada)}</td>
                       </tr>
                     ))}
