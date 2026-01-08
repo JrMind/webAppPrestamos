@@ -134,7 +134,10 @@ public class CobrosController : BaseApiController
         {
             cuota.FechaPago = null;
             cuota.MontoPagado = 0;
-            cuota.EstadoCuota = "Pendiente";
+            cuota.SaldoPendiente = cuota.MontoCuota; // Restaurar saldo pendiente
+            cuota.Cobrado = false;
+            // Verificar si la cuota está vencida
+            cuota.EstadoCuota = cuota.FechaCobro.Date < DateTime.UtcNow.Date ? "Vencida" : "Pendiente";
         }
 
         await _context.SaveChangesAsync();
