@@ -75,8 +75,10 @@ public class GananciasController : ControllerBase
                 GananciaProyectada = g.Sum(p => p.MontoPrestado * (p.PorcentajeCobrador / 100m)),
                 // Ganancia realizada basada en cuotas pagadas
                 GananciaRealizada = g.Sum(p => 
-                    p.Cuotas.Where(c => c.EstadoCuota == "Pagada")
-                            .Sum(c => c.MontoCuota) * (p.PorcentajeCobrador / p.TasaInteres)
+                    p.TasaInteres > 0 
+                        ? p.Cuotas.Where(c => c.EstadoCuota == "Pagada")
+                                .Sum(c => c.MontoCuota) * (p.PorcentajeCobrador / p.TasaInteres)
+                        : 0
                 ),
                 Detalle = g.Select(p => new
                 {
@@ -111,6 +113,8 @@ public class GananciasController : ControllerBase
         });
 
         var gananciaSociosRealizada = prestamosActivos.Sum(p => {
+            if (p.TasaInteres == 0) return 0;
+            
             var cuotasPagadas = p.Cuotas.Where(c => c.EstadoCuota == "Pagada").Sum(c => c.MontoCuota);
             var porcentajeCobrador = p.CobradorId.HasValue ? p.PorcentajeCobrador : 0;
             var porcentajeSocios = p.TasaInteres - porcentajeCobrador - PORCENTAJE_APORTADOR;
