@@ -478,6 +478,61 @@ function App() {
     prestamoId: 0, cuotaId: undefined, montoPago: 0,
     fechaPago: formatDateInput(new Date()), metodoPago: 'Efectivo', observaciones: ''
   });
+
+  // Fixed Quota Mode State
+  const [mantenerCuota, setMantenerCuota] = useState(false);
+  const [targetCuota, setTargetCuota] = useState(0);
+
+  // Recalculate duration when maintaining quota
+  const handleMontoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newMonto = parseFloat(e.target.value) || 0;
+
+    if (mantenerCuota && targetCuota > 0 && newMonto > 0) {
+      // Calculate required duration to keep quota fixed.
+      // Assuming Simple Interest for now: Quota = (M + M*r*t) / (t*freq) => t = M / (Q*freq - M*r)
+      // Adjust for unit (Duracion is in form units, need to convert)
+
+      // Simpler approach: Iterative or approximation? No, explicit algebra.
+      // Formula: Cuota = (Monto + Monto * (Tasa/100) * Meses) / CuotasTotales
+      // CuotasTotales = Meses * FreqMes
+      // Cuota = (M + M*r*M_dur) / (M_dur * Freq)
+      // Cuota * M_dur * Freq = M + M*r*M_dur
+      // M_dur * (Cuota*Freq - M*r) = M
+      // M_dur = M / (Cuota*Freq - M*r)
+
+      const tasaMensual = prestamoForm.tasaInteres / 100;
+      const frecuenciaDias: Record<string, number> = { Diario: 1, Semanal: 7, Quincenal: 15, Mensual: 30 };
+      const diasEntreCuotas = frecuenciaDias[prestamoForm.frecuenciaPago] || 30;
+      const freqMensual = 30 / diasEntreCuotas; // Payments per month
+
+      // Denominator
+      const denom = targetCuota * freqMensual - newMonto * tasaMensual;
+
+      if (denom > 0) {
+        const mesesNecesarios = newMonto / denom;
+        // Convert months to current unit
+        const diasMap: Record<string, number> = { Dias: 1 / 30, Semanas: 1 / 4, Quincenas: 1 / 2, Meses: 1 };
+        const factorUnidad = diasMap[prestamoForm.unidadDuracion] || 1;
+
+        const nuevaDuracion = Math.ceil(mesesNecesarios / factorUnidad);
+        setPrestamoForm({ ...prestamoForm, montoPrestado: newMonto, duracion: nuevaDuracion > 0 ? nuevaDuracion : 1 });
+      } else {
+        // Impossible to keep quota (interest exceeds quota)
+        setPrestamoForm({ ...prestamoForm, montoPrestado: newMonto });
+      }
+    } else {
+      setPrestamoForm({ ...prestamoForm, montoPrestado: newMonto });
+    }
+  };
+
+  const toggleMantenerCuota = (checked: boolean) => {
+    setMantenerCuota(checked);
+    if (checked) {
+      // Capture current quota as target
+      const preview = calcularPreview();
+      if (preview) setTargetCuota(preview.montoCuota);
+    }
+  };
   const [usuarioForm, setUsuarioForm] = useState({ nombre: '', email: '', password: '', telefono: '', rol: 'Socio', porcentajeParticipacion: 0, tasaInteresMensual: 3 });
   const [aporteForm, setAporteForm] = useState({ usuarioId: 0, monto: 0, descripcion: '', tipo: 'aporte' });
 
@@ -674,6 +729,12 @@ function App() {
 
       setShowPrestamoModal(false);
       setPrestamoForm({ clienteId: 0, montoPrestado: 0, tasaInteres: 15, tipoInteres: 'Simple', frecuenciaPago: 'Quincenal', duracion: 3, unidadDuracion: 'Meses', fechaPrestamo: formatDateInput(new Date()), descripcion: '', cobradorId: undefined, porcentajeCobrador: 5 });
+      setFuentesCapital([]);
+      setSelectedCliente(null);
+      setClienteSearch('');
+      setEditMode(false);
+      setMantenerCuota(false);
+      setTargetCuota(0);
       setFuentesCapital([]);
       setSelectedCliente(null);
       setClienteSearch('');
@@ -1265,6 +1326,10 @@ function App() {
                   <span className="kpi-title">💰 Interés Total (Proyectado)</span>
                   <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(resumenParticipacion.resumen.totalInteresesProyectados)}</span>
                 </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #3b82f6' }}>
+                  <span className="kpi-title">📅 Proyección (Este Mes)</span>
+                  <span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(resumenParticipacion.resumen.proyeccionInteresesMesActual || 0)}</span>
+                </div>
                 <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b' }}>
                   <span className="kpi-title">🏃 Comisiones Cobradores</span>
                   <span className="kpi-value" style={{ color: '#f59e0b' }}>{formatMoney(resumenParticipacion.resumen.totalGananciaCobradores)}</span>
@@ -1415,7 +1480,22 @@ function App() {
                     </div>
                     <input type="hidden" value={prestamoForm.clienteId || ''} required />
                   </div>
-                  <div className="form-group"><label>Monto ($) *</label><input type="number" min="50" required value={prestamoForm.montoPrestado || ''} onChange={e => setPrestamoForm({ ...prestamoForm, montoPrestado: Number(e.target.value) })} /></div>
+                  <div className="form-group">
+                    <label>Monto ($) *</label>
+                    <input type="number" min="50" required value={prestamoForm.montoPrestado || ''} onChange={handleMontoChange} />
+                  </div>
+                  {/* Fixed Quota Toggle */}
+                  <div className="form-group" style={{ marginTop: '-0.5rem', marginBottom: '1rem' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', color: '#555', cursor: 'pointer' }}>
+                      <input
+                        type="checkbox"
+                        checked={mantenerCuota}
+                        onChange={e => toggleMantenerCuota(e.target.checked)}
+                        style={{ width: '16px', height: '16px' }}
+                      />
+                      <span>🔓 Mantener valor de cuota (Recalcular plazo)</span>
+                    </label>
+                  </div>
                   <div className="form-group" style={{ display: 'flex', alignItems: 'center' }}>
                     <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', cursor: 'pointer', margin: 0 }}>
                       <input

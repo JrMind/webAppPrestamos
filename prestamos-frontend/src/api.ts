@@ -616,6 +616,7 @@ export interface ResumenParticipacion {
     resumen: {
         totalCapitalPrestado: number;
         totalInteresesProyectados: number;
+        proyeccionInteresesMesActual: number;
         totalGananciaCobradores: number;
         totalGananciaSociosBruta: number;
         gastoMensualAportadores: number;

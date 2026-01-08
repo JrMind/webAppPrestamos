@@ -144,22 +144,48 @@ public class GananciasController : ControllerBase
             GananciaRealizada = 0 // Simplificado por ahora
         }).ToList();
 
-        var resumen = new
-        {
-            TotalCapitalPrestado = prestamosActivos.Sum(p => p.MontoPrestado),
-            TotalInteresesProyectados = Math.Round(totalInteresesGenerados, 0),
-            
-            // Desglose
-            TotalGananciaCobradores = Math.Round(totalGananciaCobradores, 0),
-            TotalGananciaSociosBruta = Math.Round(gananciaBrutaSocios, 0),
-            
-            // Gasto Aportadores (MENSUAL)
-            GastoMensualAportadores = Math.Round(gastoMensualAportadores, 0),
-            
-            // Verificación
-            SumaPartes = Math.Round(totalGananciaCobradores + gananciaBrutaSocios, 0),
-            Diferencia = Math.Round(totalInteresesGenerados - (totalGananciaCobradores + gananciaBrutaSocios), 0)
-        };
+            // 4. PROYECCIÓN INTERESES MES ACTUAL
+            var now = DateTime.UtcNow;
+            var startOfMonth = new DateTime(now.Year, now.Month, 1, 0, 0, 0, DateTimeKind.Utc);
+            var endOfMonth = startOfMonth.AddMonths(1).AddTicks(-1);
+
+            decimal proyeccionInteresesMesActual = 0;
+
+            foreach(var p in prestamosActivos)
+            {
+                 // Cuotas que vencen este mes (pagadas o pendientes)
+                 // Queremos saber cuánto interés se genera este mes, independientemente de si se paga o no.
+                 var cuotasMes = p.Cuotas.Where(c => c.FechaCobro >= startOfMonth && c.FechaCobro <= endOfMonth).ToList();
+                 
+                 if (cuotasMes.Count > 0 && p.MontoTotal > 0)
+                 {
+                     // Proporción de interés en cada cuota
+                     // Estimación: (TotalIntereses / TotalDeuda) * MontoCuota
+                     decimal ratioInteres = p.MontoIntereses / p.MontoTotal;
+                     
+                     proyeccionInteresesMesActual += cuotasMes.Sum(c => c.MontoCuota * ratioInteres);
+                 }
+            }
+
+            var resumen = new
+            {
+                TotalCapitalPrestado = prestamosActivos.Sum(p => p.MontoPrestado),
+                TotalInteresesProyectados = Math.Round(totalInteresesGenerados, 0),
+                
+                // Nuevo Campo
+                ProyeccionInteresesMesActual = Math.Round(proyeccionInteresesMesActual, 0),
+
+                // Desglose
+                TotalGananciaCobradores = Math.Round(totalGananciaCobradores, 0),
+                TotalGananciaSociosBruta = Math.Round(gananciaBrutaSocios, 0),
+                
+                // Gasto Aportadores (MENSUAL)
+                GastoMensualAportadores = Math.Round(gastoMensualAportadores, 0),
+                
+                // Verificación
+                SumaPartes = Math.Round(totalGananciaCobradores + gananciaBrutaSocios, 0),
+                Diferencia = Math.Round(totalInteresesGenerados - (totalGananciaCobradores + gananciaBrutaSocios), 0)
+            };
 
         return Ok(new
         {
