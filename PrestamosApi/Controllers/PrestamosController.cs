@@ -415,10 +415,13 @@ public class PrestamosController : BaseApiController
 
         if (cambiosEstructurales)
         {
-            // Validar si ya tiene pagos
-            if (prestamo.Pagos.Any())
+            // Validar si ya tiene pagos O cuotas ya pagadas
+            bool tienePagos = prestamo.Pagos.Any();
+            bool tieneCuotasPagadas = prestamo.Cuotas.Any(c => c.MontoPagado > 0 || c.EstadoCuota == "Pagada");
+            
+            if (tienePagos || tieneCuotasPagadas)
             {
-                return BadRequest(new { message = "No se pueden modificar condiciones financieras de un préstamo con pagos registrados. Elimine los pagos primero." });
+                return BadRequest(new { message = "No se pueden modificar condiciones financieras de un préstamo con pagos o cuotas pagadas. Revierta los pagos primero." });
             }
 
             // Recalcular préstamo completamente
@@ -512,8 +515,20 @@ public class PrestamosController : BaseApiController
         if (prestamo == null)
             return NotFound(new { message = "Préstamo no encontrado" });
 
-        if (prestamo.Pagos.Any())
-            return BadRequest(new { message = "No se puede eliminar un préstamo con pagos registrados" });
+        // Verificar pagos o cuotas pagadas
+        bool tienePagos = prestamo.Pagos.Any();
+        
+        // También verificar si hay cuotas marcadas como pagadas (aunque no tengan registro en Pagos)
+        var prestamoCuotas = await _context.CuotasPrestamo
+            .Where(c => c.PrestamoId == id)
+            .ToListAsync();
+        bool tieneCuotasPagadas = prestamoCuotas.Any(c => c.MontoPagado > 0 || c.EstadoCuota == "Pagada");
+
+        if (tienePagos)
+            return BadRequest(new { message = "No se puede eliminar un préstamo con pagos registrados. Elimine los pagos primero desde el detalle del préstamo." });
+
+        if (tieneCuotasPagadas)
+            return BadRequest(new { message = "No se puede eliminar un préstamo con cuotas marcadas como pagadas. Desmarque las cuotas primero." });
 
         _context.Prestamos.Remove(prestamo);
         await _context.SaveChangesAsync();
