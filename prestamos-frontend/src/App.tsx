@@ -45,6 +45,7 @@ function App() {
   const [filtroFrecuencia, setFiltroFrecuencia] = useState('Todos');
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
   const [filtroClienteId] = useState<number | undefined>();
+  const [filtroClienteBusqueda, setFiltroClienteBusqueda] = useState('');
 
   // Modals
   const [showClienteModal, setShowClienteModal] = useState(false);
@@ -593,13 +594,21 @@ function App() {
       if (editMode && editingPrestamoId) {
         // MODO EDICIÓN - Obtener el préstamo actual para preservar el estado
         const prestamoActual = prestamos.find(p => p.id === editingPrestamoId);
+        // Construir payload explícito con todos los campos requeridos por UpdatePrestamoDto
         await prestamosApi.updateCompleto(editingPrestamoId, {
-          ...prestamoForm,
-          numeroCuotas: prestamoForm.duracion, // Asumiendo duracion = numeroCuotas
-          estadoPrestamo: prestamoActual?.estadoPrestamo || 'Activo', // Preservar estado existente
-          // La fecha del formulario se envía como FechaPrestamo Y como FechaPrimerPago si queremos forzar el inicio
-          // Para que el servicio sepa que queremos iniciar en esa fecha, la pasamos como FechaPrimerPago
-          fechaPrimerPago: prestamoForm.fechaPrestamo // Enviamos la fecha seleccionada como inicio explicito
+          montoPrestado: prestamoForm.montoPrestado,
+          tasaInteres: prestamoForm.tasaInteres,
+          tipoInteres: prestamoForm.tipoInteres,
+          frecuenciaPago: prestamoForm.frecuenciaPago,
+          numeroCuotas: prestamoForm.duracion,
+          fechaPrestamo: prestamoForm.fechaPrestamo,
+          fechaPrimerPago: prestamoForm.fechaPrestamo,
+          estadoPrestamo: prestamoActual?.estadoPrestamo || 'Activo',
+          descripcion: prestamoForm.descripcion,
+          cobradorId: prestamoForm.cobradorId,
+          porcentajeCobrador: prestamoForm.porcentajeCobrador,
+          diaSemana: prestamoForm.diaSemana,
+          esCongelado: prestamoForm.esCongelado || false
         });
         showToast('Préstamo actualizado exitosamente', 'success');
       } else {
@@ -867,49 +876,78 @@ function App() {
 
           {/* Clientes Tab */}
           {activeTab === 'clientes' && (
-            <div className="table-container">
-              <table>
-                <thead>
-                  <tr>
-                    <th>ID</th>
-                    <th>Nombre</th>
-                    <th>Cédula</th>
-                    <th>Teléfono</th>
-                    <th>Préstamos</th>
-                    <th>Total</th>
-                    <th>Estado</th>
-                    <th>Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {clientes.map(c => (
-                    <tr key={c.id}>
-                      <td>#{c.id}</td>
-                      <td><strong>{c.nombre}</strong></td>
-                      <td>{c.cedula}</td>
-                      <td>{c.telefono || '-'}</td>
-                      <td>{c.prestamosActivos}</td>
-                      <td className="money">{formatMoney(c.totalPrestado)}</td>
-                      <td>
-                        <span className={`badge ${c.estado === 'Activo' ? 'badge-green' : 'badge-gray'}`}>
-                          {c.estado}
-                        </span>
-                      </td>
-                      <td>
-                        <button className="btn btn-secondary btn-sm" onClick={() => openEditCliente(c)}>
-                          ✏️ Editar
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {clientes.length === 0 && (
+            <>
+              {/* Client Search Bar */}
+              <div className="filters-bar" style={{ marginBottom: '1rem' }}>
+                <div className="filter-group" style={{ flex: 1 }}>
+                  <label>Buscar Cliente</label>
+                  <input
+                    type="text"
+                    placeholder="Nombre o cédula..."
+                    value={filtroClienteBusqueda}
+                    onChange={e => setFiltroClienteBusqueda(e.target.value)}
+                  />
+                </div>
+                <button className="btn btn-secondary btn-sm" onClick={() => setFiltroClienteBusqueda('')}>
+                  Limpiar
+                </button>
+              </div>
+              <div className="table-container">
+                <table>
+                  <thead>
                     <tr>
-                      <td colSpan={8} className="empty-state">No hay clientes</td>
+                      <th>ID</th>
+                      <th>Nombre</th>
+                      <th>Cédula</th>
+                      <th>Teléfono</th>
+                      <th>Préstamos</th>
+                      <th>Total</th>
+                      <th>Estado</th>
+                      <th>Acciones</th>
                     </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {clientes
+                      .filter(c =>
+                        filtroClienteBusqueda === '' ||
+                        c.nombre.toLowerCase().includes(filtroClienteBusqueda.toLowerCase()) ||
+                        c.cedula.toLowerCase().includes(filtroClienteBusqueda.toLowerCase())
+                      )
+                      .map(c => (
+                        <tr key={c.id}>
+                          <td>#{c.id}</td>
+                          <td><strong>{c.nombre}</strong></td>
+                          <td>{c.cedula}</td>
+                          <td>{c.telefono || '-'}</td>
+                          <td>{c.prestamosActivos}</td>
+                          <td className="money">{formatMoney(c.totalPrestado)}</td>
+                          <td>
+                            <span className={`badge ${c.estado === 'Activo' ? 'badge-green' : 'badge-gray'}`}>
+                              {c.estado}
+                            </span>
+                          </td>
+                          <td>
+                            <button className="btn btn-secondary btn-sm" onClick={() => openEditCliente(c)}>
+                              ✏️ Editar
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    {clientes.filter(c =>
+                      filtroClienteBusqueda === '' ||
+                      c.nombre.toLowerCase().includes(filtroClienteBusqueda.toLowerCase()) ||
+                      c.cedula.toLowerCase().includes(filtroClienteBusqueda.toLowerCase())
+                    ).length === 0 && (
+                        <tr>
+                          <td colSpan={8} className="empty-state">
+                            {filtroClienteBusqueda ? 'No se encontraron clientes' : 'No hay clientes'}
+                          </td>
+                        </tr>
+                      )}
+                  </tbody>
+                </table>
+              </div>
+            </>
           )}
 
           {/* Cobros Tab */}
