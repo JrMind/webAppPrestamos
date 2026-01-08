@@ -560,11 +560,15 @@ public class PrestamosController : BaseApiController
             .ToListAsync();
         bool tieneCuotasPagadas = prestamoCuotas.Any(c => c.MontoPagado > 0 || c.EstadoCuota == "Pagada");
 
+        // [MOD] Permitir eliminación forzada: Eliminar pagos y cuotas asociados
         if (tienePagos)
-            return BadRequest(new { message = "No se puede eliminar un préstamo con pagos registrados. Elimine los pagos primero desde el detalle del préstamo." });
-
-        if (tieneCuotasPagadas)
-            return BadRequest(new { message = "No se puede eliminar un préstamo con cuotas marcadas como pagadas. Desmarque las cuotas primero." });
+        {
+            _context.Pagos.RemoveRange(prestamo.Pagos);
+            // Cuotas se borran en cascada por configuración de EF, pero Pagos es Restrict por seguridad.
+            // Aquí lo forzamos.
+        }
+        
+        // No necesitamos verificar tieneCuotasPagadas, se borrarán en cascada.
 
         _context.Prestamos.Remove(prestamo);
         await _context.SaveChangesAsync();
