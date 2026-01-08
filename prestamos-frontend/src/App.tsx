@@ -24,7 +24,7 @@ function App() {
   const [balanceSocios, setBalanceSocios] = useState<BalanceSocio[]>([]);
   const [aportadoresExternos, setAportadoresExternos] = useState<AportadorExterno[]>([]);
   const [showAportadorModal, setShowAportadorModal] = useState(false);
-  const [aportadorForm, setAportadorForm] = useState<CreateAportadorExternoDto>({ nombre: '', telefono: '', email: '', tasaInteres: 3, diasParaPago: 30, notas: '' });
+  const [aportadorForm, setAportadorForm] = useState<CreateAportadorExternoDto>({ nombre: '', telefono: '', email: '', tasaInteres: 3, diasParaPago: 30, notas: '', montoTotalAportado: 0 });
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
 
   // New feature states
@@ -263,7 +263,7 @@ function App() {
       await aportadoresExternosApi.create(aportadorForm);
       showToast('Aportador creado exitosamente', 'success');
       setShowAportadorModal(false);
-      setAportadorForm({ nombre: '', telefono: '', email: '', tasaInteres: 3, diasParaPago: 30, notas: '' });
+      setAportadorForm({ nombre: '', telefono: '', email: '', tasaInteres: 3, diasParaPago: 30, notas: '', montoTotalAportado: 0 });
       loadAportadoresExternos();
     } catch (error: unknown) {
       showToast(error instanceof Error ? error.message : 'Error', 'error');
@@ -1831,6 +1831,7 @@ function App() {
                   <div className="form-group full-width"><label>Nombre *</label><input type="text" required value={aportadorForm.nombre} onChange={e => setAportadorForm({ ...aportadorForm, nombre: e.target.value })} /></div>
                   <div className="form-group"><label>Teléfono</label><input type="tel" value={aportadorForm.telefono || ''} onChange={e => setAportadorForm({ ...aportadorForm, telefono: e.target.value })} /></div>
                   <div className="form-group"><label>Email</label><input type="email" value={aportadorForm.email || ''} onChange={e => setAportadorForm({ ...aportadorForm, email: e.target.value })} /></div>
+                  <div className="form-group"><label>Capital Aportado *</label><input type="number" min="0" required value={aportadorForm.montoTotalAportado || 0} onChange={e => setAportadorForm({ ...aportadorForm, montoTotalAportado: Number(e.target.value) })} /></div>
                   <div className="form-group"><label>Tasa Interés (%)</label><input type="number" min="0" step="0.5" value={aportadorForm.tasaInteres} onChange={e => setAportadorForm({ ...aportadorForm, tasaInteres: Number(e.target.value) })} /></div>
                   <div className="form-group"><label>Días para Pago</label><input type="number" min="1" value={aportadorForm.diasParaPago} onChange={e => setAportadorForm({ ...aportadorForm, diasParaPago: Number(e.target.value) })} /></div>
                   <div className="form-group full-width"><label>Notas</label><textarea value={aportadorForm.notas || ''} onChange={e => setAportadorForm({ ...aportadorForm, notas: e.target.value })} rows={2}></textarea></div>

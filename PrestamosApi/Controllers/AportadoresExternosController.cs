@@ -60,6 +60,7 @@ public class AportadoresExternosController : ControllerBase
             TasaInteres = dto.TasaInteres,
             DiasParaPago = dto.DiasParaPago,
             Notas = dto.Notas,
+            MontoTotalAportado = dto.MontoTotalAportado,
             FechaCreacion = DateTime.UtcNow
         };
 
@@ -88,6 +89,7 @@ public class AportadoresExternosController : ControllerBase
         aportador.DiasParaPago = dto.DiasParaPago;
         aportador.Estado = dto.Estado;
         aportador.Notas = dto.Notas;
+        aportador.MontoTotalAportado = dto.MontoTotalAportado;
 
         await _context.SaveChangesAsync();
         return NoContent();

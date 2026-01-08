@@ -220,7 +220,8 @@ public record CreateAportadorExternoDto(
     string? Email,
     decimal TasaInteres,
     int DiasParaPago,
-    string? Notas
+    string? Notas,
+    decimal MontoTotalAportado = 0
 );
 
 public record UpdateAportadorExternoDto(
@@ -230,7 +231,8 @@ public record UpdateAportadorExternoDto(
     decimal TasaInteres,
     int DiasParaPago,
     string Estado,
-    string? Notas
+    string? Notas,
+    decimal MontoTotalAportado = 0
 );
 
 // Fuente de Capital DTOs
