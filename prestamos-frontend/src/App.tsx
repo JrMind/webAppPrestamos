@@ -569,7 +569,9 @@ function App() {
       fechaPrestamo: prestamo.fechaPrestamo.split('T')[0],
       descripcion: prestamo.descripcion || '',
       porcentajeCobrador: prestamo.porcentajeCobrador,
-      diaSemana: prestamo.diaSemana
+      diaSemana: prestamo.diaSemana,
+      cobradorId: prestamo.cobradorId,
+      esCongelado: prestamo.esCongelado || false
     });
 
     setShowPrestamoModal(true);

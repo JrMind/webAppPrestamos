@@ -469,9 +469,25 @@ public class PrestamosController : BaseApiController
             // A futuro: Agregar endpoints de Recalcular en backend.
             // Por ahora, recálculo básico de interés simple:
              if (prestamo.TipoInteres == "Simple") {
-                // Inferir meses aprox
-                decimal meses = (decimal)prestamo.NumeroCuotas * (prestamo.FrecuenciaPago == "Semanal" ? 7 : 30) / 30m; 
-                if (prestamo.FrecuenciaPago == "Semanal") meses = prestamo.NumeroCuotas / 4m;
+                // Inferir meses según la frecuencia de pago
+                decimal meses;
+                switch (prestamo.FrecuenciaPago) {
+                    case "Diario":
+                        meses = prestamo.NumeroCuotas / 30m;
+                        break;
+                    case "Semanal":
+                        meses = prestamo.NumeroCuotas / 4m;
+                        break;
+                    case "Quincenal":
+                        meses = prestamo.NumeroCuotas / 2m;
+                        break;
+                    case "Mensual":
+                        meses = prestamo.NumeroCuotas;
+                        break;
+                    default:
+                        meses = prestamo.NumeroCuotas;
+                        break;
+                }
                 
                 prestamo.MontoIntereses = prestamo.MontoPrestado * (prestamo.TasaInteres / 100m) * meses;
                 prestamo.MontoTotal = prestamo.MontoPrestado + prestamo.MontoIntereses;
