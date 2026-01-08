@@ -419,10 +419,11 @@ public class PrestamosController : BaseApiController
             bool tienePagos = prestamo.Pagos.Any();
             bool tieneCuotasPagadas = prestamo.Cuotas.Any(c => c.MontoPagado > 0 || c.EstadoCuota == "Pagada");
             
-            if (tienePagos || tieneCuotasPagadas)
-            {
-                return BadRequest(new { message = "No se pueden modificar condiciones financieras de un préstamo con pagos o cuotas pagadas. Revierta los pagos primero." });
-            }
+            // [MOD] Permitimos editar aunque tenga pagos. La lógica de regeneración se encargará de re-aplicar los pagos.
+            // if (tienePagos || tieneCuotasPagadas)
+            // {
+            //     return BadRequest(new { message = "No se pueden modificar condiciones financieras de un préstamo con pagos o cuotas pagadas. Revierta los pagos primero." });
+            // }
 
             // Recalcular préstamo completamente
             // Necesitamos la 'Duración' y 'Unidad' originales o inferirlas. 
@@ -458,6 +459,12 @@ public class PrestamosController : BaseApiController
             // Voy a RECALCULAR usando el servicio con los datos actuales del prestamo, excepto que faltan parametros.
             // Solución rápida: Actualizar propiedades y regenerar cuotas con los datos actuales.
             
+            // 1. Calcular total pagado históricamente (según tabla Pagos, que es la fuente de verdad)
+            decimal totalPagadoHist = prestamo.Pagos.Sum(p => p.MontoPago);
+            
+            // 2. Desvincular pagos de las cuotas antiguas para evitar errores de FK al borrarlas (y mantener el historial de pagos como "Saldo a favor")
+            foreach(var pago in prestamo.Pagos) pago.CuotaId = null; 
+
             // Eliminar cuotas anteriores
             _context.CuotasPrestamo.RemoveRange(prestamo.Cuotas);
             
@@ -498,6 +505,35 @@ public class PrestamosController : BaseApiController
              }
 
              var nuevasCuotas = _prestamoService.GenerarCuotas(prestamo, fechaInicio);
+             
+             // 5. Re-aplicar pagos históricos a las nuevas cuotas
+             if (totalPagadoHist > 0)
+             {
+                 var cuotasOrdenadas = nuevasCuotas.OrderBy(c => c.FechaCobro).ToList();
+                 decimal remanente = totalPagadoHist;
+                 
+                 foreach (var c in cuotasOrdenadas)
+                 {
+                     if (remanente <= 0) break;
+                     
+                     decimal abono = Math.Min(remanente, c.MontoCuota);
+                     c.MontoPagado = abono;
+                     c.SaldoPendiente = c.MontoCuota - abono;
+                     c.EstadoCuota = c.SaldoPendiente <= 0.01m ? "Pagada" : "Parcial";
+                     // Si está pagada, podríamos ponerle una fecha de pago simulada (hoy o la original), 
+                     // pero como son múltiples pagos, lo dejamos null o ponemos la fecha de préstamo.
+                     // Mejor no inventar fechas en Cuota.FechaPago si no corresponde a un único pago.
+                     
+                     remanente -= abono;
+                 }
+                 
+                 // Nota: Si sobra dinero (remanente > 0) porque redujo el préstamo drásticamente, 
+                 // ese dinero queda "flotando" en la suma de Pagos pero sin asignar a cuotas.
+                 // El SaldoPendiente del Prestamo se calcula sumando Cuotas, así que el préstamo podría quedar negativo o pagado en exceso?
+                 // El sistema calcula SaldoPendiente sumando (Cuota.MontoCuota - Cuota.MontoPagado).
+                 // Si las cuotas no absorben todo el pago, el saldo será 0 (todas pagadas).
+             }
+
              _context.CuotasPrestamo.AddRange(nuevasCuotas);
         }
 
