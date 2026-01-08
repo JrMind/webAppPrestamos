@@ -596,6 +596,7 @@ export interface ResumenParticipacion {
         nombre: string;
         prestamosAsignados: number;
         gananciaProyectada: number;
+        gananciaInteresMes: number; // Nuevo
         gananciaRealizada: number;
         detalle: Array<{
             id: number;
@@ -611,6 +612,8 @@ export interface ResumenParticipacion {
         capitalActual: number;
         porcentaje: number;
         gananciaProyectadaTotal: number;
+        gananciaInteresMes: number; // Nuevo
+        flujoNetoMes: number; // Nuevo
         gananciaRealizada: number;
     }>;
     resumen: {

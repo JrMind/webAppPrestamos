@@ -1369,13 +1369,14 @@ function App() {
               <h4 style={{ margin: '1.5rem 0 0.5rem' }}>🏃 Cobradores ({resumenParticipacion.cobradores.length})</h4>
               <div className="table-container" style={{ marginBottom: '1.5rem' }}>
                 <table>
-                  <thead><tr><th>Cobrador</th><th>Préstamos</th><th>Comisión Proyectada</th><th>Comisión Realizada</th></tr></thead>
+                  <thead><tr><th>Cobrador</th><th>Préstamos</th><th>Comisión Proyectada Total</th><th>📅 Interés Mes</th><th>Comisión Realizada</th></tr></thead>
                   <tbody>
                     {resumenParticipacion.cobradores.map(c => (
                       <tr key={c.cobradorId}>
                         <td><strong>{c.nombre}</strong></td>
                         <td>{c.prestamosAsignados}</td>
                         <td className="money" style={{ color: '#f59e0b' }}>{formatMoney(c.gananciaProyectada)}</td>
+                        <td className="money" style={{ color: '#3b82f6' }}>{formatMoney(c.gananciaInteresMes)}</td>
                         <td className="money" style={{ color: '#10b981' }}>{formatMoney(c.gananciaRealizada)}</td>
                       </tr>
                     ))}
@@ -1388,7 +1389,7 @@ function App() {
               <h4 style={{ margin: '1.5rem 0 0.5rem' }}>👥 Socios ({resumenParticipacion.socios.length})</h4>
               <div className="table-container">
                 <table>
-                  <thead><tr><th>Socio</th><th>Capital Aportado</th><th>Capital Actual</th><th>% Participación</th><th>Ganancia Proyectada Total</th><th>Ganancia Realizada</th></tr></thead>
+                  <thead><tr><th>Socio</th><th>Capital Aportado</th><th>Capital Actual</th><th>% Participación</th><th>Ganancia Proyectada Total</th><th>📅 Interés Mes</th><th>💵 Flujo Neto Mes</th><th>Ganancia Realizada</th></tr></thead>
                   <tbody>
                     {resumenParticipacion.socios.map(s => (
                       <tr key={s.id}>
@@ -1397,6 +1398,8 @@ function App() {
                         <td className="money" style={{ color: '#10b981' }}>{formatMoney(s.capitalActual)}</td>
                         <td>{s.porcentaje.toFixed(1)}%</td>
                         <td className="money" style={{ color: '#3b82f6' }}>{formatMoney(s.gananciaProyectadaTotal)}</td>
+                        <td className="money" style={{ color: '#3b82f6' }}>{formatMoney(s.gananciaInteresMes)}</td>
+                        <td className="money" style={{ color: '#10b981' }}>{formatMoney(s.flujoNetoMes)}</td>
                         <td className="money" style={{ color: '#8b5cf6' }}>{formatMoney(s.gananciaRealizada)}</td>
                       </tr>
                     ))}
