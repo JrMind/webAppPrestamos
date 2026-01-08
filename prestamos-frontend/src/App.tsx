@@ -25,6 +25,7 @@ function App() {
   const [aportadoresExternos, setAportadoresExternos] = useState<AportadorExterno[]>([]);
   const [showAportadorModal, setShowAportadorModal] = useState(false);
   const [aportadorForm, setAportadorForm] = useState<CreateAportadorExternoDto>({ nombre: '', telefono: '', email: '', tasaInteres: 3, diasParaPago: 30, notas: '', montoTotalAportado: 0 });
+  const [editingAportadorId, setEditingAportadorId] = useState<number | null>(null);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
 
   // New feature states
@@ -260,14 +261,34 @@ function App() {
   const handleCreateAportador = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      await aportadoresExternosApi.create(aportadorForm);
-      showToast('Aportador creado exitosamente', 'success');
+      if (editingAportadorId) {
+        await aportadoresExternosApi.update(editingAportadorId, aportadorForm);
+        showToast('Aportador actualizado exitosamente', 'success');
+      } else {
+        await aportadoresExternosApi.create(aportadorForm);
+        showToast('Aportador creado exitosamente', 'success');
+      }
       setShowAportadorModal(false);
       setAportadorForm({ nombre: '', telefono: '', email: '', tasaInteres: 3, diasParaPago: 30, notas: '', montoTotalAportado: 0 });
+      setEditingAportadorId(null);
       loadAportadoresExternos();
     } catch (error: unknown) {
       showToast(error instanceof Error ? error.message : 'Error', 'error');
     }
+  };
+
+  const handleEditAportadorButton = (aportador: AportadorExterno) => {
+    setAportadorForm({
+      nombre: aportador.nombre,
+      telefono: aportador.telefono || '',
+      email: aportador.email || '',
+      tasaInteres: aportador.tasaInteres,
+      diasParaPago: aportador.diasParaPago,
+      notas: aportador.notas || '',
+      montoTotalAportado: aportador.montoTotalAportado
+    });
+    setEditingAportadorId(aportador.id);
+    setShowAportadorModal(true);
   };
 
   const handleDeleteAportador = async (id: number) => {
@@ -1120,7 +1141,11 @@ function App() {
           {activeTab === 'aportadores' && (
             <div>
               <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '1rem' }}>
-                <button className="btn btn-primary" onClick={() => setShowAportadorModal(true)}>+ Nuevo Aportador</button>
+                <button className="btn btn-primary" onClick={() => {
+                  setEditingAportadorId(null);
+                  setAportadorForm({ nombre: '', telefono: '', email: '', tasaInteres: 3, diasParaPago: 30, notas: '', montoTotalAportado: 0 });
+                  setShowAportadorModal(true);
+                }}>+ Nuevo Aportador</button>
               </div>
               <div className="table-container">
                 <table><thead><tr><th>Nombre</th><th>Teléfono</th><th>Tasa %</th><th>Días Pago</th><th>Aportado</th><th>Pagado</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>
@@ -1135,6 +1160,7 @@ function App() {
                       <td style={{ color: a.saldoPendiente > 0 ? '#ef4444' : '#10b981' }}>{formatMoney(a.saldoPendiente)}</td>
                       <td><span className={`badge ${a.estado === 'Activo' ? 'badge-green' : 'badge-gray'}`}>{a.estado}</span></td>
                       <td>
+                        <button className="btn btn-secondary" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem', marginRight: '0.5rem' }} onClick={() => handleEditAportadorButton(a)}>Editar</button>
                         <button className="btn btn-danger" style={{ padding: '0.25rem 0.5rem', fontSize: '0.75rem' }} onClick={() => handleDeleteAportador(a.id)}>Eliminar</button>
                       </td>
                     </tr>
@@ -1250,6 +1276,10 @@ function App() {
                 <div className="kpi-card" style={{ borderLeft: '4px solid #8b5cf6' }}>
                   <span className="kpi-title">👥 Ganancias Socios</span>
                   <span className="kpi-value" style={{ color: '#8b5cf6' }}>{formatMoney(resumenParticipacion.resumen.totalGananciasSocios)}</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #ec4899' }}>
+                  <span className="kpi-title">💸 Pago a Aportadores</span>
+                  <span className="kpi-value" style={{ color: '#ec4899' }}>{formatMoney(resumenParticipacion.resumen.totalGananciasAportadores)}</span>
                 </div>
               </div>
 
@@ -1824,7 +1854,7 @@ function App() {
       {showAportadorModal && (
         <div className="modal-overlay" onClick={() => setShowAportadorModal(false)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
-            <div className="modal-header"><h2>Nuevo Aportador Externo</h2><button className="modal-close" onClick={() => setShowAportadorModal(false)}>×</button></div>
+            <div className="modal-header"><h2>{editingAportadorId ? 'Editar Aportador' : 'Nuevo Aportador Externo'}</h2><button className="modal-close" onClick={() => setShowAportadorModal(false)}>×</button></div>
             <form onSubmit={handleCreateAportador}>
               <div className="modal-body">
                 <div className="form-grid">
@@ -1837,7 +1867,7 @@ function App() {
                   <div className="form-group full-width"><label>Notas</label><textarea value={aportadorForm.notas || ''} onChange={e => setAportadorForm({ ...aportadorForm, notas: e.target.value })} rows={2}></textarea></div>
                 </div>
               </div>
-              <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowAportadorModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">Crear</button></div>
+              <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowAportadorModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">{editingAportadorId ? 'Guardar Cambios' : 'Crear'}</button></div>
             </form>
           </div>
         </div>
