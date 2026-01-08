@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, miBalanceApi } from './api';
+import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, miBalanceApi, gananciasApi, ResumenParticipacion } from './api';
 import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MiBalance } from './types';
 import './App.css';
 
@@ -15,7 +15,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores'>('prestamos');
+  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias'>('prestamos');
 
   // Data states
   const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
@@ -32,6 +32,7 @@ function App() {
   const [smsHistoryData, setSmsHistoryData] = useState<SmsHistory[]>([]);
   const [cobrosDelMes, setCobrosDelMes] = useState<CobrosDelMes | null>(null);
   const [miBalance, setMiBalance] = useState<MiBalance | null>(null);
+  const [resumenParticipacion, setResumenParticipacion] = useState<ResumenParticipacion | null>(null);
   const [showSmsCampaignModal, setShowSmsCampaignModal] = useState(false);
   const [smsCampaignForm, setSmsCampaignForm] = useState<CreateSmsCampaignDto>({
     nombre: '', mensaje: '', activo: true, diasEnvio: '[]', horasEnvio: '[]', vecesPorDia: 1, tipoDestinatario: 'CuotasHoy'
@@ -193,6 +194,13 @@ function App() {
       const data = await miBalanceApi.getMiBalance(currentUser?.id);
       setMiBalance(data);
     } catch (error) { console.error('Error loading balance:', error); }
+  };
+
+  const loadResumenParticipacion = async () => {
+    try {
+      const data = await gananciasApi.getResumenParticipacion();
+      setResumenParticipacion(data);
+    } catch (error) { console.error('Error loading resumen participacion:', error); }
   };
 
   const handleCreateSmsCampaign = async (e: React.FormEvent) => {
@@ -854,6 +862,7 @@ function App() {
             <button className={`tab ${activeTab === 'smshistory' ? 'active' : ''}`} onClick={() => setActiveTab('smshistory')}>📨 Historial</button>
             {currentUser?.rol === 'Socio' && <button className={`tab ${activeTab === 'usuarios' ? 'active' : ''}`} onClick={() => setActiveTab('usuarios')}>👤 Usuarios</button>}
             <button className={`tab ${activeTab === 'aportadores' ? 'active' : ''}`} onClick={() => setActiveTab('aportadores')}>Aportadores</button>
+            <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); }}>📊 Ganancias</button>
           </div>
 
           {/* Prestamos Tab */}
@@ -1216,6 +1225,91 @@ function App() {
                       <td>{a.descripcion || '-'}</td>
                     </tr>
                   ))}</tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Ganancias Tab */}
+          {activeTab === 'ganancias' && resumenParticipacion && (
+            <div>
+              {/* Resumen General */}
+              <div className="kpi-grid" style={{ marginBottom: '1.5rem' }}>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
+                  <span className="kpi-title">💰 Capital Prestado</span>
+                  <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(resumenParticipacion.resumen.totalCapitalPrestado)}</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #3b82f6' }}>
+                  <span className="kpi-title">📊 Intereses Proyectados</span>
+                  <span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(resumenParticipacion.resumen.totalInteresesProyectados)}</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+                  <span className="kpi-title">🏃 Comisiones Cobradores</span>
+                  <span className="kpi-value" style={{ color: '#f59e0b' }}>{formatMoney(resumenParticipacion.resumen.totalComisionesCobradores)}</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #8b5cf6' }}>
+                  <span className="kpi-title">👥 Ganancias Socios</span>
+                  <span className="kpi-value" style={{ color: '#8b5cf6' }}>{formatMoney(resumenParticipacion.resumen.totalGananciasSocios)}</span>
+                </div>
+              </div>
+
+              {/* Aportadores Externos */}
+              <h4 style={{ margin: '1.5rem 0 0.5rem' }}>💵 Aportadores Externos ({resumenParticipacion.aportadores.length})</h4>
+              <div className="table-container" style={{ marginBottom: '1.5rem' }}>
+                <table>
+                  <thead><tr><th>Nombre</th><th>Capital Aportado</th><th>Tasa Interés</th><th>Ganancia Mensual</th><th>Estado</th></tr></thead>
+                  <tbody>
+                    {resumenParticipacion.aportadores.map(a => (
+                      <tr key={a.id}>
+                        <td><strong>{a.nombre}</strong></td>
+                        <td className="money">{formatMoney(a.capitalAportado)}</td>
+                        <td>{a.tasaInteres}%</td>
+                        <td className="money" style={{ color: '#10b981' }}>{formatMoney(a.gananciaProyectadaMensual)}</td>
+                        <td><span className={`badge ${a.estado === 'Activo' ? 'badge-green' : 'badge-gray'}`}>{a.estado}</span></td>
+                      </tr>
+                    ))}
+                    {resumenParticipacion.aportadores.length === 0 && <tr><td colSpan={5} className="empty-state">No hay aportadores externos</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Cobradores */}
+              <h4 style={{ margin: '1.5rem 0 0.5rem' }}>🏃 Cobradores ({resumenParticipacion.cobradores.length})</h4>
+              <div className="table-container" style={{ marginBottom: '1.5rem' }}>
+                <table>
+                  <thead><tr><th>Cobrador</th><th>Préstamos</th><th>Comisión Proyectada</th><th>Comisión Realizada</th></tr></thead>
+                  <tbody>
+                    {resumenParticipacion.cobradores.map(c => (
+                      <tr key={c.cobradorId}>
+                        <td><strong>{c.nombre}</strong></td>
+                        <td>{c.prestamosAsignados}</td>
+                        <td className="money" style={{ color: '#f59e0b' }}>{formatMoney(c.gananciaProyectada)}</td>
+                        <td className="money" style={{ color: '#10b981' }}>{formatMoney(c.gananciaRealizada)}</td>
+                      </tr>
+                    ))}
+                    {resumenParticipacion.cobradores.length === 0 && <tr><td colSpan={4} className="empty-state">No hay cobradores con préstamos asignados</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Socios */}
+              <h4 style={{ margin: '1.5rem 0 0.5rem' }}>👥 Socios ({resumenParticipacion.socios.length})</h4>
+              <div className="table-container">
+                <table>
+                  <thead><tr><th>Socio</th><th>Capital Aportado</th><th>Capital Actual</th><th>% Participación</th><th>Ganancia Proyectada</th><th>Ganancia Realizada</th></tr></thead>
+                  <tbody>
+                    {resumenParticipacion.socios.map(s => (
+                      <tr key={s.id}>
+                        <td><strong>{s.nombre}</strong></td>
+                        <td className="money">{formatMoney(s.capitalAportado)}</td>
+                        <td className="money" style={{ color: '#10b981' }}>{formatMoney(s.capitalActual)}</td>
+                        <td>{s.porcentaje.toFixed(1)}%</td>
+                        <td className="money" style={{ color: '#3b82f6' }}>{formatMoney(s.gananciaProyectada)}</td>
+                        <td className="money" style={{ color: '#8b5cf6' }}>{formatMoney(s.gananciaRealizada)}</td>
+                      </tr>
+                    ))}
+                    {resumenParticipacion.socios.length === 0 && <tr><td colSpan={6} className="empty-state">No hay socios registrados</td></tr>}
+                  </tbody>
                 </table>
               </div>
             </div>

@@ -580,3 +580,55 @@ export const miBalanceApi = {
         return handleResponse<MiBalanceType>(response);
     },
 };
+
+// Ganancias por Participación
+export interface ResumenParticipacion {
+    aportadores: Array<{
+        id: number;
+        nombre: string;
+        capitalAportado: number;
+        tasaInteres: number;
+        gananciaProyectadaMensual: number;
+        estado: string;
+    }>;
+    cobradores: Array<{
+        cobradorId: number;
+        nombre: string;
+        prestamosAsignados: number;
+        gananciaProyectada: number;
+        gananciaRealizada: number;
+        detalle: Array<{
+            prestamoId: number;
+            clienteNombre: string;
+            montoIntereses: number;
+            porcentajeCobrador: number;
+            comisionProyectada: number;
+            cuotasPagadas: number;
+            totalCuotas: number;
+        }>;
+    }>;
+    socios: Array<{
+        id: number;
+        nombre: string;
+        capitalAportado: number;
+        capitalActual: number;
+        porcentaje: number;
+        gananciaProyectada: number;
+        gananciaRealizada: number;
+    }>;
+    resumen: {
+        totalCapitalPrestado: number;
+        totalInteresesProyectados: number;
+        totalComisionesCobradores: number;
+        totalGananciasAportadores: number;
+        totalGananciasSocios: number;
+        prestamosActivos: number;
+    };
+}
+
+export const gananciasApi = {
+    getResumenParticipacion: async (): Promise<ResumenParticipacion> => {
+        const response = await fetch(`${API_URL}/ganancias/resumen-participacion`, { headers: getHeaders() });
+        return handleResponse<ResumenParticipacion>(response);
+    },
+};
