@@ -401,7 +401,7 @@ public class PrestamosController : BaseApiController
         // Actualizar campos informativos siempre
         prestamo.Descripcion = dto.Descripcion;
         prestamo.EstadoPrestamo = dto.EstadoPrestamo;
-        if (dto.CobradorId.HasValue) prestamo.CobradorId = dto.CobradorId;
+        prestamo.CobradorId = dto.CobradorId;
         prestamo.PorcentajeCobrador = dto.PorcentajeCobrador;
 
         // Verificar si hay cambios estructurales (Monto, Tasa, Fechas, Frecuencia)
