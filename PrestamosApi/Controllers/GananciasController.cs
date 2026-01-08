@@ -12,7 +12,7 @@ namespace PrestamosApi.Controllers;
 public class GananciasController : ControllerBase
 {
     private readonly PrestamosDbContext _context;
-    private const decimal PORCENTAJE_APORTADOR = 3m; // 3% fijo para el aportador
+    private const decimal PORCENTAJE_APORTADOR = 3m; // 3% fijo para el aportador sobre SU capital
 
     public GananciasController(PrestamosDbContext context)
     {
@@ -103,11 +103,11 @@ public class GananciasController : ControllerBase
 
         var cantidadSocios = socios.Count > 0 ? socios.Count : 1;
 
-        // Calcular porcentaje para socios: TasaInteres - Cobrador% - 3%
+        // Calcular porcentaje para socios: TasaInteres - Cobrador%
         // Para cada préstamo, calcular cuánto va a los socios
         var gananciaSociosProyectada = prestamosActivos.Sum(p => {
             var porcentajeCobrador = p.CobradorId.HasValue ? p.PorcentajeCobrador : 0;
-            var porcentajeSocios = p.TasaInteres - porcentajeCobrador - PORCENTAJE_APORTADOR;
+            var porcentajeSocios = p.TasaInteres - porcentajeCobrador;
             if (porcentajeSocios < 0) porcentajeSocios = 0;
             return p.MontoPrestado * (porcentajeSocios / 100m);
         });
@@ -117,7 +117,7 @@ public class GananciasController : ControllerBase
             
             var cuotasPagadas = p.Cuotas.Where(c => c.EstadoCuota == "Pagada").Sum(c => c.MontoCuota);
             var porcentajeCobrador = p.CobradorId.HasValue ? p.PorcentajeCobrador : 0;
-            var porcentajeSocios = p.TasaInteres - porcentajeCobrador - PORCENTAJE_APORTADOR;
+            var porcentajeSocios = p.TasaInteres - porcentajeCobrador;
             if (porcentajeSocios < 0) porcentajeSocios = 0;
             // Proporción de cuotas que va a socios
             return cuotasPagadas * (porcentajeSocios / p.TasaInteres);
