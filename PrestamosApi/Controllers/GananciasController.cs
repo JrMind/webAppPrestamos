@@ -12,7 +12,8 @@ namespace PrestamosApi.Controllers;
 public class GananciasController : ControllerBase
 {
     private readonly PrestamosDbContext _context;
-    private const decimal PORCENTAJE_APORTADOR = 3m; // 3% fijo mensual sobre SU capital
+    private const decimal PORCENTAJE_APORTADOR = 3m; // 3% fijo mensual
+    private const int NUM_SOCIOS = 3; // Número fijo de socios
 
     public GananciasController(PrestamosDbContext context)
     {
@@ -127,21 +128,33 @@ public class GananciasController : ControllerBase
             }).ToList();
 
 
-        // --- 3. SOCIOS ---
+        // --- 3. SOCIOS (Fórmula: (Interés - 3% Aportador) / 3 Socios) ---
         var totalInteresesGenerados = prestamosActivos.Sum(p => p.MontoIntereses);
-        var totalGananciaCobradores = cobradoresAgrupados.Sum(c => c.GananciaProyectada);
-        var gananciaBrutaSocios = totalInteresesGenerados - totalGananciaCobradores;
+        var totalCapitalPrestado = prestamosActivos.Sum(p => p.MontoPrestado);
         
-        // Mensuales Socios
-        var interesNetoSociosMes = globalInteresMes - globalGananciaCobradoresMes;
-        var flujoNetoSociosMes = globalFlujoMes - gastoMensualAportadores; // Capital + Interes - Gastos
+        // Descuento del 3% del aportador (sobre el capital aportado)
+        var descuentoAportador = aportadores.Sum(a => a.MontoTotalAportado) * (PORCENTAJE_APORTADOR / 100m);
+        
+        // Ganancia de interés por socio = (InterésTotal - DescuentoAportador) / 3
+        var gananciaInteresPorSocio = (totalInteresesGenerados - descuentoAportador) / NUM_SOCIOS;
+        
+        // Calcular cantidad de quincenas promedio de los préstamos activos
+        var quincenasPromedio = prestamosActivos.Count > 0 
+            ? prestamosActivos.Average(p => p.NumeroCuotas * (p.FrecuenciaPago == "Quincenal" ? 1 : 
+                                                              p.FrecuenciaPago == "Mensual" ? 2 : 
+                                                              p.FrecuenciaPago == "Semanal" ? 0.5m : 1))
+            : 1;
+        
+        // Ganancia Total = Ganancia Interés × Quincenas + Capital/3
+        var gananciaTotal = gananciaInteresPorSocio + (totalCapitalPrestado / NUM_SOCIOS);
+        
+        // Mensuales Socios (basado en cuotas del mes actual)
+        var interesNetoSociosMes = (globalInteresMes - descuentoAportador) / NUM_SOCIOS;
 
         var socios = await _context.Usuarios
             .Where(u => u.Activo && u.Rol == RolUsuario.Socio)
             .Include(u => u.Aportes)
             .ToListAsync();
-            
-        int numSocios = socios.Count > 0 ? socios.Count : 1;
         
         var sociosResumen = socios.Select(s => new
         {
@@ -149,29 +162,28 @@ public class GananciasController : ControllerBase
             s.Nombre,
             CapitalAportado = s.Aportes.Sum(a => a.MontoInicial),
             CapitalActual = s.Aportes.Sum(a => a.MontoActual),
-            Porcentaje = 100m / numSocios,
+            Porcentaje = 100m / NUM_SOCIOS, // 33.33% cada uno
             
-            // Totales
-            GananciaProyectadaTotal = gananciaBrutaSocios / numSocios,
+            // Totales con nueva fórmula
+            GananciaProyectadaTotal = Math.Round(gananciaInteresPorSocio, 0),
             GananciaRealizada = 0,
             
             // Mensuales
-            GananciaInteresMes = interesNetoSociosMes / numSocios,
-            FlujoNetoMes = flujoNetoSociosMes / numSocios
+            GananciaInteresMes = Math.Round(interesNetoSociosMes, 0),
+            FlujoNetoMes = Math.Round((globalFlujoMes - gastoMensualAportadores) / NUM_SOCIOS, 0)
         }).ToList();
 
         var resumen = new
         {
-            TotalCapitalPrestado = prestamosActivos.Sum(p => p.MontoPrestado),
+            TotalCapitalPrestado = Math.Round(totalCapitalPrestado, 0),
             TotalInteresesProyectados = Math.Round(totalInteresesGenerados, 0),
+            DescuentoAportador3Porciento = Math.Round(descuentoAportador, 0),
+            GananciaInteresPorSocio = Math.Round(gananciaInteresPorSocio, 0),
             ProyeccionInteresesMesActual = Math.Round(globalInteresMes, 0),
 
-            TotalGananciaCobradores = Math.Round(totalGananciaCobradores, 0),
-            TotalGananciaSociosBruta = Math.Round(gananciaBrutaSocios, 0),
+            TotalGananciaCobradores = Math.Round(cobradoresAgrupados.Sum(c => c.GananciaProyectada), 0),
             GastoMensualAportadores = Math.Round(gastoMensualAportadores, 0),
-            
-            SumaPartes = Math.Round(totalGananciaCobradores + gananciaBrutaSocios, 0),
-            Diferencia = Math.Round(totalInteresesGenerados - (totalGananciaCobradores + gananciaBrutaSocios), 0)
+            NumeroSociosFijo = NUM_SOCIOS
         };
 
         return Ok(new
