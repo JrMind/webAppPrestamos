@@ -1736,6 +1736,28 @@ function App() {
                 <div className="detail-item"><label>Pendiente</label><span style={{ color: '#ef4444' }}>{formatMoney(selectedPrestamo.saldoPendiente)}</span></div>
                 <div className="detail-item"><label>Estado</label><span className={`badge ${selectedPrestamo.estadoPrestamo === 'Activo' ? 'badge-green' : selectedPrestamo.estadoPrestamo === 'Pagado' ? 'badge-blue' : 'badge-red'}`}>{selectedPrestamo.estadoPrestamo}</span></div>
                 <div className="detail-item"><label>Cobrador</label><span>{selectedPrestamo.cobradorNombre || 'No asignado'}</span></div>
+
+                {/* Sección de Ganancias por Socio de este préstamo */}
+                <div style={{ gridColumn: '1 / -1', marginTop: '1rem', padding: '1rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', border: '1px solid #10b981' }}>
+                  <h4 style={{ marginBottom: '0.75rem', color: '#10b981' }}>📊 Ganancias de Socios (Este Préstamo)</h4>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: '#888' }}>Interés Total</label>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#10b981' }}>{formatMoney(selectedPrestamo.montoIntereses)}</div>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: '#888' }}>Ganancia Interés/Socio</label>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#3b82f6' }}>{formatMoney(selectedPrestamo.montoIntereses / 3)}</div>
+                      <span style={{ fontSize: '0.65rem', color: '#666' }}>(Interés ÷ 3)</span>
+                    </div>
+                    <div>
+                      <label style={{ fontSize: '0.75rem', color: '#888' }}>Ganancia Total/Socio</label>
+                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#8b5cf6' }}>{formatMoney((selectedPrestamo.montoIntereses + selectedPrestamo.montoPrestado) / 3)}</div>
+                      <span style={{ fontSize: '0.65rem', color: '#666' }}>(Interés + Capital) ÷ 3</span>
+                    </div>
+                  </div>
+                </div>
+
                 {selectedPrestamo.esCongelado && (
                   <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
                     <span className="badge" style={{ background: '#0ea5e9', color: 'white', padding: '0.5rem 1rem' }}>❄️ Préstamo Congelado - Solo intereses</span>
