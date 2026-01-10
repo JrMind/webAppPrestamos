@@ -33,8 +33,8 @@ public class DashboardController : ControllerBase
             .SumAsync(c => c.SaldoPendiente);
 
         // Interés del mes - suma de intereses de cuotas del mes actual
-        var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
-        var finMes = inicioMes.AddMonths(1);
+        var inicioMes = DateTime.SpecifyKind(new DateTime(hoy.Year, hoy.Month, 1), DateTimeKind.Utc);
+        var finMes = DateTime.SpecifyKind(inicioMes.AddMonths(1), DateTimeKind.Utc);
         var interesMes = await _context.CuotasPrestamo
             .Where(c => c.FechaCobro >= inicioMes && c.FechaCobro < finMes)
             .SumAsync(c => (decimal?)c.MontoInteres) ?? 0;
