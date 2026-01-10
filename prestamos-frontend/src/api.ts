@@ -620,6 +620,7 @@ export interface ResumenParticipacion {
         totalCapitalPrestado: number;
         totalInteresesProyectados: number;
         proyeccionInteresesMesActual: number;
+        flujoTotalMes: number;
         totalGananciaCobradores: number;
         totalGananciaSociosBruta: number;
         gastoMensualAportadores: number;
