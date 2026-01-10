@@ -877,15 +877,9 @@ function App() {
         <div className="kpi-grid">
           <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Total Prestado</span></div><span className="kpi-value">{formatMoney(metricas?.totalPrestado || 0)}</span></div>
           <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Total Cobrado</span></div><span className="kpi-value">{formatMoney(metricas?.totalCobrado || 0)}</span></div>
-<<<<<<< HEAD
-          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Intereses Ganados</span></div><span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(metricas?.totalGanadoIntereses || 0)}</span></div>
-          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Intereses Proyectados</span></div><span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(metricas?.interesesProyectados || 0)}</span></div>
-          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Capital Proyectado</span></div><span className="kpi-value" style={{ color: '#8b5cf6' }}>{formatMoney((metricas?.totalPrestado || 0) + (metricas?.interesesProyectados || 0))}</span></div>
-          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Cuotas Vencidas</span></div><span className="kpi-value">{metricas?.cuotasVencidasHoy || 0}</span></div>
-=======
           <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Interés del Mes</span></div><span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(metricas?.interesMes || 0)}</span></div>
           <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Ganancia Total Mes</span></div><span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(metricas?.gananciaTotalMes || 0)}</span></div>
->>>>>>> 94fc7fb (feat: agregar calculo de ganancias mensuales - InteresMes y GananciaTotalMes - Agregar MontoCapital y MontoInteres a CuotaPrestamo - Modificar PrestamoService para calcular interes por cuota - Actualizar DashboardController con nuevas metricas mensuales - Actualizar frontend con nuevos KPIs - Crear script de migracion v4)
+          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Cuotas Vencidas</span></div><span className="kpi-value">{metricas?.cuotasVencidasHoy || 0}</span></div>
         </div>
 
         {/* Flujo de Capital */}
