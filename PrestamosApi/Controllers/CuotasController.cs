@@ -125,4 +125,83 @@ public class CuotasController : ControllerBase
 
         return Ok(new { message = $"Se actualizaron {cuotasVencidas.Count} cuotas vencidas" });
     }
+
+    /// <summary>
+    /// Recalcula las fechas de cuotas de préstamos quincenales existentes
+    /// usando la nueva lógica de exactamente 15 días calendario entre cuotas.
+    /// Solo afecta cuotas pendientes (no pagadas).
+    /// </summary>
+    [HttpPost("recalcular-quincenales")]
+    public async Task<ActionResult> RecalcularCuotasQuincenales()
+    {
+        // Obtener todos los préstamos quincenales activos
+        var prestamosQuincenales = await _context.Prestamos
+            .Include(p => p.Cuotas)
+            .Where(p => p.FrecuenciaPago == "Quincenal" && 
+                       (p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido"))
+            .ToListAsync();
+
+        int prestamosActualizados = 0;
+        int cuotasActualizadas = 0;
+
+        foreach (var prestamo in prestamosQuincenales)
+        {
+            // Ordenar cuotas por número
+            var cuotasOrdenadas = prestamo.Cuotas.OrderBy(c => c.NumeroCuota).ToList();
+            
+            if (!cuotasOrdenadas.Any()) continue;
+
+            // Obtener la fecha base: fecha de la primera cuota existente
+            var fechaBase = cuotasOrdenadas.First().FechaCobro;
+            bool prestamoModificado = false;
+
+            foreach (var cuota in cuotasOrdenadas)
+            {
+                // Solo recalcular cuotas pendientes o parciales (no las ya pagadas)
+                if (cuota.EstadoCuota == "Pagada") continue;
+
+                // Calcular nueva fecha: fecha base + (número cuota - 1) * 15 días
+                var nuevaFecha = fechaBase.AddDays((cuota.NumeroCuota - 1) * 15);
+                nuevaFecha = DateTime.SpecifyKind(nuevaFecha, DateTimeKind.Utc);
+
+                // Solo actualizar si la fecha cambió
+                if (cuota.FechaCobro.Date != nuevaFecha.Date)
+                {
+                    cuota.FechaCobro = nuevaFecha;
+                    
+                    // Actualizar estado si la nueva fecha ya pasó
+                    if (nuevaFecha.Date < DateTime.Today && cuota.SaldoPendiente > 0)
+                    {
+                        cuota.EstadoCuota = "Vencida";
+                    }
+                    else if (cuota.SaldoPendiente > 0 && cuota.MontoPagado == 0)
+                    {
+                        cuota.EstadoCuota = "Pendiente";
+                    }
+
+                    cuotasActualizadas++;
+                    prestamoModificado = true;
+                }
+            }
+
+            if (prestamoModificado)
+            {
+                // Actualizar fecha de vencimiento del préstamo (última cuota)
+                var ultimaCuota = cuotasOrdenadas.LastOrDefault();
+                if (ultimaCuota != null)
+                {
+                    prestamo.FechaVencimiento = ultimaCuota.FechaCobro;
+                }
+                prestamosActualizados++;
+            }
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { 
+            message = $"Recálculo completado: {prestamosActualizados} préstamos y {cuotasActualizadas} cuotas actualizadas",
+            prestamosActualizados,
+            cuotasActualizadas
+        });
+    }
 }

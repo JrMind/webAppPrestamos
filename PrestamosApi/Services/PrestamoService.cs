@@ -231,32 +231,14 @@ public class PrestamoService : IPrestamoService
         return primeraCuota.AddDays((numeroCuota - 1) * 7);
     }
 
+    /// <summary>
+    /// Calcula la fecha de una cuota quincenal sumando exactamente 15 días calendario
+    /// por cada cuota desde la fecha inicial.
+    /// </summary>
     private DateTime CalcularFechaQuincenal(DateTime fechaInicial, int numeroCuota)
     {
-        var fecha = fechaInicial;
-        int cuotasGeneradas = 0;
-        
-        while (cuotasGeneradas < numeroCuota)
-        {
-            if (fecha.Day < 15)
-            {
-                fecha = new DateTime(fecha.Year, fecha.Month, 15, 0, 0, 0, DateTimeKind.Utc);
-            }
-            else if (fecha.Day < DateTime.DaysInMonth(fecha.Year, fecha.Month))
-            {
-                int ultimoDia = DateTime.DaysInMonth(fecha.Year, fecha.Month);
-                fecha = new DateTime(fecha.Year, fecha.Month, ultimoDia, 0, 0, 0, DateTimeKind.Utc);
-            }
-            else
-            {
-                fecha = fecha.AddMonths(1);
-                fecha = new DateTime(fecha.Year, fecha.Month, 15, 0, 0, 0, DateTimeKind.Utc);
-            }
-            
-            cuotasGeneradas++;
-        }
-        
-        return fecha;
+        // Quincenal = exactamente 15 días calendario por cuota
+        return fechaInicial.AddDays(numeroCuota * 15);
     }
 
     private DateTime CalcularFechaMensual(DateTime fechaInicial, int numeroCuota)
