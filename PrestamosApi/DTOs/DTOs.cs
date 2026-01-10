@@ -144,13 +144,8 @@ public record CreatePagoDto(
 public record DashboardMetricasDto(
     decimal TotalPrestado,
     decimal TotalACobrar,
-<<<<<<< HEAD
-    decimal TotalGanadoIntereses,
-    decimal InteresesProyectados, // NUEVO: suma de intereses de todos los préstamos
-=======
     decimal InteresMes,         // Intereses de cuotas del mes
     decimal GananciaTotalMes,   // Total cuotas a cobrar del mes
->>>>>>> 94fc7fb (feat: agregar calculo de ganancias mensuales - InteresMes y GananciaTotalMes - Agregar MontoCapital y MontoInteres a CuotaPrestamo - Modificar PrestamoService para calcular interes por cuota - Actualizar DashboardController con nuevas metricas mensuales - Actualizar frontend con nuevos KPIs - Crear script de migracion v4)
     int PrestamosActivos,
     decimal MontoPrestamosActivos,
     int CuotasVencidasHoy,

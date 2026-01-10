@@ -83,7 +83,6 @@ public class PrestamoService : IPrestamoService
         // La primera cuota es la fecha indicada, o se calcula desde la fecha del préstamo
         DateTime fechaBase = fechaPrimerPago ?? prestamo.FechaPrestamo; 
         
-<<<<<<< HEAD
         // Si no se especificó fechaPrimerPago, calculamos la primera cuota según frecuencia
         if (fechaPrimerPago == null)
         {
@@ -92,7 +91,6 @@ public class PrestamoService : IPrestamoService
 
         DateTime fechaActual = fechaBase;
 
-=======
         // Calcular interés y capital por cuota (distribución lineal)
         decimal interesPorCuota = Math.Round(prestamo.MontoIntereses / prestamo.NumeroCuotas, 2);
         decimal capitalPorCuota = Math.Round(prestamo.MontoPrestado / prestamo.NumeroCuotas, 2);
@@ -103,7 +101,6 @@ public class PrestamoService : IPrestamoService
         decimal ajusteInteres = prestamo.MontoIntereses - totalInteresCalculado;
         decimal ajusteCapital = prestamo.MontoPrestado - totalCapitalCalculado;
         
->>>>>>> 94fc7fb (feat: agregar calculo de ganancias mensuales - InteresMes y GananciaTotalMes - Agregar MontoCapital y MontoInteres a CuotaPrestamo - Modificar PrestamoService para calcular interes por cuota - Actualizar DashboardController con nuevas metricas mensuales - Actualizar frontend con nuevos KPIs - Crear script de migracion v4)
         for (int i = 1; i <= prestamo.NumeroCuotas; i++)
         {
              // Para la primera cuota usamos la fecha base decidida

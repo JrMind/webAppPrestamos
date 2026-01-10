@@ -32,15 +32,6 @@ public class DashboardController : ControllerBase
             .Where(c => c.Prestamo!.EstadoPrestamo == "Activo")
             .SumAsync(c => c.SaldoPendiente);
 
-<<<<<<< HEAD
-        var totalGanadoIntereses = await _context.Prestamos
-            .Where(p => p.EstadoPrestamo == "Pagado")
-            .SumAsync(p => p.MontoIntereses);
-        
-        // Intereses proyectados = suma de intereses de TODOS los préstamos (activos + pagados)
-        var interesesProyectados = await _context.Prestamos
-            .SumAsync(p => p.MontoIntereses);
-=======
         // Interés del mes - suma de intereses de cuotas del mes actual
         var inicioMes = new DateTime(hoy.Year, hoy.Month, 1);
         var finMes = inicioMes.AddMonths(1);
@@ -53,7 +44,6 @@ public class DashboardController : ControllerBase
             .Where(c => c.FechaCobro >= inicioMes && c.FechaCobro < finMes
                     && (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial"))
             .SumAsync(c => (decimal?)c.SaldoPendiente) ?? 0;
->>>>>>> 94fc7fb (feat: agregar calculo de ganancias mensuales - InteresMes y GananciaTotalMes - Agregar MontoCapital y MontoInteres a CuotaPrestamo - Modificar PrestamoService para calcular interes por cuota - Actualizar DashboardController con nuevas metricas mensuales - Actualizar frontend con nuevos KPIs - Crear script de migracion v4)
 
         var prestamosActivos = await _context.Prestamos
             .Where(p => p.EstadoPrestamo == "Activo")
@@ -239,13 +229,8 @@ public class DashboardController : ControllerBase
         return Ok(new DashboardMetricasDto(
             totalPrestado,
             totalACobrar,
-<<<<<<< HEAD
-            totalGanadoIntereses,
-            interesesProyectados, // NUEVO
-=======
             interesMes,
             gananciaTotalMes,
->>>>>>> 94fc7fb (feat: agregar calculo de ganancias mensuales - InteresMes y GananciaTotalMes - Agregar MontoCapital y MontoInteres a CuotaPrestamo - Modificar PrestamoService para calcular interes por cuota - Actualizar DashboardController con nuevas metricas mensuales - Actualizar frontend con nuevos KPIs - Crear script de migracion v4)
             prestamosActivos,
             montoPrestamosActivos,
             cantidadCuotasVencidasHoy,
