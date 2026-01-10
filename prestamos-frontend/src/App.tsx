@@ -1328,8 +1328,14 @@ function App() {
                   <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(resumenParticipacion.resumen.totalInteresesProyectados)}</span>
                 </div>
                 <div className="kpi-card" style={{ borderLeft: '4px solid #3b82f6' }}>
-                  <span className="kpi-title">📅 Proyección (Este Mes)</span>
+                  <span className="kpi-title">📊 Ganancia Intereses Mes</span>
                   <span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(resumenParticipacion.resumen.proyeccionInteresesMesActual || 0)}</span>
+                  <span className="kpi-sub">Solo intereses del mes</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #06b6d4' }}>
+                  <span className="kpi-title">💵 Flujo Total Mes</span>
+                  <span className="kpi-value" style={{ color: '#06b6d4' }}>{formatMoney(resumenParticipacion.resumen.flujoTotalMes || 0)}</span>
+                  <span className="kpi-sub">Capital + Intereses</span>
                 </div>
                 <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b' }}>
                   <span className="kpi-title">🏃 Comisiones Cobradores</span>

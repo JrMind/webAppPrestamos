@@ -184,6 +184,7 @@ public class GananciasController : ControllerBase
             DescuentoAportador3Porciento = Math.Round(descuentoAportador, 0),
             GananciaInteresPorSocio = Math.Round(gananciaInteresPorSocio, 0),
             ProyeccionInteresesMesActual = Math.Round(globalInteresMes, 0),
+            FlujoTotalMes = Math.Round(globalFlujoMes, 0), // Capital + Intereses del mes
 
             TotalGananciaCobradores = Math.Round(cobradoresAgrupados.Sum(c => c.GananciaProyectada), 0),
             GastoMensualAportadores = Math.Round(gastoMensualAportadores, 0),
