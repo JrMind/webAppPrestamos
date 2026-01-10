@@ -7,6 +7,8 @@ public class CuotaPrestamo
     public int NumeroCuota { get; set; }
     public DateTime FechaCobro { get; set; }
     public decimal MontoCuota { get; set; }
+    public decimal MontoCapital { get; set; }  // Parte de capital en la cuota
+    public decimal MontoInteres { get; set; }  // Parte de interés en la cuota
     public decimal MontoPagado { get; set; } = 0;
     public decimal SaldoPendiente { get; set; }
     public string EstadoCuota { get; set; } = "Pendiente"; // Pendiente, Pagada, Vencida, Parcial

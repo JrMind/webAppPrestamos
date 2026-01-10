@@ -252,8 +252,8 @@ export interface CuotaProximaDetalle {
 export interface DashboardMetricas {
   totalPrestado: number;
   totalACobrar: number;
-  totalGanadoIntereses: number;
-  interesesProyectados: number; // NUEVO
+  interesMes: number;         // Intereses de cuotas del mes
+  gananciaTotalMes: number;   // Total cuotas a cobrar del mes
   prestamosActivos: number;
   montoPrestamosActivos: number;
   cuotasVencidasHoy: number;
