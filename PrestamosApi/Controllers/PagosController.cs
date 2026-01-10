@@ -149,10 +149,14 @@ public class PagosController : ControllerBase
                 }
                 else
                 {
-                    // Lógica normal para préstamos no congelados
-                    cuota.MontoPagado += dto.MontoPago;
+                    // Lógica normal para préstamos no congelados CON DISTRIBUCIÓN A CUOTAS FUTURAS
+                    decimal montoRestante = dto.MontoPago;
+                    
+                    // Primero, aplicar a la cuota actual
+                    decimal abonoActual = Math.Min(montoRestante, cuota.SaldoPendiente);
+                    cuota.MontoPagado += abonoActual;
                     cuota.SaldoPendiente = cuota.MontoCuota - cuota.MontoPagado;
-
+                    
                     if (cuota.SaldoPendiente <= 0)
                     {
                         cuota.SaldoPendiente = 0;
@@ -162,6 +166,43 @@ public class PagosController : ControllerBase
                     else if (cuota.MontoPagado > 0)
                     {
                         cuota.EstadoCuota = "Parcial";
+                    }
+                    
+                    montoRestante -= abonoActual;
+                    
+                    // Si queda dinero, distribuir a cuotas futuras
+                    if (montoRestante > 0)
+                    {
+                        var cuotasPendientes = prestamo.Cuotas
+                            .Where(c => c.Id != cuota.Id && 
+                                       (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida"))
+                            .OrderBy(c => c.FechaCobro)
+                            .ToList();
+                        
+                        foreach (var cuotaFutura in cuotasPendientes)
+                        {
+                            if (montoRestante <= 0) break;
+                            
+                            decimal abonoFuturo = Math.Min(montoRestante, cuotaFutura.SaldoPendiente);
+                            cuotaFutura.MontoPagado += abonoFuturo;
+                            cuotaFutura.SaldoPendiente = cuotaFutura.MontoCuota - cuotaFutura.MontoPagado;
+                            
+                            if (cuotaFutura.SaldoPendiente <= 0)
+                            {
+                                cuotaFutura.SaldoPendiente = 0;
+                                cuotaFutura.EstadoCuota = "Pagada";
+                                cuotaFutura.FechaPago = fechaPagoUtc;
+                            }
+                            else if (cuotaFutura.MontoPagado > 0)
+                            {
+                                cuotaFutura.EstadoCuota = "Parcial";
+                            }
+                            
+                            montoRestante -= abonoFuturo;
+                        }
+                        
+                        _logger.LogInformation("Pago con exceso distribuido: Préstamo #{PrestamoId}, Cuota #{CuotaId}, Monto original ${Monto}, Distribuido a cuotas futuras",
+                            prestamo.Id, cuota.Id, dto.MontoPago);
                     }
                 }
             }
