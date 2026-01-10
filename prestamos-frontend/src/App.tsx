@@ -680,13 +680,15 @@ function App() {
       if (editMode && editingPrestamoId) {
         // MODO EDICIÓN - Obtener el préstamo actual para preservar el estado
         const prestamoActual = prestamos.find(p => p.id === editingPrestamoId);
+        // Calcular numeroCuotas correctamente usando la misma lógica que el preview
+        const calculatedPreview = calcularPreview();
         // Construir payload explícito con todos los campos requeridos por UpdatePrestamoDto
         await prestamosApi.updateCompleto(editingPrestamoId, {
           montoPrestado: prestamoForm.montoPrestado,
           tasaInteres: prestamoForm.tasaInteres,
           tipoInteres: prestamoForm.tipoInteres,
           frecuenciaPago: prestamoForm.frecuenciaPago,
-          numeroCuotas: prestamoForm.duracion,
+          numeroCuotas: calculatedPreview?.numeroCuotas || prestamoForm.duracion,
           fechaPrestamo: prestamoForm.fechaPrestamo,
           fechaPrimerPago: prestamoForm.fechaPrestamo,
           estadoPrestamo: prestamoActual?.estadoPrestamo || 'Activo',
