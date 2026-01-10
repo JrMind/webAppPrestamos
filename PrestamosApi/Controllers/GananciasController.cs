@@ -132,11 +132,14 @@ public class GananciasController : ControllerBase
         var totalInteresesGenerados = prestamosActivos.Sum(p => p.MontoIntereses);
         var totalCapitalPrestado = prestamosActivos.Sum(p => p.MontoPrestado);
         
-        // Descuento del 3% del aportador (sobre el capital aportado)
-        var descuentoAportador = aportadores.Sum(a => a.MontoTotalAportado) * (PORCENTAJE_APORTADOR / 100m);
+        // Descuento mensual aportadores
+        var descuentoAportador = gastoMensualAportadores;
         
-        // Ganancia de interés por socio = (InterésTotal - DescuentoAportador) / 3
-        var gananciaInteresPorSocio = (totalInteresesGenerados - descuentoAportador) / NUM_SOCIOS;
+        // Ganancia proyectada de cobradores
+        var gananciaCobradoresTotal = cobradoresAgrupados.Sum(c => c.GananciaProyectada);
+        
+        // Ganancia de interés por socio = (InterésTotal - Aportadores - Cobradores) / 3
+        var gananciaInteresPorSocio = (totalInteresesGenerados - gananciaCobradoresTotal - descuentoAportador) / NUM_SOCIOS;
         
         // Calcular cantidad de quincenas promedio de los préstamos activos
         var quincenasPromedio = prestamosActivos.Count > 0 
@@ -149,7 +152,8 @@ public class GananciasController : ControllerBase
         var gananciaTotal = gananciaInteresPorSocio + (totalCapitalPrestado / NUM_SOCIOS);
         
         // Mensuales Socios (basado en cuotas del mes actual)
-        var interesNetoSociosMes = (globalInteresMes - descuentoAportador) / NUM_SOCIOS;
+        // Interés neto = Interés Total - Aportadores - Cobradores
+        var interesNetoSociosMes = (globalInteresMes - gastoMensualAportadores - globalGananciaCobradoresMes) / NUM_SOCIOS;
 
         var socios = await _context.Usuarios
             .Where(u => u.Activo && u.Rol == RolUsuario.Socio)
