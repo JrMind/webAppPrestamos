@@ -186,11 +186,18 @@ public class GananciasController : ControllerBase
         var totalCapitalBase = totalCapitalAportadoSocios + totalCapitalAportadoExternos;
         var capitalReinvertido = totalCapitalPrestado - totalCapitalBase;
 
+        // Capital en la calle (Saldo de capital pendiente por cobrar)
+        // Sumamos el capital de las cuotas no pagadas
+        var capitalEnCalle = prestamosActivos.Sum(p => p.Cuotas
+            .Where(c => c.EstadoCuota != "Pagada")
+            .Sum(c => c.MontoCapital));
+
         var resumen = new
         {
             TotalCapitalPrestado = Math.Round(totalCapitalPrestado, 0),
-            TotalCapitalBase = Math.Round(totalCapitalBase, 0), // Nuevo: Capital real inyectado
-            CapitalReinvertido = Math.Round(capitalReinvertido, 0), // Nuevo: Diferencia (Ganancia reinvertida)
+            TotalCapitalBase = Math.Round(totalCapitalBase, 0),
+            CapitalReinvertido = Math.Round(capitalReinvertido, 0),
+            CapitalEnCalle = Math.Round(capitalEnCalle, 0), // Nuevo: Riesgo actual
             
             TotalInteresesProyectados = Math.Round(totalInteresesGenerados, 0),
             DescuentoAportador3Porciento = Math.Round(descuentoAportador, 0),

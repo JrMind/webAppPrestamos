@@ -1362,6 +1362,11 @@ function App() {
                   <span className="kpi-value" style={{ color: '#ec4899' }}>{formatMoney(resumenParticipacion.resumen.capitalReinvertido || 0)}</span>
                   <span className="kpi-sub">Crecimiento Orgánico</span>
                 </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #f97316' }}>
+                  <span className="kpi-title">🛣️ Capital en Calle</span>
+                  <span className="kpi-value" style={{ color: '#f97316' }}>{formatMoney(resumenParticipacion.resumen.capitalEnCalle || 0)}</span>
+                  <span className="kpi-sub">Saldo Capital Pendiente</span>
+                </div>
                 <div className="kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
                   <span className="kpi-title">💰 Interés Total (Proyectado)</span>
                   <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(resumenParticipacion.resumen.totalInteresesProyectados)}</span>
