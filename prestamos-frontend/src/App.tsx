@@ -42,6 +42,30 @@ function App() {
   const [passwordChangeUserId, setPasswordChangeUserId] = useState<number | null>(null);
   const [newPassword, setNewPassword] = useState('');
 
+  // Estados para edición inline en Ganancias
+  const [editingGananciaAportadorId, setEditingGananciaAportadorId] = useState<number | null>(null);
+  const [editMontoAportado, setEditMontoAportado] = useState<string>('');
+
+  const handleStartEditGananciaAportador = (id: number, currentMonto: number) => {
+    setEditingGananciaAportadorId(id);
+    setEditMontoAportado(currentMonto.toString());
+  };
+
+  const handleSaveGananciaAportador = async (id: number) => {
+    try {
+      if (!editMontoAportado) return;
+      // Primero obtener el aportador actual para no perder otros datos
+      const aportadorActual = await aportadoresExternosApi.getById(id);
+      await aportadoresExternosApi.update(id, { ...aportadorActual, montoTotalAportado: Number(editMontoAportado) });
+      showToast('Capital actualizado', 'success');
+      setEditingGananciaAportadorId(null);
+      loadResumenParticipacion(); // Recargar datos
+    } catch (error) {
+      showToast('Error al actualizar', 'error');
+      console.error(error);
+    }
+  };
+
   // Filters
   const [filtroEstado, setFiltroEstado] = useState('Todos');
   const [filtroFrecuencia, setFiltroFrecuencia] = useState('Todos');
@@ -1376,7 +1400,30 @@ function App() {
                     {resumenParticipacion.aportadores.map(a => (
                       <tr key={a.id}>
                         <td><strong>{a.nombre}</strong></td>
-                        <td className="money">{formatMoney(a.capitalAportado)}</td>
+                        <td className="money">
+                          {editingGananciaAportadorId === a.id ? (
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              <input
+                                type="number"
+                                value={editMontoAportado}
+                                onChange={e => setEditMontoAportado(e.target.value)}
+                                style={{ width: '120px', padding: '0.25rem', background: '#333', border: '1px solid #444', color: '#fff', borderRadius: '4px' }}
+                              />
+                              <button onClick={() => handleSaveGananciaAportador(a.id)} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Guardar">💾</button>
+                              <button onClick={() => setEditingGananciaAportadorId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Cancelar">❌</button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              {formatMoney(a.capitalAportado)}
+                              <span
+                                onClick={() => handleStartEditGananciaAportador(a.id, a.capitalAportado)}
+                                style={{ cursor: 'pointer', fontSize: '0.9rem', opacity: 0.6 }}
+                                title="Editar Capital">
+                                ✏️
+                              </span>
+                            </div>
+                          )}
+                        </td>
                         <td>{a.tasaInteres}%</td>
                         <td className="money" style={{ color: '#10b981' }}>{formatMoney(a.gananciaMensual)}</td>
                         <td><span className={`badge ${a.estado === 'Activo' ? 'badge-green' : 'badge-gray'}`}>{a.estado}</span></td>
