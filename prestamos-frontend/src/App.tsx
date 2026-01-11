@@ -1323,6 +1323,21 @@ function App() {
             <div>
               {/* Resumen General */}
               <div className="kpi-grid" style={{ marginBottom: '1.5rem' }}>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #6366f1' }}>
+                  <span className="kpi-title">🏦 Capital en Circulación</span>
+                  <span className="kpi-value" style={{ color: '#6366f1' }}>{formatMoney(resumenParticipacion.resumen.totalCapitalPrestado)}</span>
+                  <span className="kpi-sub">Total Prestado Activo</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #8b5cf6' }}>
+                  <span className="kpi-title">💎 Capital Base (Inversión)</span>
+                  <span className="kpi-value" style={{ color: '#8b5cf6' }}>{formatMoney(resumenParticipacion.resumen.totalCapitalBase || 0)}</span>
+                  <span className="kpi-sub">Socios + Aportadores</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #ec4899' }}>
+                  <span className="kpi-title">🔄 Capital Reinvertido</span>
+                  <span className="kpi-value" style={{ color: '#ec4899' }}>{formatMoney(resumenParticipacion.resumen.capitalReinvertido || 0)}</span>
+                  <span className="kpi-sub">Crecimiento Orgánico</span>
+                </div>
                 <div className="kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
                   <span className="kpi-title">💰 Interés Total (Proyectado)</span>
                   <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(resumenParticipacion.resumen.totalInteresesProyectados)}</span>

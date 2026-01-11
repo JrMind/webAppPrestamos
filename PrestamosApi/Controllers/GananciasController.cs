@@ -181,9 +181,17 @@ public class GananciasController : ControllerBase
             FlujoNetoMes = Math.Round((globalFlujoMes - gastoMensualAportadores) / NUM_SOCIOS, 0)
         }).ToList();
 
+        var totalCapitalAportadoSocios = socios.Sum(s => s.Aportes.Sum(a => a.MontoInicial));
+        var totalCapitalAportadoExternos = aportadores.Sum(a => a.MontoTotalAportado);
+        var totalCapitalBase = totalCapitalAportadoSocios + totalCapitalAportadoExternos;
+        var capitalReinvertido = totalCapitalPrestado - totalCapitalBase;
+
         var resumen = new
         {
             TotalCapitalPrestado = Math.Round(totalCapitalPrestado, 0),
+            TotalCapitalBase = Math.Round(totalCapitalBase, 0), // Nuevo: Capital real inyectado
+            CapitalReinvertido = Math.Round(capitalReinvertido, 0), // Nuevo: Diferencia (Ganancia reinvertida)
+            
             TotalInteresesProyectados = Math.Round(totalInteresesGenerados, 0),
             DescuentoAportador3Porciento = Math.Round(descuentoAportador, 0),
             GananciaInteresPorSocio = Math.Round(gananciaInteresPorSocio, 0),

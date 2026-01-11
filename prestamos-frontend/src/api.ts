@@ -618,6 +618,8 @@ export interface ResumenParticipacion {
     }>;
     resumen: {
         totalCapitalPrestado: number;
+        totalCapitalBase: number; // Nuevo
+        capitalReinvertido: number; // Nuevo
         totalInteresesProyectados: number;
         proyeccionInteresesMesActual: number;
         flujoTotalMes: number;
