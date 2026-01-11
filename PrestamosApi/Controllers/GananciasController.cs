@@ -168,8 +168,8 @@ public class GananciasController : ControllerBase
             CapitalActual = s.Aportes.Sum(a => a.MontoActual),
             Porcentaje = 100m / NUM_SOCIOS, // 33.33% cada uno
             
-            // Totales con nueva fórmula
-            GananciaProyectadaTotal = Math.Round(gananciaInteresPorSocio, 0),
+            // Totales del MES (solo cuotas del mes vigente)
+            GananciaProyectadaTotal = Math.Round(interesNetoSociosMes, 0), // Solo intereses del mes neto
             GananciaRealizada = 0,
             
             // Mensuales
