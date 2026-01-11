@@ -160,6 +160,9 @@ public class GananciasController : ControllerBase
             .Include(u => u.Aportes)
             .ToListAsync();
         
+        // Ganancia neta mensual por socio = (Flujo Total - Aportadores - Cobradores) / 3
+        var gananciaTotalMesPorSocio = (globalFlujoMes - gastoMensualAportadores - globalGananciaCobradoresMes) / NUM_SOCIOS;
+        
         var sociosResumen = socios.Select(s => new
         {
             s.Id,
@@ -168,12 +171,13 @@ public class GananciasController : ControllerBase
             CapitalActual = s.Aportes.Sum(a => a.MontoActual),
             Porcentaje = 100m / NUM_SOCIOS, // 33.33% cada uno
             
-            // Totales del MES (solo cuotas del mes vigente)
-            GananciaProyectadaTotal = Math.Round(interesNetoSociosMes, 0), // Solo intereses del mes neto
+            // Total del MES = Capital recuperado + Interés neto (después de pagar aportadores y cobradores)
+            GananciaProyectadaTotal = Math.Round(gananciaTotalMesPorSocio, 0),
             GananciaRealizada = 0,
             
-            // Mensuales
+            // Solo intereses del mes (neto)
             GananciaInteresMes = Math.Round(interesNetoSociosMes, 0),
+            // Flujo bruto del mes (sin descontar cobradores)
             FlujoNetoMes = Math.Round((globalFlujoMes - gastoMensualAportadores) / NUM_SOCIOS, 0)
         }).ToList();
 
