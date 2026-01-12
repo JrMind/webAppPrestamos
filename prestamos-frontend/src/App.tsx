@@ -1838,7 +1838,13 @@ function App() {
                 <div className="detail-item"><label>Pagado</label><span style={{ color: '#10b981' }}>{formatMoney(selectedPrestamo.totalPagado)}</span></div>
                 <div className="detail-item"><label>Pendiente</label><span style={{ color: '#ef4444' }}>{formatMoney(selectedPrestamo.saldoPendiente)}</span></div>
                 <div className="detail-item"><label>Estado</label><span className={`badge ${selectedPrestamo.estadoPrestamo === 'Activo' ? 'badge-green' : selectedPrestamo.estadoPrestamo === 'Pagado' ? 'badge-blue' : 'badge-red'}`}>{selectedPrestamo.estadoPrestamo}</span></div>
-                <div className="detail-item"><label>Cobrador</label><span>{selectedPrestamo.cobradorNombre || 'No asignado'}</span></div>
+                <div className="detail-item">
+                  <label>Cobrador</label>
+                  <span>
+                    {selectedPrestamo.cobradorNombre || 'No asignado'}
+                    {selectedPrestamo.cobradorNombre && selectedPrestamo.porcentajeCobrador ? <span style={{ fontSize: '0.85rem', color: '#6b7280', marginLeft: '5px' }}>({selectedPrestamo.porcentajeCobrador}%)</span> : ''}
+                  </span>
+                </div>
 
                 {/* Sección de Ganancias por Socio de este préstamo */}
                 <div style={{ gridColumn: '1 / -1', marginTop: '1rem', padding: '1rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', border: '1px solid #10b981' }}>
