@@ -1849,22 +1849,42 @@ function App() {
                 {/* Sección de Ganancias por Socio de este préstamo */}
                 <div style={{ gridColumn: '1 / -1', marginTop: '1rem', padding: '1rem', background: 'rgba(16, 185, 129, 0.1)', borderRadius: '8px', border: '1px solid #10b981' }}>
                   <h4 style={{ marginBottom: '0.75rem', color: '#10b981' }}>📊 Ganancias de Socios (Este Préstamo)</h4>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-                    <div>
-                      <label style={{ fontSize: '0.75rem', color: '#888' }}>Interés Total</label>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#10b981' }}>{formatMoney(selectedPrestamo.montoIntereses)}</div>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '0.75rem', color: '#888' }}>Ganancia Interés/Socio</label>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#3b82f6' }}>{formatMoney(selectedPrestamo.montoIntereses / 3)}</div>
-                      <span style={{ fontSize: '0.65rem', color: '#666' }}>(Interés ÷ 3)</span>
-                    </div>
-                    <div>
-                      <label style={{ fontSize: '0.75rem', color: '#888' }}>Ganancia Total/Socio</label>
-                      <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#8b5cf6' }}>{formatMoney((selectedPrestamo.montoIntereses + selectedPrestamo.montoPrestado) / 3)}</div>
-                      <span style={{ fontSize: '0.65rem', color: '#666' }}>(Interés + Capital) ÷ 3</span>
-                    </div>
-                  </div>
+                  {(() => {
+                    const capitalPorCuota = selectedPrestamo.montoPrestado / (selectedPrestamo.numeroCuotas || 1);
+                    const interesPorCuota = selectedPrestamo.montoCuota - capitalPorCuota;
+
+                    const capitalPagado = capitalPorCuota * selectedPrestamo.cuotasPagadas;
+                    const interesPagado = interesPorCuota * selectedPrestamo.cuotasPagadas;
+
+                    const costoAportadores = selectedPrestamo.montoPrestado * 0.03;
+                    const costoCobrador = selectedPrestamo.cobradorNombre && selectedPrestamo.porcentajeCobrador
+                      ? selectedPrestamo.montoPrestado * (selectedPrestamo.porcentajeCobrador / 100)
+                      : 0;
+
+                    const gananciaInteresNeta = selectedPrestamo.montoIntereses - costoAportadores - costoCobrador;
+
+                    return (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#888' }}>Ganancia Interés Neta</label>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#10b981' }} title={`Interés Total (${formatMoney(selectedPrestamo.montoIntereses)}) - Costos`}>
+                            {formatMoney(gananciaInteresNeta)}
+                          </div>
+                          <span style={{ fontSize: '0.65rem', color: '#666' }}>Interés - Costos</span>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#888' }}>Capital Pagado</label>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{formatMoney(capitalPagado)}</div>
+                          <span style={{ fontSize: '0.65rem', color: '#666' }}>(Cap/Cuota * Pagadas)</span>
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', color: '#888' }}>Interés Pagado</label>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#3b82f6' }}>{formatMoney(interesPagado)}</div>
+                          <span style={{ fontSize: '0.65rem', color: '#666' }}>(Int/Cuota * Pagadas)</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
 
                 {selectedPrestamo.esCongelado && (
