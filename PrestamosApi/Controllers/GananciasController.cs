@@ -187,10 +187,13 @@ public class GananciasController : ControllerBase
         var capitalReinvertido = totalCapitalPrestado - totalCapitalBase;
 
         // Capital en la calle (Saldo de capital pendiente por cobrar)
-        // Sumamos el capital de las cuotas no pagadas
-        var capitalEnCalle = prestamosActivos.Sum(p => p.Cuotas
-            .Where(c => c.EstadoCuota != "Pagada")
-            .Sum(c => c.MontoCapital));
+        var capitalEnCalle = prestamosActivos.Sum(p => 
+            p.EsCongelado 
+                ? p.MontoPrestado // En congelados, el MontoPrestado es el saldo actual
+                : p.Cuotas
+                    .Where(c => c.EstadoCuota != "Pagada")
+                    .Sum(c => c.MontoCapital)
+        );
 
         var resumen = new
         {

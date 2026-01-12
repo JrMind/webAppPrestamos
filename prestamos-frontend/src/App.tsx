@@ -10,6 +10,14 @@ const formatDateInput = (date: Date): string => date.toISOString().split('T')[0]
 
 interface Toast { id: number; message: string; type: 'success' | 'error' | 'warning'; }
 
+const getPorcentajeCobradorSugerido = (tasa: number) => {
+  if (tasa === 10) return 2;
+  if (tasa === 12) return 4;
+  if (tasa === 15) return 5;
+  if (tasa === 20) return 10;
+  return null;
+};
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!getAuthToken());
   const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
@@ -982,7 +990,10 @@ function App() {
                     <td><strong>{p.clienteNombre}</strong><div style={{ color: '#666', fontSize: '0.75rem' }}>{p.clienteCedula}</div></td>
                     <td className="money">{formatMoney(p.montoPrestado)}</td>
                     <td>{p.tasaInteres}%</td>
-                    <td>{p.cobradorNombre || '-'}</td>
+                    <td>
+                      {p.cobradorNombre || '-'}
+                      {p.cobradorNombre && p.porcentajeCobrador ? <span style={{ fontSize: '0.75rem', color: '#6b7280', marginLeft: '4px' }}>({p.porcentajeCobrador}%)</span> : ''}
+                    </td>
                     <td>{p.cuotasPagadas}/{p.numeroCuotas}</td>
                     <td><span className={`badge ${p.estadoPrestamo === 'Activo' ? 'badge-green' : p.estadoPrestamo === 'Pagado' ? 'badge-blue' : 'badge-red'}`}>{p.estadoPrestamo}</span></td>
                     <td><div className="actions"><button className="btn btn-secondary btn-sm" onClick={() => openDetalle(p)}>Ver</button><button className="btn btn-primary btn-sm" onClick={() => openEditPrestamo(p)}>✏️</button><button className="btn btn-danger btn-sm" onClick={() => handleDeletePrestamo(p.id)}>✕</button></div></td>
@@ -1590,7 +1601,25 @@ function App() {
                       <span>❄️ Congelado</span>
                     </label>
                   </div>
-                  <div className="form-group"><label>Tasa Interés (%) *</label><input type="number" min="0" step="0.1" required value={prestamoForm.tasaInteres} onChange={e => setPrestamoForm({ ...prestamoForm, tasaInteres: Number(e.target.value) })} /></div>
+                  <div className="form-group">
+                    <label>Tasa Interés (%) *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.1"
+                      required
+                      value={prestamoForm.tasaInteres}
+                      onChange={e => {
+                        const nuevaTasa = Number(e.target.value);
+                        const sugerido = getPorcentajeCobradorSugerido(nuevaTasa);
+                        setPrestamoForm({
+                          ...prestamoForm,
+                          tasaInteres: nuevaTasa,
+                          porcentajeCobrador: sugerido !== null ? sugerido : prestamoForm.porcentajeCobrador
+                        });
+                      }}
+                    />
+                  </div>
                   <div className="form-group">
                     <label>Frecuencia *</label>
                     <select value={prestamoForm.frecuenciaPago} onChange={e => setPrestamoForm({ ...prestamoForm, frecuenciaPago: e.target.value })}>
