@@ -190,9 +190,9 @@ public class GananciasController : ControllerBase
         var capitalEnCalle = prestamosActivos.Sum(p => 
             p.EsCongelado 
                 ? p.MontoPrestado // En congelados, el MontoPrestado es el saldo actual
-                : p.Cuotas
-                    .Where(c => c.EstadoCuota != "Pagada")
-                    .Sum(c => c.MontoCapital)
+                : (p.MontoPrestado - p.Cuotas
+                    .Where(c => c.EstadoCuota == "Pagada")
+                    .Sum(c => c.MontoCapital))
         );
 
         var resumen = new

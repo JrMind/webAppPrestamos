@@ -1856,9 +1856,17 @@ function App() {
                     const capitalPagado = capitalPorCuota * selectedPrestamo.cuotasPagadas;
                     const interesPagado = interesPorCuota * selectedPrestamo.cuotasPagadas;
 
-                    const costoAportadores = selectedPrestamo.montoPrestado * 0.03;
+                    // Calcular duración en meses para costos mensuales
+                    let mesesDuracion = 1;
+                    if (selectedPrestamo.frecuenciaPago === 'Mensual') mesesDuracion = selectedPrestamo.numeroCuotas;
+                    else if (selectedPrestamo.frecuenciaPago === 'Quincenal') mesesDuracion = selectedPrestamo.numeroCuotas / 2;
+                    else if (selectedPrestamo.frecuenciaPago === 'Semanal') mesesDuracion = selectedPrestamo.numeroCuotas / 4;
+                    else if (selectedPrestamo.frecuenciaPago === 'Diario') mesesDuracion = selectedPrestamo.numeroCuotas / 30;
+
+                    // Costos Mensuales multiplicados por duración
+                    const costoAportadores = (selectedPrestamo.montoPrestado * 0.03) * mesesDuracion;
                     const costoCobrador = selectedPrestamo.cobradorNombre && selectedPrestamo.porcentajeCobrador
-                      ? selectedPrestamo.montoPrestado * (selectedPrestamo.porcentajeCobrador / 100)
+                      ? (selectedPrestamo.montoPrestado * (selectedPrestamo.porcentajeCobrador / 100)) * mesesDuracion
                       : 0;
 
                     const gananciaInteresNeta = selectedPrestamo.montoIntereses - costoAportadores - costoCobrador;
@@ -1867,10 +1875,10 @@ function App() {
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
                         <div>
                           <label style={{ fontSize: '0.75rem', color: '#888' }}>Ganancia Interés Neta</label>
-                          <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#10b981' }} title={`Interés Total (${formatMoney(selectedPrestamo.montoIntereses)}) - Costos`}>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#10b981' }} title={`Interés Total (${formatMoney(selectedPrestamo.montoIntereses)}) - Costos (${formatMoney(costoAportadores + costoCobrador)})`}>
                             {formatMoney(gananciaInteresNeta)}
                           </div>
-                          <span style={{ fontSize: '0.65rem', color: '#666' }}>Interés - Costos</span>
+                          <span style={{ fontSize: '0.65rem', color: '#666' }}>Interés - Costos ({parseFloat(mesesDuracion.toFixed(1))} meses)</span>
                         </div>
                         <div>
                           <label style={{ fontSize: '0.75rem', color: '#888' }}>Capital Pagado</label>
