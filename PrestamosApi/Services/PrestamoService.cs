@@ -5,6 +5,7 @@ namespace PrestamosApi.Services;
 public interface IPrestamoService
 {
     List<CuotaPrestamo> GenerarCuotas(Prestamo prestamo, DateTime? fechaPrimerPago = null);
+    CuotaPrestamo GenerarSiguienteCuotaCongelada(Prestamo prestamo, CuotaPrestamo ultimaCuota);
     (decimal MontoTotal, decimal MontoIntereses, decimal MontoCuota, int NumeroCuotas, DateTime FechaVencimiento) 
         CalcularPrestamo(decimal montoPrestado, decimal tasaInteres, string tipoInteres, 
                          string frecuenciaPago, int duracion, string unidadDuracion, DateTime fechaPrestamo,
@@ -110,8 +111,35 @@ public class PrestamoService : IPrestamoService
                 fechaActual = CalcularProximaFecha(fechaActual, prestamo.FrecuenciaPago, prestamo.DiaSemana);
             }
 
+            if (prestamo.EsCongelado)
+            {
+                // Para préstamos congelados, SOLO generar la primera cuota
+                // Las siguientes se generan automáticamente al pagar la anterior
+                if (i > 1) break;
+
+                // Asegurar UTC
+                var fechaCobro = DateTime.SpecifyKind(fechaActual, DateTimeKind.Utc);
+                
+                decimal interesCongelado = prestamo.MontoCuota; // La cuota es todo interés
+                
+                cuotas.Add(new CuotaPrestamo
+                {
+                    PrestamoId = prestamo.Id,
+                    NumeroCuota = 1, // Siempre es la "próxima" cuota
+                    FechaCobro = fechaCobro,
+                    MontoCuota = interesCongelado,
+                    MontoCapital = 0, // No amortiza capital
+                    MontoInteres = interesCongelado,
+                    MontoPagado = 0,
+                    SaldoPendiente = interesCongelado,
+                    EstadoCuota = "Pendiente"
+                });
+                break;
+            }
+
+            // Lógica normal para préstamos amortizables
              // Asegurar UTC
-            var fechaCobro = DateTime.SpecifyKind(fechaActual, DateTimeKind.Utc);
+            var fechaCobroNormal = DateTime.SpecifyKind(fechaActual, DateTimeKind.Utc);
             
             // Aplicar ajuste de redondeo en la última cuota
             decimal interesCuota = i == prestamo.NumeroCuotas ? interesPorCuota + ajusteInteres : interesPorCuota;
@@ -121,7 +149,7 @@ public class PrestamoService : IPrestamoService
             {
                 PrestamoId = prestamo.Id,
                 NumeroCuota = i,
-                FechaCobro = fechaCobro,
+                FechaCobro = fechaCobroNormal,
                 MontoCuota = prestamo.MontoCuota,
                 MontoCapital = capitalCuota,
                 MontoInteres = interesCuota,
@@ -132,6 +160,39 @@ public class PrestamoService : IPrestamoService
         }
         
         return cuotas;
+    }
+
+    public CuotaPrestamo GenerarSiguienteCuotaCongelada(Prestamo prestamo, CuotaPrestamo ultimaCuota)
+    {
+        // Calcular fecha de la nueva cuota
+        DateTime nuevaFecha = CalcularProximaFecha(ultimaCuota.FechaCobro, prestamo.FrecuenciaPago, prestamo.DiaSemana);
+        DateTime fechaCobro = DateTime.SpecifyKind(nuevaFecha, DateTimeKind.Utc);
+
+        // Recalcular monto por si hubo abonos a capital
+        // Cuota = Capital * (Tasa/100) * factor
+        decimal factorFrecuencia = prestamo.FrecuenciaPago switch
+        {
+            "Diario" => 1m / 30m,
+            "Semanal" => 7m / 30m,
+            "Quincenal" => 15m / 30m,
+            "Mensual" => 1m,
+            _ => 1m
+        };
+        
+        decimal nuevoInteres = Math.Round(prestamo.MontoPrestado * (prestamo.TasaInteres / 100m) * factorFrecuencia, 0);
+
+        return new CuotaPrestamo
+        {
+            PrestamoId = prestamo.Id,
+            NumeroCuota = ultimaCuota.NumeroCuota + 1,
+            FechaCobro = fechaCobro,
+            MontoCuota = nuevoInteres,
+            MontoCapital = 0,
+            MontoInteres = nuevoInteres,
+            MontoPagado = 0,
+            SaldoPendiente = nuevoInteres,
+            EstadoCuota = "Pendiente"
+        };
     }
 
     private DateTime CalcularProximaFecha(DateTime fechaAnterior, string frecuencia, string? diaSemana)

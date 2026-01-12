@@ -16,17 +16,20 @@ public class PagosController : ControllerBase
     private readonly PrestamosDbContext _context;
     private readonly ITwilioService _twilioService;
     private readonly IDistribucionGananciasService _distribucionService;
+    private readonly IPrestamoService _prestamoService;
     private readonly ILogger<PagosController> _logger;
 
     public PagosController(
         PrestamosDbContext context, 
         ITwilioService twilioService, 
         IDistribucionGananciasService distribucionService,
+        IPrestamoService prestamoService,
         ILogger<PagosController> logger)
     {
         _context = context;
         _twilioService = twilioService;
         _distribucionService = distribucionService;
+        _prestamoService = prestamoService;
         _logger = logger;
     }
 
@@ -115,7 +118,8 @@ public class PagosController : ControllerBase
                         }
                         else
                         {
-                            // Recalcular montos de cuotas futuras basado en nuevo capital
+                            
+                            // Recalcular MontoCuota del préstamo para el futuro
                             decimal factorFrecuencia = prestamo.FrecuenciaPago switch
                             {
                                 "Diario" => 1m / 30m,
@@ -124,20 +128,11 @@ public class PagosController : ControllerBase
                                 "Mensual" => 1m,
                                 _ => 1m
                             };
-                            decimal nuevaCuota = Math.Round(prestamo.MontoPrestado * (prestamo.TasaInteres / 100m) * factorFrecuencia, 0);
+                            decimal nuevaCuotaBase = Math.Round(prestamo.MontoPrestado * (prestamo.TasaInteres / 100m) * factorFrecuencia, 0);
+                            prestamo.MontoCuota = nuevaCuotaBase;
                             
-                            // Actualizar cuotas pendientes con el nuevo monto
-                            foreach (var c in prestamo.Cuotas.Where(c => c.EstadoCuota != "Pagada" && c.Id != cuota.Id))
-                            {
-                                c.MontoCuota = nuevaCuota;
-                                c.SaldoPendiente = nuevaCuota - c.MontoPagado;
-                            }
-                            
-                            // Actualizar MontoCuota del préstamo
-                            prestamo.MontoCuota = nuevaCuota;
-                            
-                            _logger.LogInformation("Préstamo congelado #{PrestamoId}: Abono capital ${AbonoCapital}, Nuevo capital ${NuevoCapital}, Nueva cuota ${NuevaCuota}", 
-                                prestamo.Id, abonoCapital, prestamo.MontoPrestado, nuevaCuota);
+                            _logger.LogInformation("Préstamo congelado #{PrestamoId}: Abono capital ${AbonoCapital}, Nuevo capital ${NuevoCapital}, Nueva cuota base ${NuevaCuota}", 
+                                prestamo.Id, abonoCapital, prestamo.MontoPrestado, nuevaCuotaBase);
                         }
                     }
                     
@@ -146,6 +141,13 @@ public class PagosController : ControllerBase
                     cuota.SaldoPendiente = 0;
                     cuota.EstadoCuota = "Pagada";
                     cuota.FechaPago = fechaPagoUtc;
+
+                    // IMPORTANTE: Generar la cuota del PRÓXIMO MES automáticamente
+                    if (prestamo.EstadoPrestamo == "Activo")
+                    {
+                        var nuevaCuotaCongelada = _prestamoService.GenerarSiguienteCuotaCongelada(prestamo, cuota);
+                        _context.CuotasPrestamo.Add(nuevaCuotaCongelada);
+                    }
                 }
                 else
                 {

@@ -1800,7 +1800,9 @@ function App() {
               <div className="detail-grid">
                 <div className="detail-item"><label>Cliente</label><span>{selectedPrestamo.clienteNombre}</span></div>
                 <div className="detail-item"><label>Monto Prestado</label><span>{formatMoney(selectedPrestamo.montoPrestado)}</span></div>
-                <div className="detail-item"><label>Total a Pagar</label><span>{formatMoney(selectedPrestamo.montoTotal)}</span></div>
+                {!selectedPrestamo.esCongelado && (
+                  <div className="detail-item"><label>Total a Pagar</label><span>{formatMoney(selectedPrestamo.montoTotal)}</span></div>
+                )}
                 <div className="detail-item"><label>Interés</label><span style={{ color: '#10b981' }}>{selectedPrestamo.tasaInteres}% ({selectedPrestamo.tipoInteres})</span></div>
                 <div className="detail-item"><label>Frecuencia</label><span className="badge badge-blue">{selectedPrestamo.frecuenciaPago}</span></div>
                 <div className="detail-item"><label>Cuotas</label><span>{selectedPrestamo.cuotasPagadas} / {selectedPrestamo.numeroCuotas}</span></div>
