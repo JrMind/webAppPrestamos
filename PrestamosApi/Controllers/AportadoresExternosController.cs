@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using PrestamosApi.Data;
 using PrestamosApi.DTOs;
 using PrestamosApi.Models;
+using PrestamosApi.Services;
 
 namespace PrestamosApi.Controllers;
 
@@ -13,10 +14,12 @@ namespace PrestamosApi.Controllers;
 public class AportadoresExternosController : ControllerBase
 {
     private readonly PrestamosDbContext _context;
+    private readonly ICierreMesService _cierreMesService;
 
-    public AportadoresExternosController(PrestamosDbContext context)
+    public AportadoresExternosController(PrestamosDbContext context, ICierreMesService cierreMesService)
     {
         _context = context;
+        _cierreMesService = cierreMesService;
     }
 
     [HttpGet]
@@ -111,5 +114,23 @@ public class AportadoresExternosController : ControllerBase
         _context.AportadoresExternos.Remove(aportador);
         await _context.SaveChangesAsync();
         return NoContent();
+    }
+
+    [HttpPost("force-cierre-mes")]
+    public async Task<IActionResult> ForceCierreMes()
+    {
+        try
+        {
+            // Por defecto, trata de cerrar el mes ANTERIOR
+            var now = DateTime.UtcNow;
+            var prevMonth = now.AddMonths(-1);
+            
+            var result = await _cierreMesService.EjecutarCierreMes(prevMonth.Month, prevMonth.Year, force: true);
+            return Ok(new { message = result });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = ex.Message });
+        }
     }
 }

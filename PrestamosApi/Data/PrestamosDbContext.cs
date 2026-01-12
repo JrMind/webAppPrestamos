@@ -5,6 +5,8 @@ namespace PrestamosApi.Data;
 
 public class PrestamosDbContext : DbContext
 {
+    public DbSet<CierreMesLog> CierreMesLogs { get; set; }
+
     public PrestamosDbContext(DbContextOptions<PrestamosDbContext> options) : base(options)
     {
     }

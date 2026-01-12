@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PrestamosApi.Data;
 using PrestamosApi.Services;
+using PrestamosApi.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -65,9 +66,11 @@ builder.Services.AddScoped<IDistribucionGananciasService, DistribucionGananciasS
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IGananciasService, GananciasService>();
 builder.Services.AddScoped<ITwilioService, TwilioService>();
+builder.Services.AddScoped<ICierreMesService, CierreMesService>();
 
-// Background Service para notificaciones
+// Background Services
 builder.Services.AddHostedService<NotificationBackgroundService>();
+builder.Services.AddHostedService<AutomatedCierreWorker>();
 
 // CORS
 builder.Services.AddCors(options =>
