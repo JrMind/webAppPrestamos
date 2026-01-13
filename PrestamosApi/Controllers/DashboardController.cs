@@ -245,8 +245,8 @@ public class DashboardController : ControllerBase
             if (cuota.MontoCuota > 0)
             {
                 // Proporción del pago que corresponde a capital
-                var proporcionCapital = cuota.MontoCapital / cuota.MontoCuota;
-                capitalRecuperadoTotal += cuota.MontoPagado * proporcionCapital;
+                var proporcionCapitalCuota = cuota.MontoCapital / cuota.MontoCuota;
+                capitalRecuperadoTotal += cuota.MontoPagado * proporcionCapitalCuota;
             }
         }
         var capitalInicial = totalPrestado - capitalRecuperadoTotal;
