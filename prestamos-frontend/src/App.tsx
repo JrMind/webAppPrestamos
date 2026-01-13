@@ -1153,7 +1153,7 @@ function App() {
                     <>
                       <h4 style={{ color: '#ef4444', margin: '1rem 0 0.5rem' }}>⚠️ Cuotas Vencidas</h4>
                       <div className="table-container">
-                        <table><thead><tr><th>✓</th><th>Cliente</th><th>Fecha</th><th>Días</th><th>Monto</th><th>Acciones</th></tr></thead>
+                        <table><thead><tr><th>✓</th><th>Cliente</th><th>Fecha</th><th>Días</th><th>Monto</th><th>Cobrador</th><th>Acciones</th></tr></thead>
                           <tbody>{cobrosDelMes.cuotasVencidas.map(c => (
                             <tr key={c.id} style={{ background: 'rgba(239,68,68,0.1)' }}>
                               <td><input type="checkbox" checked={c.cobrado} onChange={e => handleMarcarCobrado(c.id, e.target.checked)} /></td>
@@ -1161,6 +1161,7 @@ function App() {
                               <td style={{ color: '#ef4444' }}>{formatDate(c.fechaCobro)}</td>
                               <td><span className="badge badge-red">{Math.abs(c.diasParaVencer)}d</span></td>
                               <td className="money">{formatMoney(c.saldoPendiente)}</td>
+                              <td>{c.cobradorNombre || '-'}</td>
                               <td>
                                 <div className="actions">
                                   <button className="btn btn-secondary btn-sm" onClick={async () => {
