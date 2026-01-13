@@ -298,6 +298,7 @@ export interface CreateAportadorExternoDto {
   diasParaPago: number;
   notas?: string;
   montoTotalAportado?: number;
+  estado?: string;  // Para updates
 }
 
 // Fuente de Capital para préstamos

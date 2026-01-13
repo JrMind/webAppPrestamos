@@ -64,7 +64,17 @@ function App() {
       if (!editMontoAportado) return;
       // Primero obtener el aportador actual para no perder otros datos
       const aportadorActual = await aportadoresExternosApi.getById(id);
-      await aportadoresExternosApi.update(id, { ...aportadorActual, montoTotalAportado: Number(editMontoAportado) });
+      // Enviar objeto con las propiedades correctas incluyendo estado
+      await aportadoresExternosApi.update(id, {
+        nombre: aportadorActual.nombre,
+        telefono: aportadorActual.telefono,
+        email: aportadorActual.email,
+        tasaInteres: aportadorActual.tasaInteres,
+        diasParaPago: aportadorActual.diasParaPago,
+        estado: aportadorActual.estado,
+        notas: aportadorActual.notas,
+        montoTotalAportado: Number(editMontoAportado)
+      });
       showToast('Capital actualizado', 'success');
       setEditingGananciaAportadorId(null);
       loadResumenParticipacion(); // Recargar datos
@@ -301,7 +311,7 @@ function App() {
         showToast('Aportador creado exitosamente', 'success');
       }
       setShowAportadorModal(false);
-      setAportadorForm({ nombre: '', telefono: '', email: '', tasaInteres: 3, diasParaPago: 30, notas: '', montoTotalAportado: 0 });
+      setAportadorForm({ nombre: '', telefono: '', email: '', tasaInteres: 3, diasParaPago: 30, notas: '', montoTotalAportado: 0, estado: 'Activo' });
       setEditingAportadorId(null);
       loadAportadoresExternos();
     } catch (error: unknown) {
@@ -317,7 +327,8 @@ function App() {
       tasaInteres: aportador.tasaInteres,
       diasParaPago: aportador.diasParaPago,
       notas: aportador.notas || '',
-      montoTotalAportado: aportador.montoTotalAportado
+      montoTotalAportado: aportador.montoTotalAportado,
+      estado: aportador.estado
     });
     setEditingAportadorId(aportador.id);
     setShowAportadorModal(true);
