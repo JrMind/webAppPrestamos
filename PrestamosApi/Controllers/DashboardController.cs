@@ -226,6 +226,16 @@ public class DashboardController : ControllerBase
             ))
             .ToListAsync();
 
+        // Capital Inicial = Total Prestado - (cuotas pagadas - intereses)
+        // Es decir, total prestado - capital recuperado
+        // Usamos la proporción de capital de cada pago para calcular el capital recuperado neto
+        var totalIntereses = await _context.Prestamos.SumAsync(p => (decimal?)p.MontoIntereses) ?? 0;
+        var totalAPagar = await _context.Prestamos.SumAsync(p => p.MontoTotal);
+        var proporcionIntereses = totalAPagar > 0 ? totalIntereses / totalAPagar : 0;
+        var interesesCobrados = totalCobrado * proporcionIntereses;
+        var capitalRecuperadoTotal = totalCobrado - interesesCobrados;
+        var capitalInicial = totalPrestado - capitalRecuperadoTotal;
+
         return Ok(new DashboardMetricasDto(
             totalPrestado,
             totalACobrar,
@@ -246,7 +256,8 @@ public class DashboardController : ControllerBase
             cuotasProximasDetalle,
             totalCobrado,
             dineroCirculando,
-            reservaDisponible
+            reservaDisponible,
+            Math.Round(capitalInicial, 2)
         ));
     }
 }

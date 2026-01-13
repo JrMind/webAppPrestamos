@@ -271,6 +271,7 @@ export interface DashboardMetricas {
   totalCobrado: number;
   dineroCirculando: number;
   reservaDisponible: number;
+  capitalInicial: number;  // Nuevo: suma préstamos - (pagos - intereses)
 }
 
 // Aportador Externo

@@ -916,6 +916,11 @@ function App() {
 
         {/* Flujo de Capital */}
         <div className="kpi-grid" style={{ marginTop: '1rem' }}>
+          <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b', background: 'linear-gradient(135deg, rgba(245,158,11,0.1) 0%, transparent 100%)' }}>
+            <div className="kpi-header"><span className="kpi-title">💰 Capital Inicial</span></div>
+            <span className="kpi-value" style={{ color: '#f59e0b' }}>{formatMoney(metricas?.capitalInicial || 0)}</span>
+            <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Capital aún en circulación</span>
+          </div>
           <div className="kpi-card" style={{ borderLeft: '4px solid #10b981', background: 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, transparent 100%)' }}>
             <div className="kpi-header"><span className="kpi-title">🏦 Reserva Disponible</span></div>
             <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(metricas?.reservaDisponible || 0)}</span>

@@ -162,7 +162,8 @@ public record DashboardMetricasDto(
     // Flujo de Capital
     decimal TotalCobrado = 0,
     decimal DineroCirculando = 0,
-    decimal ReservaDisponible = 0
+    decimal ReservaDisponible = 0,
+    decimal CapitalInicial = 0   // Nuevo: suma prestamos - (pagos - intereses)
 );
 
 public record EvolucionPrestamosDto(
