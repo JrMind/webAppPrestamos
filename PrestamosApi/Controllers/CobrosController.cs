@@ -135,6 +135,7 @@ public class CobrosController : BaseApiController
         {
             cuota.FechaPago = DateTime.UtcNow;
             cuota.MontoPagado = cuota.MontoCuota; // Asumir pago completo por defecto al marcar
+            cuota.SaldoPendiente = 0; // CRÍTICO: Poner en 0 para que la reserva se actualice
             cuota.EstadoCuota = "Pagada";
             
             // Distribuir ganancias automáticamente
