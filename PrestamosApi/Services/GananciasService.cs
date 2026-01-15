@@ -38,14 +38,20 @@ public class GananciasService : IGananciasService
 
     public async Task<decimal> CalcularReservaDisponibleAsync()
     {
-        // Capital Total = Aportes Iniciales + Capital Reinvertido (Ganancias)
-        var capitalTotal = await _context.Aportes.SumAsync(a => a.MontoInicial);
+        // 1. Capital de socios (aportes iniciales)
+        var capitalSocios = await _context.Aportes.SumAsync(a => a.MontoInicial);
+        
+        // 2. Capital de aportadores externos
+        var capitalAportadoresExternos = await _context.AportadoresExternos
+            .Where(a => a.Estado == "Activo")
+            .SumAsync(a => a.MontoTotalAportado);
+        
+        // 3. Capital reinvertido (ganancias de socios acumuladas)
         var capitalReinvertido = await _context.Usuarios
             .Where(u => u.Activo && u.Rol == RolUsuario.Socio)
             .SumAsync(u => u.CapitalActual);
         
-        // Capital en la calle = Suma de capital pendiente de préstamos activos
-        // Lo calculamos basándonos en las cuotas para mayor precisión con pagos parciales
+        // 4. Capital en la calle (pendiente de cobrar en préstamos activos)
         var prestamosActivos = await _context.Prestamos
             .Include(p => p.Cuotas)
             .Where(p => p.EstadoPrestamo == "Activo")
@@ -56,10 +62,6 @@ public class GananciasService : IGananciasService
         {
             if (prestamo.Cuotas.Any())
             {
-                // Estrategia: Sumar el capital original de todas las cuotas y restar la parte de capital de lo pagado
-                // O más simple: Sumar SaldoPendiente * ProporciónCapital de cada cuota
-                // Pero SaldoPendiente incluye interés.
-                
                 foreach (var cuota in prestamo.Cuotas)
                 {
                     if (cuota.MontoCuota > 0) 
@@ -68,20 +70,20 @@ public class GananciasService : IGananciasService
                         var ratioCapital = cuota.MontoCapital / cuota.MontoCuota;
                         
                         // Capital pendiente = Saldo pendiente de la cuota * ratio de capital
-                        // (SaldoPendiente es el monto total que falta por pagar de la cuota)
                         capitalEnCalle += cuota.SaldoPendiente * ratioCapital;
                     }
                 }
             }
             else
             {
-                // Fallback si no tiene cuotas generadas (raro en activo)
+                // Fallback si no tiene cuotas generadas
                 capitalEnCalle += prestamo.MontoPrestado;
             }
         }
         
-        // Reserva Disponible = (Capital Total + Ganancias Reinvertidas) - Capital en Calle
-        return capitalTotal + capitalReinvertido - capitalEnCalle;
+        // Fórmula completa de Reserva Disponible:
+        // = (Capital Socios + Capital Externos + Ganancias Reinvertidas) - Capital En Calle
+        return capitalSocios + capitalAportadoresExternos + capitalReinvertido - capitalEnCalle;
     }
 
     public async Task AplicarInteresMensualAsync()

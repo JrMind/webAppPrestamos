@@ -33,16 +33,21 @@ public class AdminController : ControllerBase
     public async Task<IActionResult> DiagnosticoCapital()
     {
         // 1. Aportes iniciales de socios
-        var aportesIniciales = await _context.Aportes.SumAsync(a => a.MontoInicial);
+        var aportesSocios = await _context.Aportes.SumAsync(a => a.MontoInicial);
         
-        // 2. Capital reinvertido (ganancias acumuladas en CapitalActual)
+        // 2. Capital de aportadores externos
+        var capitalAportadoresExternos = await _context.AportadoresExternos
+            .Where(a => a.Estado == "Activo")
+            .SumAsync(a => a.MontoTotalAportado);
+        
+        // 3. Capital reinvertido (ganancias acumuladas en CapitalActual)
         var socios = await _context.Usuarios
             .Where(u => u.Activo && u.Rol == RolUsuario.Socio)
             .ToListAsync();
         
         var capitalReinvertido = socios.Sum(s => s.CapitalActual);
         
-        // 3. Capital en préstamos activos (pendiente de cobrar)
+        // 4. Capital en préstamos activos (pendiente de cobrar)
         var prestamosActivos = await _context.Prestamos
             .Include(p => p.Cuotas)
             .Where(p => p.EstadoPrestamo == "Activo")
@@ -61,10 +66,10 @@ public class AdminController : ControllerBase
             }
         }
         
-        // 4. Calcular reserva disponible
-        var reservaDisponible = aportesIniciales + capitalReinvertido - capitalEnCalle;
+        // 5. Calcular reserva disponible
+        var reservaDisponible = aportesSocios + capitalAportadoresExternos + capitalReinvertido - capitalEnCalle;
         
-        // 5. Detalles por socio
+        // 6. Detalles por socio
         var detallesSocios = socios.Select(s => new
         {
             s.Id,
@@ -80,11 +85,13 @@ public class AdminController : ControllerBase
         {
             resumen = new
             {
-                aportesIniciales,
+                aportesSocios,
+                capitalAportadoresExternos,
                 capitalReinvertido,
+                capitalTotal = aportesSocios + capitalAportadoresExternos + capitalReinvertido,
                 capitalEnCalle,
                 reservaDisponible,
-                formula = "Reserva = Aportes Iniciales + Capital Reinvertido - Capital En Calle"
+                formula = "Reserva = Aportes Socios + Capital Externos + Capital Reinvertido - Capital En Calle"
             },
             socios = detallesSocios,
             prestamosActivos = new
