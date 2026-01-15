@@ -315,6 +315,38 @@ public class PrestamosController : BaseApiController
         _context.Prestamos.Add(prestamo);
         await _context.SaveChangesAsync();
 
+        // ASIGNACIÓN AUTOMÁTICA DE FUENTE DE CAPITAL
+        // Calcular reserva disponible
+        var reservaDisponible = await _gananciasService.CalcularReservaDisponibleAsync();
+        
+        if (dto.MontoPrestado <= reservaDisponible)
+        {
+            // Hay suficiente reserva - crear fuente automáticamente
+            var fuenteCapital = new FuenteCapitalPrestamo
+            {
+                PrestamoId = prestamo.Id,
+                Tipo = "Reserva",
+                UsuarioId = null,
+                AportadorExternoId = null,
+                MontoAportado = dto.MontoPrestado,
+                FechaRegistro = DateTime.UtcNow
+            };
+            _context.FuentesCapitalPrestamo.Add(fuenteCapital);
+            await _context.SaveChangesAsync();
+        }
+        else
+        {
+            // Reserva insuficiente - eliminar préstamo y retornar error
+            _context.Prestamos.Remove(prestamo);
+            await _context.SaveChangesAsync();
+            return BadRequest(new 
+            { 
+                message = $"Reserva insuficiente. Disponible: ${reservaDisponible:N0}, Necesario: ${dto.MontoPrestado:N0}. Debe usar el endpoint CreatePrestamoConFuentes para especificar fuentes de capital manualmente.",
+                reservaDisponible = reservaDisponible,
+                montoRequerido = dto.MontoPrestado
+            });
+        }
+
         // Generar cuotas (Fecha del préstamo se usa como fecha base para primera cuota)
         var cuotas = _prestamoService.GenerarCuotas(prestamo, fechaPrestamoUtc);
         _context.CuotasPrestamo.AddRange(cuotas);

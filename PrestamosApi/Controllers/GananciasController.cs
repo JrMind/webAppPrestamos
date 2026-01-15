@@ -183,7 +183,7 @@ public class GananciasController : ControllerBase
             s.Id,
             s.Nombre,
             CapitalAportado = s.Aportes.Sum(a => a.MontoInicial),
-            CapitalActual = s.Aportes.Sum(a => a.MontoActual),
+            CapitalActual = s.Aportes.Sum(a => a.MontoActual) + s.CapitalActual,
             Porcentaje = 100m / NUM_SOCIOS, // 33.33% cada uno
             
             // Total del MES = Solo Interés neto (Ganancia real)

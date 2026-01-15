@@ -7,6 +7,7 @@ namespace PrestamosApi.Services;
 public interface IGananciasService
 {
     Task<decimal> CalcularCapitalActualAsync(int usuarioId);
+    Task<decimal> CalcularReservaDisponibleAsync();
     Task AplicarInteresMensualAsync();
     Task<IEnumerable<object>> ObtenerBalanceSociosAsync();
     Task RegistrarAporteAsync(int usuarioId, decimal monto, string? descripcion);
@@ -28,7 +29,28 @@ public class GananciasService : IGananciasService
         var aportes = await _context.Aportes
             .Where(a => a.UsuarioId == usuarioId)
             .SumAsync(a => a.MontoActual);
-        return aportes;
+            
+        var usuario = await _context.Usuarios.FindAsync(usuarioId);
+        var capitalReinvertido = usuario?.CapitalActual ?? 0;
+            
+        return aportes + capitalReinvertido;
+    }
+
+    public async Task<decimal> CalcularReservaDisponibleAsync()
+    {
+        // Capital Total = Aportes Iniciales + Capital Reinvertido (Ganancias)
+        var capitalTotal = await _context.Aportes.SumAsync(a => a.MontoInicial);
+        var capitalReinvertido = await _context.Usuarios
+            .Where(u => u.Activo && u.Rol == RolUsuario.Socio)
+            .SumAsync(u => u.CapitalActual);
+        
+        // Capital en la calle = Suma de MontoPrestado de préstamos activos
+        var capitalEnCalle = await _context.Prestamos
+            .Where(p => p.EstadoPrestamo == "Activo")
+            .SumAsync(p => p.MontoPrestado);
+        
+        // Reserva Disponible = (Capital Total + Ganancias Reinvertidas) - Capital en Calle
+        return capitalTotal + capitalReinvertido - capitalEnCalle;
     }
 
     public async Task AplicarInteresMensualAsync()
@@ -146,6 +168,18 @@ public class GananciasService : IGananciasService
             {
                 montoRestante -= aporte.MontoActual;
                 aporte.MontoActual = 0;
+            }
+        }
+
+        // Si aún queda monto por retirar, descontar del capital reinvertido (ganancias acumuladas)
+        if (montoRestante > 0)
+        {
+            var usuario = await _context.Usuarios.FindAsync(usuarioId);
+            if (usuario != null)
+            {
+                usuario.CapitalActual -= montoRestante;
+                // Si por alguna razón queda negativo (no debería por la validación inicial), ajustamos a 0
+                if (usuario.CapitalActual < 0) usuario.CapitalActual = 0;
             }
         }
 

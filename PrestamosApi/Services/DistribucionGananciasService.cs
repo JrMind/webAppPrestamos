@@ -104,6 +104,7 @@ public class DistribucionGananciasService : IDistribucionGananciasService
                 if (socio != null)
                 {
                     socio.GananciasAcumuladas += gananciaFuente;
+                    socio.CapitalActual += gananciaFuente; // Reinversión automática (Interés Compuesto)
                 }
             }
             else if (fuente.Tipo == "Externo" && fuente.AportadorExternoId.HasValue)
@@ -123,7 +124,38 @@ public class DistribucionGananciasService : IDistribucionGananciasService
                     }
                 }
             }
-            // Tipo "Reserva" - las ganancias se quedan en el pool (no requiere acción específica)
+            else if (fuente.Tipo == "Reserva")
+            {
+                // Tipo "Reserva" - distribuir equitativamente entre los socios activos
+                var socios = await _context.Usuarios
+                    .Where(u => u.Activo && u.Rol == RolUsuario.Socio)
+                    .ToListAsync();
+                
+                if (socios.Count > 0)
+                {
+                    var numSocios = socios.Count;
+                    var gananciaPorSocio = gananciaFuente / numSocios;
+                    
+                    foreach (var socio in socios)
+                    {
+                        // Registrar distribución
+                        var distribucion = new DistribucionGanancia
+                        {
+                            PrestamoId = prestamoId,
+                            UsuarioId = socio.Id,
+                            PorcentajeAsignado = (100m / numSocios),
+                            MontoGanancia = gananciaPorSocio,
+                            FechaDistribucion = DateTime.UtcNow,
+                            Liquidado = false
+                        };
+                        _context.DistribucionesGanancia.Add(distribucion);
+                        
+                        // Actualizar ganancias acumuladas y capital reinvertido
+                        socio.GananciasAcumuladas += gananciaPorSocio;
+                        socio.CapitalActual += gananciaPorSocio;
+                    }
+                }
+            }
         }
 
         await _context.SaveChangesAsync();
