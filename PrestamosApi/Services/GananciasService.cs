@@ -44,10 +44,41 @@ public class GananciasService : IGananciasService
             .Where(u => u.Activo && u.Rol == RolUsuario.Socio)
             .SumAsync(u => u.CapitalActual);
         
-        // Capital en la calle = Suma de MontoPrestado de préstamos activos
-        var capitalEnCalle = await _context.Prestamos
+        // Capital en la calle = Suma de capital pendiente de préstamos activos
+        // Lo calculamos basándonos en las cuotas para mayor precisión con pagos parciales
+        var prestamosActivos = await _context.Prestamos
+            .Include(p => p.Cuotas)
             .Where(p => p.EstadoPrestamo == "Activo")
-            .SumAsync(p => p.MontoPrestado);
+            .ToListAsync();
+            
+        decimal capitalEnCalle = 0;
+        foreach (var prestamo in prestamosActivos)
+        {
+            if (prestamo.Cuotas.Any())
+            {
+                // Estrategia: Sumar el capital original de todas las cuotas y restar la parte de capital de lo pagado
+                // O más simple: Sumar SaldoPendiente * ProporciónCapital de cada cuota
+                // Pero SaldoPendiente incluye interés.
+                
+                foreach (var cuota in prestamo.Cuotas)
+                {
+                    if (cuota.MontoCuota > 0) 
+                    {
+                        // Proporción de capital en esta cuota específica
+                        var ratioCapital = cuota.MontoCapital / cuota.MontoCuota;
+                        
+                        // Capital pendiente = Saldo pendiente de la cuota * ratio de capital
+                        // (SaldoPendiente es el monto total que falta por pagar de la cuota)
+                        capitalEnCalle += cuota.SaldoPendiente * ratioCapital;
+                    }
+                }
+            }
+            else
+            {
+                // Fallback si no tiene cuotas generadas (raro en activo)
+                capitalEnCalle += prestamo.MontoPrestado;
+            }
+        }
         
         // Reserva Disponible = (Capital Total + Ganancias Reinvertidas) - Capital en Calle
         return capitalTotal + capitalReinvertido - capitalEnCalle;
