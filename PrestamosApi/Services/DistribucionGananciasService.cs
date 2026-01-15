@@ -124,7 +124,7 @@ public class DistribucionGananciasService : IDistribucionGananciasService
                     }
                 }
             }
-            else if (fuente.Tipo == "Reserva")
+            else if (fuente.Tipo == "Reserva" || (fuente.Tipo == "Interno" && !fuente.UsuarioId.HasValue))
             {
                 // Tipo "Reserva" - distribuir equitativamente entre los socios activos
                 var socios = await _context.Usuarios
