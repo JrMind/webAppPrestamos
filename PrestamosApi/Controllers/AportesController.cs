@@ -94,6 +94,9 @@ public class AportesController : ControllerBase
         return Ok(new { message = "Retiro registrado exitosamente" });
     }
 
+    [HttpPost("aplicar-interes")]
+    public async Task<IActionResult> AplicarInteresMensual()
+    {
         await _gananciasService.AplicarInteresMensualAsync();
         return Ok(new { message = "Interés mensual aplicado exitosamente" });
     }
