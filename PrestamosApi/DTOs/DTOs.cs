@@ -285,3 +285,38 @@ public record BalanceCapitalDto(
     List<AportadorExternoDto> AportadoresExternos
 );
 
+// Ganancia de socio por préstamo (para mostrar en detalle de préstamo)
+public record GananciaSocioPrestamoDto(
+    int SocioId,
+    string NombreSocio,
+    decimal GananciaAcumulada,    // Cuotas ya pagadas
+    decimal GananciaProyectada    // Total al finalizar préstamo
+);
+
+// Costos operativos DTOs
+public record CostoDto(
+    int Id,
+    string Nombre,
+    decimal Monto,
+    string Frecuencia,
+    string? Descripcion,
+    bool Activo,
+    DateTime FechaCreacion,
+    DateTime? FechaFin
+);
+
+public record CreateCostoDto(
+    string Nombre,
+    decimal Monto,
+    string Frecuencia,
+    string? Descripcion
+);
+
+public record UpdateCostoDto(
+    string Nombre,
+    decimal Monto,
+    string Frecuencia,
+    string? Descripcion,
+    bool Activo,
+    DateTime? FechaFin
+);

@@ -24,6 +24,7 @@ public class PrestamosDbContext : DbContext
     public DbSet<PagoAportadorExterno> PagosAportadoresExternos => Set<PagoAportadorExterno>();
     public DbSet<SmsCampaign> SmsCampaigns => Set<SmsCampaign>();
     public DbSet<SmsHistory> SmsHistories => Set<SmsHistory>();
+    public DbSet<Costo> Costos => Set<Costo>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -337,6 +338,20 @@ public class PrestamosDbContext : DbContext
 
             entity.HasIndex(e => e.SmsCampaignId).HasDatabaseName("idx_smshistory_campaign");
             entity.HasIndex(e => e.FechaEnvio).HasDatabaseName("idx_smshistory_fecha");
+        });
+
+        // Costo (Gastos operativos)
+        modelBuilder.Entity<Costo>(entity =>
+        {
+            entity.ToTable("costos");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Nombre).HasColumnName("nombre").HasMaxLength(255).IsRequired();
+            entity.Property(e => e.Monto).HasColumnName("monto").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Frecuencia).HasColumnName("frecuencia").HasMaxLength(20).HasDefaultValue("Mensual");
+            entity.Property(e => e.Descripcion).HasColumnName("descripcion");
+            entity.Property(e => e.Activo).HasColumnName("activo").HasDefaultValue(true);
+            entity.Property(e => e.FechaCreacion).HasColumnName("fechacreacion").HasDefaultValueSql("NOW()");
+            entity.Property(e => e.FechaFin).HasColumnName("fechafin");
         });
     }
 }

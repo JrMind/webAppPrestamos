@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, miBalanceApi, gananciasApi, ResumenParticipacion } from './api';
-import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MiBalance } from './types';
+import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi } from './api';
+import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MiBalance, Costo, CreateCostoDto } from './types';
 import './App.css';
 
 const formatMoney = (amount: number): string => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount);
@@ -54,6 +54,17 @@ function App() {
   const [editingGananciaAportadorId, setEditingGananciaAportadorId] = useState<number | null>(null);
   const [editMontoAportado, setEditMontoAportado] = useState<string>('');
 
+  // Estados para Costos Operativos
+  const [costos, setCostos] = useState<Costo[]>([]);
+  const [showCostoModal, setShowCostoModal] = useState(false);
+  const [editingCostoId, setEditingCostoId] = useState<number | null>(null);
+  const [costoForm, setCostoForm] = useState<CreateCostoDto>({
+    nombre: '',
+    monto: 0,
+    frecuencia: 'Mensual',
+    descripcion: ''
+  });
+
   const handleStartEditGananciaAportador = (id: number, currentMonto: number) => {
     setEditingGananciaAportadorId(id);
     setEditMontoAportado(currentMonto.toString());
@@ -81,6 +92,88 @@ function App() {
     } catch (error) {
       showToast('Error al actualizar', 'error');
       console.error(error);
+    }
+  };
+
+  // Handlers para Costos Operativos
+  const loadCostos = async () => {
+    try {
+      const data = await costosApi.getAll();
+      setCostos(data);
+    } catch (error) {
+      console.error('Error cargando costos:', error);
+    }
+  };
+
+  const handleOpenCostoModal = (costo?: Costo) => {
+    if (costo) {
+      setEditingCostoId(costo.id);
+      setCostoForm({
+        nombre: costo.nombre,
+        monto: costo.monto,
+        frecuencia: costo.frecuencia,
+        descripcion: costo.descripcion || ''
+      });
+    } else {
+      setEditingCostoId(null);
+      setCostoForm({ nombre: '', monto: 0, frecuencia: 'Mensual', descripcion: '' });
+    }
+    setShowCostoModal(true);
+  };
+
+  const handleSaveCosto = async () => {
+    try {
+      if (!costoForm.nombre || costoForm.monto <= 0) {
+        showToast('Complete nombre y monto', 'error');
+        return;
+      }
+      if (editingCostoId) {
+        await costosApi.update(editingCostoId, {
+          ...costoForm,
+          activo: true,
+          fechaFin: undefined
+        });
+        showToast('Costo actualizado', 'success');
+      } else {
+        await costosApi.create(costoForm);
+        showToast('Costo creado', 'success');
+      }
+      setShowCostoModal(false);
+      loadCostos();
+      loadResumenParticipacion();
+    } catch (error) {
+      showToast('Error al guardar costo', 'error');
+      console.error(error);
+    }
+  };
+
+  const handleDeleteCosto = async (id: number) => {
+    if (!window.confirm('¿Eliminar este costo?')) return;
+    try {
+      await costosApi.delete(id);
+      showToast('Costo eliminado', 'success');
+      loadCostos();
+      loadResumenParticipacion();
+    } catch (error) {
+      showToast('Error al eliminar', 'error');
+    }
+  };
+
+  const handleToggleCostoActivo = async (costo: Costo) => {
+    try {
+      await costosApi.update(costo.id, {
+        nombre: costo.nombre,
+        monto: costo.monto,
+        frecuencia: costo.frecuencia,
+        descripcion: costo.descripcion,
+        activo: !costo.activo,
+        fechaFin: !costo.activo ? undefined : new Date().toISOString()
+      });
+      showToast(costo.activo ? 'Costo desactivado' : 'Costo activado', 'success');
+      loadCostos();
+      loadResumenParticipacion();
+    } catch (error) {
+      showToast('Error al cambiar estado', 'error');
     }
   };
 
@@ -993,7 +1086,7 @@ function App() {
             <button className={`tab ${activeTab === 'smshistory' ? 'active' : ''}`} onClick={() => setActiveTab('smshistory')}>📨 Historial</button>
             {currentUser?.rol === 'Socio' && <button className={`tab ${activeTab === 'usuarios' ? 'active' : ''}`} onClick={() => setActiveTab('usuarios')}>👤 Usuarios</button>}
             <button className={`tab ${activeTab === 'aportadores' ? 'active' : ''}`} onClick={() => setActiveTab('aportadores')}>Aportadores</button>
-            <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); }}>📊 Ganancias</button>
+            <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); loadCostos(); }}>📊 Ganancias</button>
           </div>
 
           {/* Prestamos Tab */}
@@ -1422,7 +1515,18 @@ function App() {
                   <span className="kpi-value" style={{ color: '#ec4899' }}>{formatMoney(resumenParticipacion.resumen.gastoMensualAportadores)}</span>
                   <span className="kpi-sub">Obligación Mensual Fija</span>
                 </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #ef4444' }}>
+                  <span className="kpi-title">📋 Costos Operativos Mes</span>
+                  <span className="kpi-value" style={{ color: '#ef4444' }}>{formatMoney(resumenParticipacion.resumen.costosTotalesMes || 0)}</span>
+                  <span className="kpi-sub">Salarios, cuotas, etc.</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #22c55e', background: 'rgba(34, 197, 94, 0.1)' }}>
+                  <span className="kpi-title">✨ Ganancia Interés Neta</span>
+                  <span className="kpi-value" style={{ color: '#22c55e', fontSize: '1.5rem' }}>{formatMoney(resumenParticipacion.resumen.gananciaInteresNeta || 0)}</span>
+                  <span className="kpi-sub">Interés - Cobradores - Aportadores - Costos</span>
+                </div>
               </div>
+
 
               {/* Aportadores Externos */}
               <h4 style={{ margin: '1.5rem 0 0.5rem' }}>💵 Aportadores Externos ({resumenParticipacion.aportadores.length})</h4>
@@ -1509,8 +1613,71 @@ function App() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Costos Operativos */}
+              <h4 style={{ margin: '1.5rem 0 0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>📋 Costos Operativos ({costos.length})</span>
+                <button onClick={() => handleOpenCostoModal()} className="btn btn-primary" style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}>
+                  + Nuevo Costo
+                </button>
+              </h4>
+              <div className="table-container" style={{ marginBottom: '1.5rem' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Nombre</th>
+                      <th>Monto</th>
+                      <th>Frecuencia</th>
+                      <th>Descripción</th>
+                      <th>Estado</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {costos.map(c => (
+                      <tr key={c.id} style={{ opacity: c.activo ? 1 : 0.5 }}>
+                        <td><strong>{c.nombre}</strong></td>
+                        <td className="money" style={{ color: '#ef4444' }}>{formatMoney(c.monto)}</td>
+                        <td>
+                          <span className="badge" style={{
+                            background: c.frecuencia === 'Mensual' ? '#3b82f6' : c.frecuencia === 'Quincenal' ? '#8b5cf6' : '#6b7280',
+                            color: 'white',
+                            fontSize: '0.75rem'
+                          }}>
+                            {c.frecuencia}
+                          </span>
+                        </td>
+                        <td style={{ fontSize: '0.85rem', color: '#888' }}>{c.descripcion || '-'}</td>
+                        <td>
+                          <button
+                            onClick={() => handleToggleCostoActivo(c)}
+                            className="btn btn-sm"
+                            style={{
+                              fontSize: '0.7rem',
+                              padding: '0.25rem 0.5rem',
+                              background: c.activo ? '#10b981' : '#6b7280',
+                              color: 'white',
+                              border: 'none'
+                            }}
+                          >
+                            {c.activo ? '✓ Activo' : '✗ Inactivo'}
+                          </button>
+                        </td>
+                        <td>
+                          <div style={{ display: 'flex', gap: '0.5rem' }}>
+                            <button onClick={() => handleOpenCostoModal(c)} className="btn btn-sm" style={{ fontSize: '0.75rem' }}>✏️</button>
+                            <button onClick={() => handleDeleteCosto(c.id)} className="btn btn-sm btn-delete" style={{ fontSize: '0.75rem' }}>🗑️</button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                    {costos.length === 0 && <tr><td colSpan={6} className="empty-state">No hay costos registrados. Haz clic en "+ Nuevo Costo" para agregar uno.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
+
         </div>
       </main>
 
@@ -1870,47 +2037,74 @@ function App() {
                     const capitalPorCuota = selectedPrestamo.montoPrestado / (selectedPrestamo.numeroCuotas || 1);
                     const interesPorCuota = selectedPrestamo.montoCuota - capitalPorCuota;
 
-                    const capitalPagado = capitalPorCuota * selectedPrestamo.cuotasPagadas;
                     const interesPagado = interesPorCuota * selectedPrestamo.cuotasPagadas;
 
-                    // Calcular duración en meses para costos mensuales
-                    let mesesDuracion = 1;
-                    if (selectedPrestamo.frecuenciaPago === 'Mensual') mesesDuracion = selectedPrestamo.numeroCuotas;
-                    else if (selectedPrestamo.frecuenciaPago === 'Quincenal') mesesDuracion = selectedPrestamo.numeroCuotas / 2;
-                    else if (selectedPrestamo.frecuenciaPago === 'Semanal') mesesDuracion = selectedPrestamo.numeroCuotas / 4;
-                    else if (selectedPrestamo.frecuenciaPago === 'Diario') mesesDuracion = selectedPrestamo.numeroCuotas / 30;
-
-                    // Costos Mensuales multiplicados por duración
-                    const costoAportadores = (selectedPrestamo.montoPrestado * 0.03) * mesesDuracion;
-                    const costoCobrador = selectedPrestamo.cobradorNombre && selectedPrestamo.porcentajeCobrador
-                      ? (selectedPrestamo.montoPrestado * (selectedPrestamo.porcentajeCobrador / 100)) * mesesDuracion
+                    // Factor para calcular ganancia del cobrador
+                    const factorCobrador = selectedPrestamo.cobradorNombre && selectedPrestamo.porcentajeCobrador > 0 && selectedPrestamo.tasaInteres > 0
+                      ? selectedPrestamo.porcentajeCobrador / selectedPrestamo.tasaInteres
                       : 0;
 
-                    const gananciaInteresNeta = selectedPrestamo.montoIntereses - costoAportadores - costoCobrador;
+                    const gananciaCobrador = interesPagado * factorCobrador;
+                    const gananciaCobradorProyectada = selectedPrestamo.montoIntereses * factorCobrador;
+
+                    // Interés neto para socios (acumulado y proyectado)
+                    const interesNetoAcumulado = interesPagado - gananciaCobrador;
+                    const interesNetoProyectado = selectedPrestamo.montoIntereses - gananciaCobradorProyectada;
+
+                    const gananciaPorSocioAcumulada = interesNetoAcumulado / 3;
+                    const gananciaPorSocioProyectada = interesNetoProyectado / 3;
+
+                    // Progreso (porcentaje completado)
+                    const progreso = gananciaPorSocioProyectada > 0 ? (gananciaPorSocioAcumulada / gananciaPorSocioProyectada) * 100 : 0;
+
+                    const socios = ['Jorge Gutierrez', 'Jair Restrepo', 'Jeisson Restrepo'];
 
                     return (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem' }}>
-                        <div>
-                          <label style={{ fontSize: '0.75rem', color: '#888' }}>Ganancia Interés Neta</label>
-                          <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#10b981' }} title={`Interés Total (${formatMoney(selectedPrestamo.montoIntereses)}) - Costos (${formatMoney(costoAportadores + costoCobrador)})`}>
-                            {formatMoney(gananciaInteresNeta)}
+                      <>
+                        {/* Tarjetas de los 3 socios */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '1rem' }}>
+                          {socios.map((socio, idx) => (
+                            <div key={idx} style={{ background: 'rgba(255,255,255,0.1)', padding: '0.75rem', borderRadius: '8px', textAlign: 'center' }}>
+                              <div style={{ fontWeight: 'bold', marginBottom: '0.5rem', fontSize: '0.85rem' }}>{socio}</div>
+                              <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#10b981' }}>
+                                {formatMoney(gananciaPorSocioAcumulada)}
+                              </div>
+                              <div style={{ fontSize: '0.7rem', color: '#888', marginTop: '0.25rem' }}>
+                                de {formatMoney(gananciaPorSocioProyectada)}
+                              </div>
+                              {/* Barra de progreso */}
+                              <div style={{ height: '4px', background: '#333', borderRadius: '2px', marginTop: '0.5rem', overflow: 'hidden' }}>
+                                <div style={{
+                                  height: '100%',
+                                  width: `${Math.min(progreso, 100)}%`,
+                                  background: 'linear-gradient(90deg, #10b981, #34d399)',
+                                  borderRadius: '2px',
+                                  transition: 'width 0.3s ease'
+                                }} />
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                        {/* Resumen */}
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.1)' }}>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: '#888' }}>Interés Total Acumulado</label>
+                            <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#3b82f6' }}>{formatMoney(interesPagado)}</div>
                           </div>
-                          <span style={{ fontSize: '0.65rem', color: '#666' }}>Interés - Costos ({parseFloat(mesesDuracion.toFixed(1))} meses)</span>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: '#888' }}>Ganancia Cobrador ({selectedPrestamo.porcentajeCobrador || 0}%)</label>
+                            <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#f59e0b' }}>{formatMoney(gananciaCobrador)}</div>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: '#888' }}>Interés Neto Socios</label>
+                            <div style={{ fontSize: '1rem', fontWeight: 'bold', color: '#10b981' }}>{formatMoney(interesNetoAcumulado)}</div>
+                          </div>
                         </div>
-                        <div>
-                          <label style={{ fontSize: '0.75rem', color: '#888' }}>Capital Pagado</label>
-                          <div style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{formatMoney(capitalPagado)}</div>
-                          <span style={{ fontSize: '0.65rem', color: '#666' }}>(Cap/Cuota * Pagadas)</span>
-                        </div>
-                        <div>
-                          <label style={{ fontSize: '0.75rem', color: '#888' }}>Interés Pagado</label>
-                          <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#3b82f6' }}>{formatMoney(interesPagado)}</div>
-                          <span style={{ fontSize: '0.65rem', color: '#666' }}>(Int/Cuota * Pagadas)</span>
-                        </div>
-                      </div>
+                      </>
                     );
                   })()}
                 </div>
+
 
                 {selectedPrestamo.esCongelado && (
                   <div className="detail-item" style={{ gridColumn: '1 / -1' }}>
@@ -2179,6 +2373,70 @@ function App() {
               </div>
               <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowPasswordModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">Guardar</button></div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Costo Modal */}
+      {showCostoModal && (
+        <div className="modal-overlay" onClick={() => setShowCostoModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="modal-header">
+              <h2>{editingCostoId ? '✏️ Editar Costo' : '➕ Nuevo Costo Operativo'}</h2>
+              <button className="modal-close" onClick={() => setShowCostoModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Nombre *</label>
+                <input
+                  type="text"
+                  required
+                  value={costoForm.nombre}
+                  onChange={e => setCostoForm({ ...costoForm, nombre: e.target.value })}
+                  placeholder="Ej: Salario Cobrador Juan"
+                />
+              </div>
+              <div className="form-row">
+                <div className="form-group">
+                  <label>Monto *</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={costoForm.monto || ''}
+                    onChange={e => setCostoForm({ ...costoForm, monto: Number(e.target.value) })}
+                    placeholder="500000"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Frecuencia</label>
+                  <select
+                    value={costoForm.frecuencia}
+                    onChange={e => setCostoForm({ ...costoForm, frecuencia: e.target.value })}
+                  >
+                    <option value="Mensual">Mensual</option>
+                    <option value="Quincenal">Quincenal</option>
+                    <option value="Único">Único</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Descripción</label>
+                <textarea
+                  value={costoForm.descripcion || ''}
+                  onChange={e => setCostoForm({ ...costoForm, descripcion: e.target.value })}
+                  placeholder="Descripción opcional del costo..."
+                  rows={2}
+                  style={{ width: '100%', padding: '0.5rem', borderRadius: '4px', border: '1px solid #333', background: '#1a1a1a', color: 'white' }}
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowCostoModal(false)}>Cancelar</button>
+              <button type="button" className="btn btn-primary" onClick={handleSaveCosto}>
+                {editingCostoId ? 'Guardar Cambios' : 'Crear Costo'}
+              </button>
+            </div>
           </div>
         </div>
       )}

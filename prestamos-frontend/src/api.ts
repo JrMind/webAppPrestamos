@@ -627,6 +627,8 @@ export interface ResumenParticipacion {
         totalGananciaCobradores: number;
         totalGananciaSociosBruta: number;
         gastoMensualAportadores: number;
+        costosTotalesMes: number;           // Nuevo: Costos operativos
+        gananciaInteresNeta: number;        // Nuevo: Intereses - Cobradores - Aportadores - Costos
         sumaPartes: number;
         diferencia: number;
     };
@@ -636,5 +638,59 @@ export const gananciasApi = {
     getResumenParticipacion: async (): Promise<ResumenParticipacion> => {
         const response = await fetch(`${API_URL}/ganancias/resumen-participacion`, { headers: getHeaders() });
         return handleResponse<ResumenParticipacion>(response);
+    },
+};
+
+// Costos Operativos
+import type { Costo, CreateCostoDto, UpdateCostoDto, PrestamoConGanancias } from './types';
+
+export const costosApi = {
+    getAll: async (): Promise<Costo[]> => {
+        const response = await fetch(`${API_URL}/costos`, { headers: getHeaders() });
+        return handleResponse<Costo[]>(response);
+    },
+
+    getById: async (id: number): Promise<Costo> => {
+        const response = await fetch(`${API_URL}/costos/${id}`, { headers: getHeaders() });
+        return handleResponse<Costo>(response);
+    },
+
+    create: async (data: CreateCostoDto): Promise<Costo> => {
+        const response = await fetch(`${API_URL}/costos`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return handleResponse<Costo>(response);
+    },
+
+    update: async (id: number, data: UpdateCostoDto): Promise<Costo> => {
+        const response = await fetch(`${API_URL}/costos/${id}`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return handleResponse<Costo>(response);
+    },
+
+    delete: async (id: number): Promise<void> => {
+        const response = await fetch(`${API_URL}/costos/${id}`, {
+            method: 'DELETE',
+            headers: getHeaders(),
+        });
+        if (!response.ok) throw new Error('Error al eliminar costo');
+    },
+
+    getResumenMensual: async (): Promise<{ costosMensuales: number; costosQuincenales: number; totalMensualizado: number }> => {
+        const response = await fetch(`${API_URL}/costos/resumen-mensual`, { headers: getHeaders() });
+        return handleResponse(response);
+    },
+};
+
+// Ganancias de Socios por Préstamo
+export const prestamoGananciasApi = {
+    getGananciasSocios: async (prestamoId: number): Promise<PrestamoConGanancias> => {
+        const response = await fetch(`${API_URL}/prestamos/${prestamoId}/ganancias-socios`, { headers: getHeaders() });
+        return handleResponse<PrestamoConGanancias>(response);
     },
 };

@@ -452,3 +452,56 @@ export interface MiBalance {
   restoTorta: number;
   aportes: AporteDetalle[];
 }
+
+// Costo Operativo Types
+export interface Costo {
+  id: number;
+  nombre: string;
+  monto: number;
+  frecuencia: string;  // Mensual, Quincenal, Único
+  descripcion?: string;
+  activo: boolean;
+  fechaCreacion: string;
+  fechaFin?: string;
+}
+
+export interface CreateCostoDto {
+  nombre: string;
+  monto: number;
+  frecuencia: string;
+  descripcion?: string;
+}
+
+export interface UpdateCostoDto {
+  nombre: string;
+  monto: number;
+  frecuencia: string;
+  descripcion?: string;
+  activo: boolean;
+  fechaFin?: string;
+}
+
+// Ganancia de socio por préstamo
+export interface GananciaSocioPrestamo {
+  socioId: number;
+  nombreSocio: string;
+  gananciaAcumulada: number;
+  gananciaProyectada: number;
+}
+
+// Préstamo con ganancias de socios
+export interface PrestamoConGanancias {
+  prestamoId: number;
+  clienteNombre: string;
+  montoPrestado: number;
+  montoIntereses: number;
+  tasaInteres: number;
+  cobradorNombre?: string;
+  porcentajeCobrador: number;
+  cuotasTotales: number;
+  cuotasPagadas: number;
+  interesAcumulado: number;
+  gananciaCobrador: number;
+  interesNetoSocios: number;
+  gananciasSocios: GananciaSocioPrestamo[];
+}

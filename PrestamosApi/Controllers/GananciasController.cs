@@ -85,6 +85,21 @@ public class GananciasController : ControllerBase
             a.Estado
         }).ToList();
 
+        // --- 1.5 COSTOS OPERATIVOS ---
+        var costosActivos = await _context.Costos
+            .Where(c => c.Activo)
+            .ToListAsync();
+
+        var costosMensuales = costosActivos
+            .Where(c => c.Frecuencia == "Mensual")
+            .Sum(c => c.Monto);
+
+        var costosQuincenales = costosActivos
+            .Where(c => c.Frecuencia == "Quincenal")
+            .Sum(c => c.Monto * 2); // x2 para mensualizar
+
+        var costosTotalesMes = costosMensuales + costosQuincenales;
+
 
         // --- 2. COBRADORES (Agrupados) ---
         var cobradoresAgrupados = prestamosActivos
@@ -210,6 +225,9 @@ public class GananciasController : ControllerBase
 
             TotalGananciaCobradores = Math.Round(cobradoresAgrupados.Sum(c => c.GananciaProyectada), 0),
             GastoMensualAportadores = Math.Round(gastoMensualAportadores, 0),
+            CostosTotalesMes = Math.Round(costosTotalesMes, 0),
+            // Ganancia Interés Neta = Intereses - Cobradores - Aportadores - Costos
+            GananciaInteresNeta = Math.Round(globalInteresMes - globalGananciaCobradoresMes - gastoMensualAportadores - costosTotalesMes, 0),
             NumeroSociosFijo = NUM_SOCIOS
         };
 

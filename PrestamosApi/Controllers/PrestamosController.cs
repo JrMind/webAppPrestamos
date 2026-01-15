@@ -152,7 +152,79 @@ public class PrestamosController : BaseApiController
         return Ok(prestamo);
     }
 
+    /// <summary>
+    /// Obtener préstamo con ganancias de socios (solo para rol Socio)
+    /// </summary>
+    [HttpGet("{id}/ganancias-socios")]
+    public async Task<ActionResult<object>> GetPrestamoConGanancias(int id)
+    {
+        var prestamo = await _context.Prestamos
+            .Include(p => p.Cliente)
+            .Include(p => p.Cuotas)
+            .Include(p => p.Pagos)
+            .Include(p => p.Cobrador)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (prestamo == null)
+            return NotFound(new { message = "Préstamo no encontrado" });
+
+        // Obtener los 3 socios
+        var socios = await _context.Usuarios
+            .Where(u => u.Activo && u.Rol == RolUsuario.Socio)
+            .OrderBy(u => u.Nombre)
+            .ToListAsync();
+
+        // Calcular intereses acumulados de cuotas pagadas
+        var cuotasPagadas = prestamo.Cuotas.Where(c => c.EstadoCuota == "Pagada" || c.EstadoCuota == "Parcial").ToList();
+        var interesAcumulado = cuotasPagadas.Sum(c => c.MontoInteres * (c.EstadoCuota == "Pagada" ? 1m : c.MontoPagado / c.MontoCuota));
+
+        // Calcular ganancia del cobrador
+        decimal gananciaCobrador = 0;
+        decimal factorCobrador = 0;
+        if (prestamo.CobradorId.HasValue && prestamo.TasaInteres > 0)
+        {
+            factorCobrador = prestamo.PorcentajeCobrador / prestamo.TasaInteres;
+        }
+        gananciaCobrador = interesAcumulado * factorCobrador;
+
+        // Interés neto para los socios = Interés - Ganancia Cobrador
+        var interesNetoAcumulado = interesAcumulado - gananciaCobrador;
+
+        // Ganancia proyectada total por socio (al finalizar el préstamo)
+        var interesProyectadoTotal = prestamo.MontoIntereses;
+        var gananciaCobradorProyectada = interesProyectadoTotal * factorCobrador;
+        var interesNetoProyectado = interesProyectadoTotal - gananciaCobradorProyectada;
+        var gananciaProyectadaPorSocio = interesNetoProyectado / 3m;
+
+        // Crear lista de ganancias por socio
+        var gananciasSocios = socios.Select(s => new GananciaSocioPrestamoDto(
+            s.Id,
+            s.Nombre,
+            Math.Round(interesNetoAcumulado / 3m, 2),     // Ganancia acumulada
+            Math.Round(gananciaProyectadaPorSocio, 2)     // Ganancia proyectada total
+        )).ToList();
+
+        // Retornar datos del préstamo con ganancias
+        return Ok(new
+        {
+            PrestamoId = prestamo.Id,
+            ClienteNombre = prestamo.Cliente?.Nombre,
+            MontoPrestado = prestamo.MontoPrestado,
+            MontoIntereses = prestamo.MontoIntereses,
+            TasaInteres = prestamo.TasaInteres,
+            CobradorNombre = prestamo.Cobrador?.Nombre,
+            PorcentajeCobrador = prestamo.PorcentajeCobrador,
+            CuotasTotales = prestamo.NumeroCuotas,
+            CuotasPagadas = prestamo.Cuotas.Count(c => c.EstadoCuota == "Pagada"),
+            InteresAcumulado = Math.Round(interesAcumulado, 2),
+            GananciaCobrador = Math.Round(gananciaCobrador, 2),
+            InteresNetoSocios = Math.Round(interesNetoAcumulado, 2),
+            GananciasSocios = gananciasSocios
+        });
+    }
+
     [HttpGet("cliente/{clienteId}")]
+
     public async Task<ActionResult<IEnumerable<PrestamoDto>>> GetPrestamosByCliente(int clienteId)
     {
         var prestamos = await _context.Prestamos
