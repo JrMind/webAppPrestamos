@@ -94,11 +94,28 @@ public class AportesController : ControllerBase
         return Ok(new { message = "Retiro registrado exitosamente" });
     }
 
-    [HttpPost("aplicar-interes")]
-    public async Task<IActionResult> AplicarInteresMensual()
-    {
         await _gananciasService.AplicarInteresMensualAsync();
         return Ok(new { message = "Interés mensual aplicado exitosamente" });
+    }
+
+    [HttpPost("ajustar-capital")]
+    public async Task<IActionResult> AjustarCapital([FromBody] PrestamosApi.DTOs.AjustarCapitalDto dto)
+    {
+        var capitalActual = await _gananciasService.CalcularCapitalActualAsync(dto.UsuarioId);
+        var diferencia = dto.NuevoCapital - capitalActual;
+
+        if (diferencia == 0) return Ok(new { message = "El capital ya está actualizado" });
+
+        if (diferencia > 0)
+        {
+            await _gananciasService.RegistrarAporteAsync(dto.UsuarioId, diferencia, "Ajuste manual de capital");
+        }
+        else
+        {
+            await _gananciasService.RegistrarRetiroAsync(dto.UsuarioId, Math.Abs(diferencia), "Ajuste manual de capital");
+        }
+
+        return Ok(new { message = "Capital ajustado exitosamente" });
     }
 
     [HttpGet("mi-balance")]

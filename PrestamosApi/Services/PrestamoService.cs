@@ -46,10 +46,13 @@ public class PrestamoService : IPrestamoService
             // Cuota = Capital * (Tasa/100) * factor de frecuencia
             montoCuota = Math.Round(montoPrestado * (tasaInteres / 100m) * factorFrecuencia, 0);
             
-            // Para préstamos congelados, el "MontoTotal" es teóricamente infinito
-            // pero usamos el capital como referencia (se paga cuando abonan extra)
-            montoTotal = montoPrestado; // Solo el capital, intereses son recurrentes
-            montoIntereses = montoCuota * numeroCuotas; // Intereses proyectados para el período inicial
+            // Para préstamos congelados:
+            // - MontoTotal = Solo el capital (lo que se debe pagar para liquidar)
+            // - MontoIntereses = Solo el interés de UN período (ya que es recurrente)
+            // - NumeroCuotas = 1 (solo se genera una cuota a la vez)
+            montoTotal = montoPrestado; 
+            montoIntereses = montoCuota; // Solo interés de un período, no acumulativo
+            numeroCuotas = 1; // Solo una cuota se genera inicialmente
         }
         else if (tipoInteres == "Simple")
         {

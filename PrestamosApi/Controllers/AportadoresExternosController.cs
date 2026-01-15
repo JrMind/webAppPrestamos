@@ -92,7 +92,17 @@ public class AportadoresExternosController : ControllerBase
         aportador.DiasParaPago = dto.DiasParaPago;
         aportador.Estado = dto.Estado;
         aportador.Notas = dto.Notas;
-        aportador.MontoTotalAportado = dto.MontoTotalAportado;
+        
+        // Recalcular saldo pendiente si cambia el monto aportado
+        if (aportador.MontoTotalAportado != dto.MontoTotalAportado)
+        {
+            aportador.MontoTotalAportado = dto.MontoTotalAportado;
+            // Asumimos que el saldo pendiente es (MontoAportado - MontoPagado) + InteresesPendientes?
+            // Por simplicidad y consistencia con el modelo actual: SaldoPendiente = MontoAportado - MontoPagado (Capital)
+            // Nota: Esto no considera intereses acumulados si se manejan aparte. Revisar si SaldoPendiente incluye intereses.
+            // Si SaldoPendiente es solo capital:
+            aportador.SaldoPendiente = aportador.MontoTotalAportado - aportador.MontoPagado; 
+        }
 
         await _context.SaveChangesAsync();
         return NoContent();

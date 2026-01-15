@@ -155,6 +155,15 @@ export const aportesApi = {
             body: JSON.stringify(data),
         });
         if (!response.ok) throw new Error('Error al registrar retiro');
+    },
+
+    ajustarCapital: async (data: { usuarioId: number; nuevoCapital: number }): Promise<{ message: string }> => {
+        const response = await fetch(`${API_URL}/aportes/ajustar-capital`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return handleResponse(response);
     }
 };
 

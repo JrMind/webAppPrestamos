@@ -95,6 +95,31 @@ function App() {
     }
   };
 
+  // Estados para edición inline en Ganancias Socios
+  const [editingGananciaSocioId, setEditingGananciaSocioId] = useState<number | null>(null);
+  const [editMontoSocio, setEditMontoSocio] = useState<string>('');
+
+  const handleStartEditGananciaSocio = (id: number, currentMonto: number) => {
+    setEditingGananciaSocioId(id);
+    setEditMontoSocio(currentMonto.toString());
+  };
+
+  const handleSaveGananciaSocio = async (id: number) => {
+    try {
+      if (!editMontoSocio) return;
+      await aportesApi.ajustarCapital({
+        usuarioId: id,
+        nuevoCapital: Number(editMontoSocio)
+      });
+      showToast('Capital de socio actualizado', 'success');
+      setEditingGananciaSocioId(null);
+      loadResumenParticipacion(); // Recargar datos
+    } catch (error) {
+      showToast('Error al actualizar capital', 'error');
+      console.error(error);
+    }
+  };
+
   // Handlers para Costos Operativos
   const loadCostos = async () => {
     try {
@@ -433,6 +458,7 @@ function App() {
       await aportadoresExternosApi.delete(id);
       showToast('Aportador eliminado', 'success');
       loadAportadoresExternos();
+      loadResumenParticipacion(); // Refrescar también Ganancias si estamos ahí
     } catch (error: unknown) {
       showToast(error instanceof Error ? error.message : 'Error al eliminar', 'error');
     }
@@ -1558,6 +1584,12 @@ function App() {
                                 title="Editar Capital">
                                 ✏️
                               </span>
+                              <span
+                                onClick={() => handleDeleteAportador(a.id)}
+                                style={{ cursor: 'pointer', fontSize: '0.9rem', opacity: 0.6 }}
+                                title="Eliminar Aportador">
+                                🗑️
+                              </span>
                             </div>
                           )}
                         </td>
@@ -1601,14 +1633,38 @@ function App() {
                       <tr key={s.id}>
                         <td><strong>{s.nombre}</strong></td>
                         <td className="money">{formatMoney(s.capitalAportado)}</td>
-                        <td className="money" style={{ color: '#10b981' }}>{formatMoney(s.capitalActual)}</td>
-                        <td>{s.porcentaje.toFixed(1)}%</td>
-                        <td className="money" style={{ color: '#3b82f6' }}>{formatMoney(s.gananciaProyectadaTotal)}</td>
+                        <td className="money" style={{ color: '#10b981' }}>
+                          {editingGananciaSocioId === s.id ? (
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              <input
+                                type="number"
+                                value={editMontoSocio}
+                                onChange={e => setEditMontoSocio(e.target.value)}
+                                style={{ width: '120px', padding: '0.25rem', background: '#333', border: '1px solid #444', color: '#fff', borderRadius: '4px' }}
+                              />
+                              <button onClick={() => handleSaveGananciaSocio(s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Guardar">💾</button>
+                              <button onClick={() => setEditingGananciaSocioId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Cancelar">❌</button>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                              {formatMoney(s.capitalActual)}
+                              <span
+                                onClick={() => handleStartEditGananciaSocio(s.id, s.capitalActual)}
+                                style={{ cursor: 'pointer', fontSize: '0.9rem', opacity: 0.6 }}
+                                title="Editar Capital Actual">
+                                ✏️
+                              </span>
+                            </div>
+                          )}
+                        </td>
+                        <td>{s.porcentaje}%</td>
+                        <td className="money">{formatMoney(s.gananciaProyectadaTotal)}</td>
                         <td className="money" style={{ color: '#3b82f6' }}>{formatMoney(s.gananciaInteresMes)}</td>
-                        <td className="money" style={{ color: '#10b981' }}>{formatMoney(s.flujoNetoMes)}</td>
-                        <td className="money" style={{ color: '#8b5cf6' }}>{formatMoney(s.gananciaRealizada)}</td>
+                        <td className="money" style={{ color: '#06b6d4' }}>{formatMoney(s.flujoNetoMes)}</td>
+                        <td className="money" style={{ color: '#10b981' }}>{formatMoney(s.gananciaRealizada)}</td>
                       </tr>
                     ))}
+
                     {resumenParticipacion.socios.length === 0 && <tr><td colSpan={6} className="empty-state">No hay socios registrados</td></tr>}
                   </tbody>
                 </table>

@@ -13,11 +13,16 @@ public class CobrosController : BaseApiController
 {
     private readonly PrestamosDbContext _context;
     private readonly Services.ITwilioService _twilioService;
+    private readonly Services.IDistribucionGananciasService _distribucionService;
 
-    public CobrosController(PrestamosDbContext context, Services.ITwilioService twilioService)
+    public CobrosController(
+        PrestamosDbContext context, 
+        Services.ITwilioService twilioService,
+        Services.IDistribucionGananciasService distribucionService)
     {
         _context = context;
         _twilioService = twilioService;
+        _distribucionService = distribucionService;
     }
 
     [HttpGet("hoy")]
@@ -114,6 +119,8 @@ public class CobrosController : BaseApiController
                 .ThenInclude(p => p!.Cliente)
             .Include(c => c.Prestamo)
                 .ThenInclude(p => p!.Cuotas)
+            .Include(c => c.Prestamo)
+                .ThenInclude(p => p!.FuentesCapital) // Include FuentesCapital for distribution
             .FirstOrDefaultAsync(c => c.Id == cuotaId);
 
         if (cuota == null)
@@ -129,9 +136,17 @@ public class CobrosController : BaseApiController
             cuota.FechaPago = DateTime.UtcNow;
             cuota.MontoPagado = cuota.MontoCuota; // Asumir pago completo por defecto al marcar
             cuota.EstadoCuota = "Pagada";
+            
+            // Distribuir ganancias automáticamente
+            if (cuota.Prestamo != null)
+            {
+                await _distribucionService.DistribuirGananciasPago(cuota.PrestamoId, cuota.MontoPagado);
+            }
         }
         else if (!dto.Cobrado)
         {
+            // Nota: Revertir distribución es complejo y no está implementado aquí.
+            // Se asume que el usuario corregirá manualmente los balances si es necesario.
             cuota.FechaPago = null;
             cuota.MontoPagado = 0;
             cuota.SaldoPendiente = cuota.MontoCuota; // Restaurar saldo pendiente
