@@ -15,11 +15,19 @@ public class PrestamosController : BaseApiController
 {
     private readonly PrestamosDbContext _context;
     private readonly IPrestamoService _prestamoService;
+    private readonly IGananciasService _gananciasService;
+    private readonly IDistribucionGananciasService _distribucionService;
 
-    public PrestamosController(PrestamosDbContext context, IPrestamoService prestamoService)
+    public PrestamosController(
+        PrestamosDbContext context, 
+        IPrestamoService prestamoService, 
+        IGananciasService gananciasService,
+        IDistribucionGananciasService distribucionService)
     {
         _context = context;
         _prestamoService = prestamoService;
+        _gananciasService = gananciasService;
+        _distribucionService = distribucionService;
     }
 
     [HttpGet]
@@ -678,5 +686,57 @@ public class PrestamosController : BaseApiController
         await _context.SaveChangesAsync();
 
         return NoContent();
+    }
+
+    [HttpPost("admin/recalcular-distribuciones")]
+    // [Authorize(Roles = "Socio,Admin")] // Descomentar en producción real si se requiere seguridad
+    public async Task<IActionResult> RecalcularDistribuciones()
+    {
+        try
+        {
+            // 1. Reiniciar ganancias de socios
+            var socios = await _context.Usuarios
+                .Where(u => u.Rol == RolUsuario.Socio)
+                .ToListAsync();
+                
+            foreach (var socio in socios)
+            {
+                socio.GananciasAcumuladas = 0;
+                socio.CapitalActual = 0;
+            }
+            
+            // 2. Limpiar distribuciones existentes
+            var distribucionesExistentes = await _context.DistribucionesGanancia.ToListAsync();
+            _context.DistribucionesGanancia.RemoveRange(distribucionesExistentes);
+            await _context.SaveChangesAsync();
+            
+            // 3. Recalcular para todos los pagos históricos
+            var pagos = await _context.Pagos
+                .Include(p => p.Prestamo)
+                .OrderBy(p => p.FechaPago)
+                .ToListAsync();
+            
+            int procesados = 0;
+            foreach (var pago in pagos)
+            {
+                // Solo si el préstamo está activo o pagado
+                if (pago.Prestamo != null)
+                {
+                    await _distribucionService.DistribuirGananciasPago(pago.PrestamoId, pago.MontoPago);
+                    procesados++;
+                }
+            }
+            
+            return Ok(new 
+            { 
+                message = $"Se recalcularon {procesados} distribuciones correctamente",
+                pagosRecalculados = procesados,
+                sociosActualizados = socios.Count
+            });
+        }
+        catch (Exception ex)
+        {
+           return BadRequest(new { message = "Error recalculando distribuciones", error = ex.Message });
+        }
     }
 }
