@@ -471,15 +471,11 @@ public class PrestamosController : BaseApiController
                     }
                 }
 
-                // Si es socio interno, actualizar su capital
-                if (fuente.Tipo == "Interno" && fuente.UsuarioId.HasValue)
-                {
-                    var socio = await _context.Usuarios.FindAsync(fuente.UsuarioId.Value);
-                    if (socio != null)
-                    {
-                        socio.CapitalActual += fuente.MontoAportado;
-                    }
-                }
+                // NOTA: NO modificamos CapitalActual del socio aquí.
+                // El CapitalActual solo cambia por:
+                // 1. Intereses ganados (en DistribucionGananciasService)
+                // 2. Aportes/Retiros directos (en AportesController)
+                // Usar capital reinvertido NO debe afectar el balance del socio.
             }
         }
 
