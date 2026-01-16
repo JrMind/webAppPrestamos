@@ -388,4 +388,123 @@ public class GananciasController : ControllerBase
             }
         });
     }
+
+    /// <summary>
+    /// Auditoría de consistencia entre tabla Pagos y CuotasPrestamo
+    /// Detecta discrepancias en cuotas pagadas vs pagos registrados
+    /// </summary>
+    [HttpGet("audit-pagos")]
+    public async Task<ActionResult<object>> AuditPagosConsistency()
+    {
+        // 1. Total de pagos según tabla Pagos
+        var totalPagosRegistrados = await _context.Pagos.SumAsync(p => p.MontoPago);
+        var cantidadPagos = await _context.Pagos.CountAsync();
+        
+        // 2. Total pagado según CuotasPrestamo.MontoPagado
+        var totalPagadoEnCuotas = await _context.CuotasPrestamo.SumAsync(c => c.MontoPagado);
+        
+        // 3. Cuotas marcadas como "Pagada" pero con discrepancia en MontoPagado
+        var cuotasInconsistentes = await _context.CuotasPrestamo
+            .Include(c => c.Prestamo)
+                .ThenInclude(p => p!.Cliente)
+            .Where(c => 
+                (c.EstadoCuota == "Pagada" && c.MontoPagado < c.MontoCuota * 0.99m) || // Pagada pero sin pago completo
+                (c.EstadoCuota != "Pagada" && c.MontoPagado >= c.MontoCuota * 0.99m) || // Pago completo pero no marcada
+                (c.SaldoPendiente < 0) // Saldo negativo (bug)
+            )
+            .Select(c => new {
+                CuotaId = c.Id,
+                PrestamoId = c.PrestamoId,
+                ClienteNombre = c.Prestamo != null && c.Prestamo.Cliente != null ? c.Prestamo.Cliente.Nombre : "N/A",
+                NumeroCuota = c.NumeroCuota,
+                MontoCuota = c.MontoCuota,
+                MontoPagado = c.MontoPagado,
+                SaldoPendiente = c.SaldoPendiente,
+                EstadoCuota = c.EstadoCuota,
+                Problema = c.EstadoCuota == "Pagada" && c.MontoPagado < c.MontoCuota * 0.99m 
+                    ? "Marcada Pagada pero MontoPagado insuficiente"
+                    : c.EstadoCuota != "Pagada" && c.MontoPagado >= c.MontoCuota * 0.99m
+                        ? "Pago completo pero NO marcada como Pagada"
+                        : "Saldo negativo"
+            })
+            .ToListAsync();
+        
+        // 4. Pagos sin CuotaId vinculada (pagos "huérfanos")
+        var pagosHuerfanos = await _context.Pagos
+            .Include(p => p.Prestamo)
+                .ThenInclude(pr => pr!.Cliente)
+            .Where(p => p.CuotaId == null)
+            .Select(p => new {
+                PagoId = p.Id,
+                PrestamoId = p.PrestamoId,
+                ClienteNombre = p.Prestamo != null && p.Prestamo.Cliente != null ? p.Prestamo.Cliente.Nombre : "N/A",
+                MontoPago = p.MontoPago,
+                FechaPago = p.FechaPago,
+                Observaciones = p.Observaciones
+            })
+            .ToListAsync();
+        
+        // 5. Por préstamo: suma de Pagos vs suma de MontoPagado en cuotas
+        var prestamosMismatch = await _context.Prestamos
+            .Include(p => p.Cliente)
+            .Include(p => p.Cuotas)
+            .Include(p => p.Pagos)
+            .Where(p => p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Pagado")
+            .Select(p => new {
+                PrestamoId = p.Id,
+                ClienteNombre = p.Cliente != null ? p.Cliente.Nombre : "N/A",
+                TotalPagosTabla = p.Pagos.Sum(pa => pa.MontoPago),
+                TotalPagadoCuotas = p.Cuotas.Sum(c => c.MontoPagado),
+                CuotasPagadas = p.Cuotas.Count(c => c.EstadoCuota == "Pagada"),
+                CuotasTotales = p.Cuotas.Count(),
+                Estado = p.EstadoPrestamo
+            })
+            .ToListAsync();
+        
+        var prestamosConDiscrepancia = prestamosMismatch
+            .Where(p => Math.Abs(p.TotalPagosTabla - p.TotalPagadoCuotas) > 1) // Tolerancia de $1
+            .Select(p => new {
+                p.PrestamoId,
+                p.ClienteNombre,
+                p.TotalPagosTabla,
+                p.TotalPagadoCuotas,
+                Discrepancia = p.TotalPagosTabla - p.TotalPagadoCuotas,
+                p.CuotasPagadas,
+                p.CuotasTotales,
+                p.Estado
+            })
+            .ToList();
+        
+        // 6. Estadísticas de cuotas
+        var cuotaStats = await _context.CuotasPrestamo
+            .GroupBy(c => c.EstadoCuota)
+            .Select(g => new {
+                Estado = g.Key,
+                Cantidad = g.Count(),
+                MontoTotal = g.Sum(c => c.MontoCuota),
+                MontoPagado = g.Sum(c => c.MontoPagado)
+            })
+            .ToListAsync();
+        
+        return Ok(new {
+            resumen = new {
+                totalPagosEnTablaPagos = Math.Round(totalPagosRegistrados, 0),
+                totalMontoPagadoEnCuotas = Math.Round(totalPagadoEnCuotas, 0),
+                discrepanciaGlobal = Math.Round(totalPagosRegistrados - totalPagadoEnCuotas, 0),
+                cantidadPagosRegistrados = cantidadPagos
+            },
+            estadisticasCuotas = cuotaStats,
+            alertas = new {
+                cuotasInconsistentes = cuotasInconsistentes.Count > 0 
+                    ? new { cantidad = cuotasInconsistentes.Count, detalle = cuotasInconsistentes.Take(20) }
+                    : null,
+                pagosHuerfanos = pagosHuerfanos.Count > 0
+                    ? new { cantidad = pagosHuerfanos.Count, montoTotal = pagosHuerfanos.Sum(p => p.MontoPago), detalle = pagosHuerfanos.Take(20) }
+                    : null,
+                prestamosConDiscrepancia = prestamosConDiscrepancia.Count > 0
+                    ? new { cantidad = prestamosConDiscrepancia.Count, detalle = prestamosConDiscrepancia.Take(20) }
+                    : null
+            }
+        });
+    }
 }
