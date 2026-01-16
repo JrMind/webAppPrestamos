@@ -172,6 +172,14 @@ public class AdminController : ControllerBase
                 nuevaReservaDisponible = reservaDisponible
             });
         }
+        catch (Exception ex)
+        {
+            return BadRequest(new
+            {
+                message = "Error al recalcular sistema",
+                error = ex.Message
+            });
+        }
     }
 
     /// <summary>

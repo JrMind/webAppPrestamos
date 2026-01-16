@@ -239,4 +239,153 @@ public class GananciasController : ControllerBase
             resumen
         });
     }
+
+    /// <summary>
+    /// Obtiene el balance detallado de capital por fuente
+    /// </summary>
+    [HttpGet("balance-capital")]
+    public async Task<ActionResult<object>> GetBalanceCapital()
+    {
+        // 1. Capital de SOCIOS (Aportes iniciales registrados)
+        var aportesSocios = await _context.Aportes.SumAsync(a => a.MontoInicial);
+        
+        // 2. Capital de APORTADORES EXTERNOS
+        var aportadoresExternos = await _context.AportadoresExternos
+            .Where(a => a.Estado == "Activo")
+            .Select(a => new {
+                a.Id,
+                a.Nombre,
+                CapitalAportado = a.MontoTotalAportado,
+                a.TasaInteres
+            })
+            .ToListAsync();
+        var capitalExternos = aportadoresExternos.Sum(a => a.CapitalAportado);
+        
+        // 3. Capital REINVERTIDO (ganancias de socios)
+        var capitalReinvertido = await _context.Usuarios
+            .Where(u => u.Activo && u.Rol == RolUsuario.Socio)
+            .SumAsync(u => u.CapitalActual);
+        
+        // 4. CAPITAL PRESTADO por fuente (desde FuentesCapitalPrestamo en préstamos ACTIVOS)
+        var fuentesPrestamos = await _context.FuentesCapitalPrestamo
+            .Include(f => f.Prestamo)
+            .Include(f => f.AportadorExterno)
+            .Include(f => f.Usuario)
+            .Where(f => f.Prestamo != null && f.Prestamo.EstadoPrestamo == "Activo")
+            .ToListAsync();
+        
+        var prestadoPorAportador = fuentesPrestamos
+            .Where(f => f.Tipo == "Externo" && f.AportadorExternoId.HasValue)
+            .GroupBy(f => f.AportadorExternoId)
+            .ToDictionary(g => g.Key!.Value, g => g.Sum(f => f.MontoAportado));
+        
+        var prestadoDeReserva = fuentesPrestamos
+            .Where(f => f.Tipo == "Reserva")
+            .Sum(f => f.MontoAportado);
+            
+        var prestadoDeInternos = fuentesPrestamos
+            .Where(f => f.Tipo == "Interno")
+            .Sum(f => f.MontoAportado);
+        
+        // 5. Capital EN LA CALLE (solo capital, no intereses, de cuotas pendientes)
+        var prestamosActivos = await _context.Prestamos
+            .Include(p => p.Cuotas)
+            .Where(p => p.EstadoPrestamo == "Activo")
+            .ToListAsync();
+            
+        decimal capitalEnCalle = 0;
+        foreach (var prestamo in prestamosActivos)
+        {
+            if (prestamo.Cuotas.Any())
+            {
+                foreach (var cuota in prestamo.Cuotas)
+                {
+                    if (cuota.MontoCuota > 0)
+                    {
+                        var ratioCapital = cuota.MontoCapital / cuota.MontoCuota;
+                        capitalEnCalle += cuota.SaldoPendiente * ratioCapital;
+                    }
+                }
+            }
+            else
+            {
+                capitalEnCalle += prestamo.MontoPrestado;
+            }
+        }
+        
+        // 6. CUOTAS pagadas y pendientes
+        var todasCuotas = await _context.CuotasPrestamo
+            .Include(c => c.Prestamo)
+            .Where(c => c.Prestamo != null && c.Prestamo.EstadoPrestamo == "Activo")
+            .ToListAsync();
+        
+        var cuotasPagadas = todasCuotas.Where(c => c.EstadoCuota == "Pagada").ToList();
+        var cuotasPendientes = todasCuotas.Where(c => c.EstadoCuota != "Pagada").ToList();
+        
+        // 7. Total COBRADO históricamente
+        var totalCobrado = await _context.Pagos.SumAsync(p => p.MontoPago);
+        
+        // 8. Préstamos SIN fuente de capital asignada
+        var prestamosSinFuente = await _context.Prestamos
+            .Include(p => p.FuentesCapital)
+            .Include(p => p.Cliente)
+            .Where(p => p.EstadoPrestamo == "Activo" && !p.FuentesCapital.Any())
+            .Select(p => new {
+                p.Id,
+                ClienteNombre = p.Cliente != null ? p.Cliente.Nombre : "Sin cliente",
+                p.MontoPrestado,
+                p.FechaPrestamo
+            })
+            .ToListAsync();
+        
+        // CÁLCULO DE RESERVA DISPONIBLE
+        var capitalTotal = aportesSocios + capitalExternos + capitalReinvertido;
+        var reservaDisponible = capitalTotal - capitalEnCalle;
+        
+        // Balance por aportador externo
+        var balanceAportadores = aportadoresExternos.Select(a => new {
+            a.Id,
+            a.Nombre,
+            a.CapitalAportado,
+            CapitalPrestado = prestadoPorAportador.GetValueOrDefault(a.Id, 0m),
+            Disponible = a.CapitalAportado - prestadoPorAportador.GetValueOrDefault(a.Id, 0m)
+        }).ToList();
+        
+        return Ok(new {
+            capitalPorFuente = new {
+                socios = new {
+                    capitalAportado = Math.Round(aportesSocios, 0),
+                    capitalReinvertido = Math.Round(capitalReinvertido, 0),
+                    total = Math.Round(aportesSocios + capitalReinvertido, 0)
+                },
+                aportadoresExternos = balanceAportadores,
+                totalCapitalExternos = Math.Round(capitalExternos, 0)
+            },
+            capitalPrestado = new {
+                deReserva = Math.Round(prestadoDeReserva, 0),
+                deInternos = Math.Round(prestadoDeInternos, 0),
+                deExternos = Math.Round(prestadoPorAportador.Values.Sum(), 0),
+                total = Math.Round(prestadoDeReserva + prestadoDeInternos + prestadoPorAportador.Values.Sum(), 0)
+            },
+            resumen = new {
+                capitalTotal = Math.Round(capitalTotal, 0),
+                capitalEnCalle = Math.Round(capitalEnCalle, 0),
+                reservaDisponible = Math.Round(reservaDisponible, 0),
+                totalCobrado = Math.Round(totalCobrado, 0),
+                cuotasPagadas = new {
+                    cantidad = cuotasPagadas.Count,
+                    monto = Math.Round(cuotasPagadas.Sum(c => c.MontoPagado), 0)
+                },
+                cuotasPendientes = new {
+                    cantidad = cuotasPendientes.Count,
+                    monto = Math.Round(cuotasPendientes.Sum(c => c.SaldoPendiente), 0)
+                }
+            },
+            alertas = new {
+                prestamosSinFuente = prestamosSinFuente.Count > 0 
+                    ? new { cantidad = prestamosSinFuente.Count, prestamos = prestamosSinFuente }
+                    : null
+            }
+        });
+    }
 }
