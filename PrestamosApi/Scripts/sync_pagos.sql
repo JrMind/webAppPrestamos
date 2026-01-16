@@ -1,169 +1,159 @@
 -- ============================================================
 -- SCRIPT DE SINCRONIZACIÓN DE PAGOS
--- Objetivo: Crear registros en tabla Pagos para cuotas pagadas
--- que no tienen pago correspondiente
+-- Nombres exactos de columnas según la DB
 -- ============================================================
 
--- PASO 0: Verificar estado actual antes de cambios
+-- PASO 0: Verificar estado actual
 SELECT 'ANTES DE CAMBIOS' as etapa,
-    (SELECT COUNT(*) FROM "Pagos") as total_pagos,
-    (SELECT SUM("MontoPago") FROM "Pagos") as suma_pagos,
-    (SELECT COUNT(*) FROM "CuotasPrestamo" WHERE "EstadoCuota" = 'Pagada') as cuotas_pagadas,
-    (SELECT SUM("MontoPagado") FROM "CuotasPrestamo") as suma_monto_pagado_cuotas;
+    (SELECT COUNT(*) FROM pagos) as total_pagos,
+    (SELECT SUM(montopago) FROM pagos) as suma_pagos,
+    (SELECT COUNT(*) FROM cuotasprestamo WHERE estadocuota = 'Pagada') as cuotas_pagadas,
+    (SELECT SUM(montopagado) FROM cuotasprestamo) as suma_monto_pagado;
 
 -- ============================================================
--- PASO 1: CREAR TABLA DE BACKUP DE CUOTAS PAGADAS
+-- PASO 1: BACKUP DE CUOTAS PAGADAS
 -- ============================================================
-DROP TABLE IF EXISTS "CuotasPagadasBackup";
+DROP TABLE IF EXISTS cuotaspagadasbackup;
 
-CREATE TABLE "CuotasPagadasBackup" AS
+CREATE TABLE cuotaspagadasbackup AS
 SELECT 
-    cp."Id" as cuota_id,
-    cp."PrestamoId",
-    cp."NumeroCuota",
-    cp."FechaCobro",
-    cp."MontoCuota",
-    cp."MontoCapital",
-    cp."MontoInteres",
-    cp."MontoPagado",
-    cp."SaldoPendiente",
-    cp."EstadoCuota",
-    cp."FechaPago",
-    p."Id" as prestamo_record_id,
-    c."Nombre" as cliente_nombre,
-    c."Cedula" as cliente_cedula,
+    cp.id as cuota_id,
+    cp.prestamoid,
+    cp.numerocuota,
+    cp.fechacobro,
+    cp.montocuota,
+    cp."MontoCapital" as montocapital,
+    cp."MontoInteres" as montointeres,
+    cp.montopagado,
+    cp.saldopendiente,
+    cp.estadocuota,
+    cp.fechapago,
+    p.id as prestamo_record_id,
+    c.nombre as cliente_nombre,
+    c.cedula as cliente_cedula,
     NOW() as backup_timestamp
-FROM "CuotasPrestamo" cp
-JOIN "Prestamos" p ON cp."PrestamoId" = p."Id"
-JOIN "Clientes" c ON p."ClienteId" = c."Id"
-WHERE cp."MontoPagado" > 0 OR cp."EstadoCuota" = 'Pagada';
+FROM cuotasprestamo cp
+JOIN prestamos p ON cp.prestamoid = p.id
+JOIN clientes c ON p.clienteid = c.id
+WHERE cp.montopagado > 0 OR cp.estadocuota = 'Pagada';
 
--- Verificar backup creado
-SELECT 'BACKUP CREADO' as mensaje, COUNT(*) as registros_backup FROM "CuotasPagadasBackup";
+SELECT 'BACKUP CUOTAS CREADO' as msg, COUNT(*) as registros FROM cuotaspagadasbackup;
 
 -- ============================================================
--- PASO 2: CREAR TABLA DE BACKUP DE PAGOS ACTUALES
+-- PASO 2: BACKUP DE PAGOS ACTUALES
 -- ============================================================
-DROP TABLE IF EXISTS "PagosBackup";
+DROP TABLE IF EXISTS pagosbackup;
 
-CREATE TABLE "PagosBackup" AS
+CREATE TABLE pagosbackup AS
 SELECT 
-    pg."Id" as pago_id,
-    pg."PrestamoId",
-    pg."CuotaId",
-    pg."MontoPago",
-    pg."FechaPago",
-    pg."MetodoPago",
-    pg."Observaciones",
-    c."Nombre" as cliente_nombre,
+    pg.id as pago_id,
+    pg.prestamoid,
+    pg.cuotaid,
+    pg.montopago,
+    pg.fechapago,
+    pg.metodopago,
+    pg.observaciones,
+    c.nombre as cliente_nombre,
     NOW() as backup_timestamp
-FROM "Pagos" pg
-JOIN "Prestamos" p ON pg."PrestamoId" = p."Id"
-JOIN "Clientes" c ON p."ClienteId" = c."Id";
+FROM pagos pg
+JOIN prestamos p ON pg.prestamoid = p.id
+JOIN clientes c ON p.clienteid = c.id;
 
--- Verificar backup de pagos
-SELECT 'BACKUP PAGOS' as mensaje, COUNT(*) as registros_backup FROM "PagosBackup";
+SELECT 'BACKUP PAGOS CREADO' as msg, COUNT(*) as registros FROM pagosbackup;
 
 -- ============================================================
--- PASO 3: IDENTIFICAR CUOTAS PAGADAS SIN REGISTRO EN PAGOS
--- (Solo ver, no modificar todavía)
+-- PASO 3: CUOTAS PAGADAS SIN PAGO CORRESPONDIENTE
 -- ============================================================
-SELECT 'CUOTAS PAGADAS SIN PAGO CORRESPONDIENTE' as analisis;
-
 SELECT 
-    cp."Id" as cuota_id,
-    cp."PrestamoId",
-    c."Nombre" as cliente,
-    cp."NumeroCuota",
-    cp."MontoCuota",
-    cp."MontoPagado",
-    cp."EstadoCuota",
-    cp."FechaPago" as fecha_pago_cuota,
-    COALESCE(pg.suma_pagos, 0) as pagos_registrados_cuota,
-    cp."MontoPagado" - COALESCE(pg.suma_pagos, 0) as diferencia
-FROM "CuotasPrestamo" cp
-JOIN "Prestamos" p ON cp."PrestamoId" = p."Id"
-JOIN "Clientes" c ON p."ClienteId" = c."Id"
+    cp.id as cuota_id,
+    cp.prestamoid,
+    c.nombre as cliente,
+    cp.numerocuota as cuota,
+    cp.montocuota as monto_cuota,
+    cp.montopagado as monto_pagado,
+    cp.estadocuota as estado,
+    cp.fechapago as fecha_pago,
+    COALESCE(pg.suma_pagos, 0) as pagos_en_tabla,
+    cp.montopagado - COALESCE(pg.suma_pagos, 0) as diferencia
+FROM cuotasprestamo cp
+JOIN prestamos p ON cp.prestamoid = p.id
+JOIN clientes c ON p.clienteid = c.id
 LEFT JOIN (
-    SELECT "CuotaId", SUM("MontoPago") as suma_pagos
-    FROM "Pagos"
-    WHERE "CuotaId" IS NOT NULL
-    GROUP BY "CuotaId"
-) pg ON cp."Id" = pg."CuotaId"
-WHERE cp."MontoPagado" > 0 
-  AND (COALESCE(pg.suma_pagos, 0) < cp."MontoPagado" * 0.99)  -- Tolerancia 1%
+    SELECT cuotaid, SUM(montopago) as suma_pagos
+    FROM pagos
+    WHERE cuotaid IS NOT NULL
+    GROUP BY cuotaid
+) pg ON cp.id = pg.cuotaid
+WHERE cp.montopagado > 0 
+  AND (COALESCE(pg.suma_pagos, 0) < cp.montopagado * 0.99)
 ORDER BY diferencia DESC;
 
 -- ============================================================
--- PASO 4: CONTAR CUÁNTOS PAGOS SE VAN A CREAR
+-- PASO 4: CONTAR PAGOS A CREAR
 -- ============================================================
-SELECT 'PAGOS A CREAR' as mensaje,
+SELECT 'PAGOS A CREAR' as msg,
     COUNT(*) as cantidad,
-    SUM(cp."MontoPagado" - COALESCE(pg.suma_pagos, 0)) as monto_total
-FROM "CuotasPrestamo" cp
+    SUM(cp.montopagado - COALESCE(pg.suma_pagos, 0)) as monto_total
+FROM cuotasprestamo cp
 LEFT JOIN (
-    SELECT "CuotaId", SUM("MontoPago") as suma_pagos
-    FROM "Pagos"
-    WHERE "CuotaId" IS NOT NULL
-    GROUP BY "CuotaId"
-) pg ON cp."Id" = pg."CuotaId"
-WHERE cp."MontoPagado" > 0 
-  AND (COALESCE(pg.suma_pagos, 0) < cp."MontoPagado" * 0.99);
+    SELECT cuotaid, SUM(montopago) as suma_pagos
+    FROM pagos
+    WHERE cuotaid IS NOT NULL
+    GROUP BY cuotaid
+) pg ON cp.id = pg.cuotaid
+WHERE cp.montopagado > 0 
+  AND (COALESCE(pg.suma_pagos, 0) < cp.montopagado * 0.99);
 
 -- ============================================================
 -- PASO 5: INSERTAR PAGOS FALTANTES
--- (DESCOMENTAR PARA EJECUTAR)
+-- *** DESCOMENTAR PARA EJECUTAR ***
 -- ============================================================
 /*
-INSERT INTO "Pagos" ("PrestamoId", "CuotaId", "MontoPago", "FechaPago", "MetodoPago", "Observaciones")
+INSERT INTO pagos (prestamoid, cuotaid, montopago, fechapago, metodopago, observaciones)
 SELECT 
-    cp."PrestamoId",
-    cp."Id" as "CuotaId",
-    cp."MontoPagado" - COALESCE(pg.suma_pagos, 0) as "MontoPago",
-    COALESCE(cp."FechaPago", cp."FechaCobro") as "FechaPago",
-    'Sincronizado' as "MetodoPago",
-    'Pago sincronizado desde CuotasPrestamo - ' || NOW()::text as "Observaciones"
-FROM "CuotasPrestamo" cp
+    cp.prestamoid,
+    cp.id as cuotaid,
+    cp.montopagado - COALESCE(pg.suma_pagos, 0) as montopago,
+    COALESCE(cp.fechapago, cp.fechacobro) as fechapago,
+    'Sincronizado' as metodopago,
+    'Pago sincronizado desde CuotasPrestamo - ' || NOW()::text as observaciones
+FROM cuotasprestamo cp
 LEFT JOIN (
-    SELECT "CuotaId", SUM("MontoPago") as suma_pagos
-    FROM "Pagos"
-    WHERE "CuotaId" IS NOT NULL
-    GROUP BY "CuotaId"
-) pg ON cp."Id" = pg."CuotaId"
-WHERE cp."MontoPagado" > 0 
-  AND (COALESCE(pg.suma_pagos, 0) < cp."MontoPagado" * 0.99);
+    SELECT cuotaid, SUM(montopago) as suma_pagos
+    FROM pagos
+    WHERE cuotaid IS NOT NULL
+    GROUP BY cuotaid
+) pg ON cp.id = pg.cuotaid
+WHERE cp.montopagado > 0 
+  AND (COALESCE(pg.suma_pagos, 0) < cp.montopagado * 0.99);
 */
 
 -- ============================================================
--- PASO 6: VINCULAR PAGOS HUÉRFANOS A CUOTAS
--- (Solo ver primero)
+-- PASO 6: PAGOS HUÉRFANOS
 -- ============================================================
-SELECT 'PAGOS HUÉRFANOS (sin CuotaId)' as analisis;
+SELECT 
+    pg.id as pago_id,
+    pg.prestamoid,
+    c.nombre as cliente,
+    pg.montopago as monto,
+    pg.fechapago as fecha,
+    pg.observaciones as obs
+FROM pagos pg
+JOIN prestamos p ON pg.prestamoid = p.id
+JOIN clientes c ON p.clienteid = c.id
+WHERE pg.cuotaid IS NULL;
+
+-- ============================================================
+-- PASO 7: VERIFICACIÓN FINAL
+-- ============================================================
+SELECT 'DESPUÉS' as etapa,
+    (SELECT COUNT(*) FROM pagos) as total_pagos,
+    (SELECT SUM(montopago) FROM pagos) as suma_pagos,
+    (SELECT COUNT(*) FROM cuotasprestamo WHERE estadocuota = 'Pagada') as cuotas_pagadas,
+    (SELECT SUM(montopagado) FROM cuotasprestamo) as suma_cuotas;
 
 SELECT 
-    pg."Id" as pago_id,
-    pg."PrestamoId",
-    c."Nombre" as cliente,
-    pg."MontoPago",
-    pg."FechaPago",
-    pg."Observaciones"
-FROM "Pagos" pg
-JOIN "Prestamos" p ON pg."PrestamoId" = p."Id"
-JOIN "Clientes" c ON p."ClienteId" = c."Id"
-WHERE pg."CuotaId" IS NULL;
-
--- ============================================================
--- PASO 7: VERIFICACIÓN FINAL DESPUÉS DE CAMBIOS
--- ============================================================
-SELECT 'DESPUÉS DE CAMBIOS' as etapa,
-    (SELECT COUNT(*) FROM "Pagos") as total_pagos,
-    (SELECT SUM("MontoPago") FROM "Pagos") as suma_pagos,
-    (SELECT COUNT(*) FROM "CuotasPrestamo" WHERE "EstadoCuota" = 'Pagada') as cuotas_pagadas,
-    (SELECT SUM("MontoPagado") FROM "CuotasPrestamo") as suma_monto_pagado_cuotas;
-
--- Verificar discrepancia
-SELECT 
-    'DISCREPANCIA FINAL' as verificacion,
-    (SELECT SUM("MontoPago") FROM "Pagos") as total_pagos,
-    (SELECT SUM("MontoPagado") FROM "CuotasPrestamo") as total_cuotas,
-    (SELECT SUM("MontoPago") FROM "Pagos") - (SELECT SUM("MontoPagado") FROM "CuotasPrestamo") as diferencia;
+    'DISCREPANCIA' as verificacion,
+    (SELECT SUM(montopago) FROM pagos) as total_pagos,
+    (SELECT SUM(montopagado) FROM cuotasprestamo) as total_cuotas,
+    (SELECT SUM(montopago) FROM pagos) - (SELECT SUM(montopagado) FROM cuotasprestamo) as diferencia;

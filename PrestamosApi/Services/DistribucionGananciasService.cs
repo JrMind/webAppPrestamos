@@ -49,9 +49,11 @@ public class DistribucionGananciasService : IDistribucionGananciasService
 
         // Calcular la porción para el cobrador (si aplica)
         var gananciaNetaDistribuir = gananciaDelPago;
-        if (prestamo.CobradorId.HasValue && prestamo.PorcentajeCobrador > 0)
+        if (prestamo.CobradorId.HasValue && prestamo.PorcentajeCobrador > 0 && prestamo.TasaInteres > 0)
         {
-            var gananciaCobrador = gananciaDelPago * (prestamo.PorcentajeCobrador / 100);
+            // El cobrador recibe su % del interés (PorcentajeCobrador es relativo a TasaInteres)
+            // Ejemplo: Si TasaInteres=15% y PorcentajeCobrador=5%, cobrador recibe 5/15 = 33.3% del interés
+            var gananciaCobrador = gananciaDelPago * (prestamo.PorcentajeCobrador / prestamo.TasaInteres);
             gananciaNetaDistribuir = gananciaDelPago - gananciaCobrador;
 
             // Registrar ganancia del cobrador
