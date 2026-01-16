@@ -25,6 +25,7 @@ public class PrestamosDbContext : DbContext
     public DbSet<SmsCampaign> SmsCampaigns => Set<SmsCampaign>();
     public DbSet<SmsHistory> SmsHistories => Set<SmsHistory>();
     public DbSet<Costo> Costos => Set<Costo>();
+    public DbSet<ConfiguracionSistema> ConfiguracionesSistema => Set<ConfiguracionSistema>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -352,6 +353,18 @@ public class PrestamosDbContext : DbContext
             entity.Property(e => e.Activo).HasColumnName("activo").HasDefaultValue(true);
             entity.Property(e => e.FechaCreacion).HasColumnName("fechacreacion").HasDefaultValueSql("NOW()");
             entity.Property(e => e.FechaFin).HasColumnName("fechafin");
+        });
+
+        // ConfiguracionSistema
+        modelBuilder.Entity<ConfiguracionSistema>(entity =>
+        {
+            entity.ToTable("configuracionsistema");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Clave).HasColumnName("clave").HasMaxLength(100).IsRequired();
+            entity.Property(e => e.Valor).HasColumnName("valor").IsRequired();
+            entity.Property(e => e.FechaActualizacion).HasColumnName("fechaactualizacion").HasDefaultValueSql("NOW()");
+            entity.Property(e => e.Descripcion).HasColumnName("descripcion");
+            entity.HasIndex(e => e.Clave).IsUnique();
         });
     }
 }

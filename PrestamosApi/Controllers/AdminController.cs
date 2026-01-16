@@ -172,13 +172,94 @@ public class AdminController : ControllerBase
                 nuevaReservaDisponible = reservaDisponible
             });
         }
+    }
+
+    /// <summary>
+    /// Establece manualmente la reserva disponible (lo que realmente hay en caja)
+    /// </summary>
+    [HttpPost("reserva-disponible")]
+    public async Task<IActionResult> SetReservaDisponible([FromBody] decimal montoDisponible)
+    {
+        try
+        {
+            var config = await _context.ConfiguracionesSistema
+                .FirstOrDefaultAsync(c => c.Clave == "ReservaDisponibleManual");
+
+            if (config == null)
+            {
+                config = new ConfiguracionSistema
+                {
+                    Clave = "ReservaDisponibleManual",
+                    Valor = montoDisponible.ToString("F2"),
+                    FechaActualizacion = DateTime.UtcNow,
+                    Descripcion = "Monto disponible en caja/banco configurado manualmente"
+                };
+                _context.ConfiguracionesSistema.Add(config);
+            }
+            else
+            {
+                config.Valor = montoDisponible.ToString("F2");
+                config.FechaActualizacion = DateTime.UtcNow;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new
+            {
+                message = "Reserva disponible actualizada exitosamente",
+                montoDisponible,
+                fechaActualizacion = config.FechaActualizacion
+            });
+        }
         catch (Exception ex)
         {
             return BadRequest(new
             {
-                message = "Error al recalcular el sistema",
-                error = ex.Message,
-                detalles = ex.InnerException?.Message
+                message = "Error al actualizar reserva disponible",
+                error = ex.Message
+            });
+        }
+    }
+
+    /// <summary>
+    /// Obtiene la reserva disponible manual (si existe) o calculada automáticamente
+    /// </summary>
+    [HttpGet("reserva-disponible")]
+    public async Task<IActionResult> GetReservaDisponible()
+    {
+        try
+        {
+            // Intentar obtener valor manual primero
+            var configManual = await _context.ConfiguracionesSistema
+                .FirstOrDefaultAsync(c => c.Clave == "ReservaDisponibleManual");
+
+            if (configManual != null && decimal.TryParse(configManual.Valor, out var montoManual))
+            {
+                return Ok(new
+                {
+                    montoDisponible = montoManual,
+                    esManual = true,
+                    fechaActualizacion = configManual.FechaActualizacion,
+                    descripcion = "Valor configurado manualmente"
+                });
+            }
+
+            // Si no hay valor manual, calcular automáticamente
+            var montoCalculado = await _gananciasService.CalcularReservaDisponibleAsync();
+
+            return Ok(new
+            {
+                montoDisponible = montoCalculado,
+                esManual = false,
+                descripcion = "Valor calculado automáticamente"
+            });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new
+            {
+                message = "Error al obtener reserva disponible",
+                error = ex.Message
             });
         }
     }
