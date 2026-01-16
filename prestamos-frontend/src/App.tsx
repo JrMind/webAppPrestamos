@@ -23,7 +23,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias'>('prestamos');
+  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias'>('prestamos');
 
   // Data states
   const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
@@ -64,6 +64,25 @@ function App() {
     frecuencia: 'Mensual',
     descripcion: ''
   });
+
+  // Estado para Pagos por Día
+  const [pagosPorDiaData, setPagosPorDiaData] = useState<{
+    fechaInicio: string;
+    fechaFin: string;
+    totalGeneral: number;
+    totalPagos: number;
+    diasConPagos: number;
+    porDia: Array<{
+      fecha: string;
+      totalDia: number;
+      cantidadPagos: number;
+      pagos: Array<{ id: number; prestamoId: number; clienteNombre: string; montoPago: number; fechaPago: string; metodoPago: string; observaciones: string; }>;
+    }>;
+  } | null>(null);
+  const [pagosDiaFechaInicio, setPagosDiaFechaInicio] = useState<string>(formatDateInput(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
+  const [pagosDiaFechaFin, setPagosDiaFechaFin] = useState<string>(formatDateInput(new Date()));
+  const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+
 
   const handleStartEditGananciaAportador = (id: number, currentMonto: number) => {
     setEditingGananciaAportadorId(id);
@@ -1106,6 +1125,7 @@ function App() {
             <button className={`tab ${activeTab === 'prestamos' ? 'active' : ''}`} onClick={() => setActiveTab('prestamos')}>Préstamos</button>
             <button className={`tab ${activeTab === 'clientes' ? 'active' : ''}`} onClick={() => setActiveTab('clientes')}>Clientes</button>
             <button className={`tab ${activeTab === 'cobros' ? 'active' : ''}`} onClick={() => setActiveTab('cobros')}>📋 Cobros</button>
+            <button className={`tab ${activeTab === 'pagosdia' ? 'active' : ''}`} onClick={() => setActiveTab('pagosdia')}>💵 Pagos/Día</button>
             <button className={`tab ${activeTab === 'socios' ? 'active' : ''}`} onClick={() => setActiveTab('socios')}>Socios</button>
             <button className={`tab ${activeTab === 'balance' ? 'active' : ''}`} onClick={() => setActiveTab('balance')}>💰 Mi Balance</button>
             <button className={`tab ${activeTab === 'sms' ? 'active' : ''}`} onClick={() => setActiveTab('sms')}>📱 SMS</button>
@@ -1321,6 +1341,91 @@ function App() {
               ) : null}
             </div>
           )}
+
+          {/* Pagos Por Día Tab */}
+          {activeTab === 'pagosdia' && (
+            <div>
+              <div className="filters-bar" style={{ marginBottom: '1rem' }}>
+                <div className="filter-group">
+                  <label>Desde</label>
+                  <input type="date" value={pagosDiaFechaInicio} onChange={e => setPagosDiaFechaInicio(e.target.value)} />
+                </div>
+                <div className="filter-group">
+                  <label>Hasta</label>
+                  <input type="date" value={pagosDiaFechaFin} onChange={e => setPagosDiaFechaFin(e.target.value)} />
+                </div>
+                <button className="btn btn-primary" onClick={async () => {
+                  try {
+                    const data = await pagosApi.getPorDia(pagosDiaFechaInicio, pagosDiaFechaFin);
+                    setPagosPorDiaData(data);
+                  } catch { showToast('Error cargando pagos', 'error'); }
+                }}>🔍 Buscar</button>
+              </div>
+
+              {pagosPorDiaData && (
+                <>
+                  <div className="kpi-grid" style={{ marginBottom: '1rem' }}>
+                    <div className="kpi-card"><span className="kpi-title">💰 Total Cobrado</span><span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(pagosPorDiaData.totalGeneral)}</span></div>
+                    <div className="kpi-card"><span className="kpi-title">📝 Pagos Registrados</span><span className="kpi-value">{pagosPorDiaData.totalPagos}</span></div>
+                    <div className="kpi-card"><span className="kpi-title">📅 Días con Pagos</span><span className="kpi-value">{pagosPorDiaData.diasConPagos}</span></div>
+                  </div>
+
+                  {pagosPorDiaData.porDia.map(dia => (
+                    <div key={dia.fecha} style={{ marginBottom: '1rem', border: '1px solid var(--border)', borderRadius: '8px', overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+                          padding: '0.75rem 1rem', background: 'var(--card-bg)', cursor: 'pointer'
+                        }}
+                        onClick={() => {
+                          const newSet = new Set(expandedDays);
+                          if (newSet.has(dia.fecha)) newSet.delete(dia.fecha);
+                          else newSet.add(dia.fecha);
+                          setExpandedDays(newSet);
+                        }}
+                      >
+                        <div>
+                          <strong>{formatDate(dia.fecha)}</strong>
+                          <span style={{ color: '#6b7280', marginLeft: '0.5rem' }}>({dia.cantidadPagos} pagos)</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <span style={{ color: '#10b981', fontWeight: 'bold' }}>{formatMoney(dia.totalDia)}</span>
+                          <span>{expandedDays.has(dia.fecha) ? '▼' : '▶'}</span>
+                        </div>
+                      </div>
+                      {expandedDays.has(dia.fecha) && (
+                        <div className="table-container" style={{ margin: 0 }}>
+                          <table>
+                            <thead><tr><th>Cliente</th><th>Préstamo</th><th>Monto</th><th>Método</th><th>Observaciones</th></tr></thead>
+                            <tbody>
+                              {dia.pagos.map(p => (
+                                <tr key={p.id}>
+                                  <td><strong>{p.clienteNombre}</strong></td>
+                                  <td>#{p.prestamoId}</td>
+                                  <td className="money" style={{ color: '#10b981' }}>{formatMoney(p.montoPago)}</td>
+                                  <td>{p.metodoPago || 'Efectivo'}</td>
+                                  <td style={{ maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>{p.observaciones || '-'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+
+                  {pagosPorDiaData.porDia.length === 0 && (
+                    <div className="empty-state" style={{ padding: '2rem', textAlign: 'center' }}>No hay pagos en este rango de fechas</div>
+                  )}
+                </>
+              )}
+
+              {!pagosPorDiaData && (
+                <div className="empty-state" style={{ padding: '2rem', textAlign: 'center' }}>Selecciona un rango de fechas y haz clic en Buscar</div>
+              )}
+            </div>
+          )}
+
 
           {/* Socios Tab */}
           {activeTab === 'socios' && (

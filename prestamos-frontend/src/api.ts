@@ -376,6 +376,35 @@ export const pagosApi = {
             body: JSON.stringify({ monto, metodoPago }),
         });
         return handleResponse(response);
+    },
+
+    getPorDia: async (fechaInicio?: string, fechaFin?: string): Promise<{
+        fechaInicio: string;
+        fechaFin: string;
+        totalGeneral: number;
+        totalPagos: number;
+        diasConPagos: number;
+        porDia: Array<{
+            fecha: string;
+            totalDia: number;
+            cantidadPagos: number;
+            pagos: Array<{
+                id: number;
+                prestamoId: number;
+                clienteNombre: string;
+                montoPago: number;
+                fechaPago: string;
+                metodoPago: string;
+                observaciones: string;
+            }>;
+        }>;
+    }> => {
+        const params = new URLSearchParams();
+        if (fechaInicio) params.append('fechaInicio', fechaInicio);
+        if (fechaFin) params.append('fechaFin', fechaFin);
+        const url = `${API_URL}/pagos/por-dia${params.toString() ? '?' + params.toString() : ''}`;
+        const response = await fetch(url, { headers: getHeaders() });
+        return handleResponse(response);
     }
 };
 

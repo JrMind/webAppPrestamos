@@ -56,6 +56,66 @@ public class PagosController : ControllerBase
         return Ok(pagos);
     }
 
+    /// <summary>
+    /// Obtener pagos agrupados por día con totales
+    /// </summary>
+    [HttpGet("por-dia")]
+    public async Task<ActionResult<object>> GetPagosPorDia([FromQuery] DateTime? fechaInicio = null, [FromQuery] DateTime? fechaFin = null)
+    {
+        // Por defecto, últimos 30 días
+        var inicio = fechaInicio ?? DateTime.UtcNow.AddDays(-30);
+        var fin = fechaFin ?? DateTime.UtcNow;
+        
+        inicio = DateTime.SpecifyKind(inicio.Date, DateTimeKind.Utc);
+        fin = DateTime.SpecifyKind(fin.Date.AddDays(1).AddSeconds(-1), DateTimeKind.Utc);
+
+        var pagos = await _context.Pagos
+            .Include(p => p.Prestamo)
+                .ThenInclude(pr => pr!.Cliente)
+            .Where(p => p.FechaPago >= inicio && p.FechaPago <= fin)
+            .OrderByDescending(p => p.FechaPago)
+            .Select(p => new {
+                p.Id,
+                p.PrestamoId,
+                ClienteNombre = p.Prestamo!.Cliente!.Nombre,
+                p.MontoPago,
+                p.FechaPago,
+                p.MetodoPago,
+                p.CuotaId,
+                p.Observaciones
+            })
+            .ToListAsync();
+
+        // Agrupar por fecha
+        var porDia = pagos
+            .GroupBy(p => p.FechaPago.Date)
+            .OrderByDescending(g => g.Key)
+            .Select(g => new {
+                Fecha = g.Key,
+                TotalDia = g.Sum(p => p.MontoPago),
+                CantidadPagos = g.Count(),
+                Pagos = g.Select(p => new {
+                    p.Id,
+                    p.PrestamoId,
+                    p.ClienteNombre,
+                    p.MontoPago,
+                    p.FechaPago,
+                    p.MetodoPago,
+                    p.Observaciones
+                }).ToList()
+            })
+            .ToList();
+
+        return Ok(new {
+            fechaInicio = inicio,
+            fechaFin = fin,
+            totalGeneral = pagos.Sum(p => p.MontoPago),
+            totalPagos = pagos.Count,
+            diasConPagos = porDia.Count,
+            porDia
+        });
+    }
+
     [HttpPost]
     public async Task<ActionResult<PagoDto>> CreatePago(CreatePagoDto dto)
     {
