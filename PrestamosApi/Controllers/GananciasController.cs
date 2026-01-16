@@ -154,7 +154,7 @@ public class GananciasController : ControllerBase
         var gananciaCobradoresTotal = cobradoresAgrupados.Sum(c => c.GananciaProyectada);
         
         // Ganancia de interés por socio = (InterésTotal - Aportadores - Cobradores) / 3
-        var gananciaInteresPorSocio = (totalInteresesGenerados - gananciaCobradoresTotal - descuentoAportador) / NUM_SOCIOS;
+        var gananciaInteresPorSocio = totalInteresesGenerados / NUM_SOCIOS; // Full interest per socio
         
         // Calcular cantidad de quincenas promedio de los préstamos activos
         var quincenasPromedio = prestamosActivos.Count > 0 
@@ -168,7 +168,7 @@ public class GananciasController : ControllerBase
         
         // Mensuales Socios (basado en cuotas del mes actual)
         // Interés neto = Interés Total - Aportadores - Cobradores
-        var interesNetoSociosMes = (globalInteresMes - gastoMensualAportadores - globalGananciaCobradoresMes) / NUM_SOCIOS;
+        var interesNetoSociosMes = globalInteresMes / NUM_SOCIOS; // Full interest per socio (no cost deductions)
 
         var socios = await _context.Usuarios
             .Where(u => u.Activo && u.Rol == RolUsuario.Socio)
@@ -227,7 +227,7 @@ public class GananciasController : ControllerBase
             GastoMensualAportadores = Math.Round(gastoMensualAportadores, 0),
             CostosTotalesMes = Math.Round(costosTotalesMes, 0),
             // Ganancia Interés Neta = Intereses - Cobradores - Aportadores - Costos
-            GananciaInteresNeta = Math.Round(globalInteresMes - globalGananciaCobradoresMes - gastoMensualAportadores - costosTotalesMes, 0),
+            GananciaInteresNeta = Math.Round(globalInteresMes, 0), // Full interest net (no cost deductions)
             NumeroSociosFijo = NUM_SOCIOS
         };
 
