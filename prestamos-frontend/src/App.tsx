@@ -1363,22 +1363,49 @@ function App() {
           {/* Préstamos del Día Tab */}
           {activeTab === 'prestamosdia' && (
             <div>
-              <div className="filters-bar" style={{ marginBottom: '1rem' }}>
-                <div className="filter-group">
-                  <label>Fecha</label>
-                  <input type="date" value={prestamosDelDiaFecha} onChange={e => setPrestamosDelDiaFecha(e.target.value)} />
+              <div className="filters-bar" style={{ marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <div className="filter-group" style={{ flex: '0 0 auto', minWidth: '180px' }}>
+                  <label>Seleccionar Fecha</label>
+                  <input
+                    type="date"
+                    value={prestamosDelDiaFecha}
+                    onChange={e => {
+                      setPrestamosDelDiaFecha(e.target.value);
+                      loadPrestamosDelDia(e.target.value);
+                    }}
+                    style={{ fontSize: '1rem', padding: '0.6rem', cursor: 'pointer' }}
+                  />
                 </div>
-                <button className="btn btn-primary" onClick={() => loadPrestamosDelDia()}>🔍 Buscar</button>
-                <button className="btn btn-secondary" onClick={() => {
-                  const hoy = formatDateInput(new Date());
-                  setPrestamosDelDiaFecha(hoy);
-                  loadPrestamosDelDia(hoy);
-                }}>📅 Hoy</button>
-                <button className="btn btn-secondary" onClick={() => {
-                  const ayer = formatDateInput(new Date(Date.now() - 24 * 60 * 60 * 1000));
-                  setPrestamosDelDiaFecha(ayer);
-                  loadPrestamosDelDia(ayer);
-                }}>⏮️ Ayer</button>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+                  <button className="btn btn-primary" onClick={() => {
+                    const hoy = formatDateInput(new Date());
+                    setPrestamosDelDiaFecha(hoy);
+                    loadPrestamosDelDia(hoy);
+                  }}>📅 Hoy</button>
+                  <button className="btn btn-secondary" onClick={() => {
+                    const ayer = formatDateInput(new Date(Date.now() - 1 * 24 * 60 * 60 * 1000));
+                    setPrestamosDelDiaFecha(ayer);
+                    loadPrestamosDelDia(ayer);
+                  }}>⏮️ Ayer</button>
+                  {[2, 3, 4, 5, 6, 7].map(daysAgo => {
+                    const targetDate = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000);
+                    const dateStr = formatDateInput(targetDate);
+                    const dayName = targetDate.toLocaleDateString('es-CO', { weekday: 'short' });
+                    return (
+                      <button
+                        key={daysAgo}
+                        className="btn btn-secondary btn-sm"
+                        onClick={() => {
+                          setPrestamosDelDiaFecha(dateStr);
+                          loadPrestamosDelDia(dateStr);
+                        }}
+                        title={formatDate(dateStr)}
+                      >
+                        {dayName} {targetDate.getDate()}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
               {loadingPrestamosDelDia ? (
                 <div className="loading"><div className="spinner"></div></div>

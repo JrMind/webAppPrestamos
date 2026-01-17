@@ -114,11 +114,19 @@ public class PrestamosController : BaseApiController
     }
 
     [HttpGet("dia")]
-    public async Task<ActionResult<object>> GetPrestamosDelDia([FromQuery] DateTime? fecha = null)
+    public async Task<ActionResult<object>> GetPrestamosDelDia([FromQuery] string? fecha = null)
     {
-        var targetDate = fecha.HasValue 
-            ? DateTime.SpecifyKind(fecha.Value.Date, DateTimeKind.Utc) 
-            : DateTime.UtcNow.Date;
+        // Parse fecha string (formato: yyyy-MM-dd) para evitar problemas de zona horaria
+        DateTime targetDate;
+        if (!string.IsNullOrEmpty(fecha) && DateTime.TryParse(fecha, out var parsedDate))
+        {
+            targetDate = parsedDate.Date;
+        }
+        else
+        {
+            targetDate = DateTime.UtcNow.Date;
+        }
+        
         var userId = GetCurrentUserId();
         var isCobrador = IsCobrador();
 
@@ -133,9 +141,11 @@ public class PrestamosController : BaseApiController
             baseQuery = baseQuery.Where(p => p.CobradorId == userId.Value);
         }
 
-        // Préstamos creados en la fecha especificada
+        // Filtrar por año, mes y día para evitar problemas de zona horaria
         var prestamosHoy = await baseQuery
-            .Where(p => p.FechaPrestamo.Date == targetDate)
+            .Where(p => p.FechaPrestamo.Year == targetDate.Year 
+                     && p.FechaPrestamo.Month == targetDate.Month 
+                     && p.FechaPrestamo.Day == targetDate.Day)
             .OrderByDescending(p => p.Id)
             .Select(p => new
             {
@@ -158,7 +168,7 @@ public class PrestamosController : BaseApiController
 
         return Ok(new
         {
-            fecha = targetDate,
+            fecha = targetDate.ToString("yyyy-MM-dd"),
             prestamosHoy,
             resumen = new
             {
