@@ -146,8 +146,12 @@ public class CobrosController : BaseApiController
         }
         else if (!dto.Cobrado)
         {
-            // Nota: Revertir distribución es complejo y no está implementado aquí.
-            // Se asume que el usuario corregirá manualmente los balances si es necesario.
+            // Revertir ganancias antes de desmarcar para evitar duplicación
+            if (cuota.FechaPago.HasValue && cuota.MontoPagado > 0)
+            {
+                await _distribucionService.RevertirGananciasPago(cuota.PrestamoId, cuota.MontoPagado);
+            }
+            
             cuota.FechaPago = null;
             cuota.MontoPagado = 0;
             cuota.SaldoPendiente = cuota.MontoCuota; // Restaurar saldo pendiente

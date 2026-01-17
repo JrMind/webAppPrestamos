@@ -7,6 +7,7 @@ namespace PrestamosApi.Services;
 public interface IDistribucionGananciasService
 {
     Task DistribuirGananciasPago(int prestamoId, decimal montoPago);
+    Task RevertirGananciasPago(int prestamoId, decimal montoPago);
 }
 
 public class DistribucionGananciasService : IDistribucionGananciasService
@@ -158,6 +159,86 @@ public class DistribucionGananciasService : IDistribucionGananciasService
                     }
                 }
             }
+        }
+
+        await _context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Revierte las ganancias distribuidas de un pago (para cuando se desmarca una cuota)
+    /// </summary>
+    public async Task RevertirGananciasPago(int prestamoId, decimal montoPago)
+    {
+        // Obtener el préstamo con sus fuentes de capital
+        var prestamo = await _context.Prestamos
+            .Include(p => p.FuentesCapital)
+            .FirstOrDefaultAsync(p => p.Id == prestamoId);
+
+        if (prestamo == null || !prestamo.FuentesCapital.Any()) return;
+
+        // Calcular el porcentaje de interés respecto al total (misma lógica que distribución)
+        var totalPrestamo = prestamo.MontoTotal;
+        var montoIntereses = prestamo.MontoIntereses;
+
+        if (totalPrestamo <= 0) return;
+
+        var proporcionIntereses = montoIntereses / totalPrestamo;
+        var gananciaDelPago = montoPago * proporcionIntereses;
+
+        // Calcular y revertir la porción del cobrador (si aplica)
+        var gananciaNetaRevertir = gananciaDelPago;
+        if (prestamo.CobradorId.HasValue && prestamo.PorcentajeCobrador > 0 && prestamo.TasaInteres > 0)
+        {
+            var gananciaCobrador = gananciaDelPago * (prestamo.PorcentajeCobrador / prestamo.TasaInteres);
+            gananciaNetaRevertir = gananciaDelPago - gananciaCobrador;
+
+            // Revertir ganancia del cobrador
+            var cobrador = await _context.Usuarios.FindAsync(prestamo.CobradorId.Value);
+            if (cobrador != null)
+            {
+                cobrador.GananciasAcumuladas -= gananciaCobrador;
+            }
+        }
+
+        // Calcular participación total de las fuentes
+        var totalCapitalFuentes = prestamo.FuentesCapital.Sum(f => f.MontoAportado);
+        if (totalCapitalFuentes <= 0) return;
+
+        foreach (var fuente in prestamo.FuentesCapital)
+        {
+            var gananciaFuente = gananciaNetaRevertir * (fuente.MontoAportado / totalCapitalFuentes);
+
+            if (fuente.Tipo == "Interno" && fuente.UsuarioId.HasValue)
+            {
+                // Socio interno - revertir distribución
+                var socio = await _context.Usuarios.FindAsync(fuente.UsuarioId.Value);
+                if (socio != null)
+                {
+                    socio.GananciasAcumuladas -= gananciaFuente;
+                    socio.CapitalActual -= gananciaFuente;
+                }
+            }
+            else if (fuente.Tipo == "Reserva" || (fuente.Tipo == "Interno" && !fuente.UsuarioId.HasValue))
+            {
+                // Tipo "Reserva" - revertir equitativamente entre los socios activos
+                var socios = await _context.Usuarios
+                    .Where(u => u.Activo && u.Rol == RolUsuario.Socio)
+                    .ToListAsync();
+                
+                if (socios.Count > 0)
+                {
+                    var numSocios = socios.Count;
+                    var gananciaPorSocio = gananciaFuente / numSocios;
+                    
+                    foreach (var socio in socios)
+                    {
+                        socio.GananciasAcumuladas -= gananciaPorSocio;
+                        socio.CapitalActual -= gananciaPorSocio;
+                    }
+                }
+            }
+            // Nota: Para aportadores externos no revertimos nada porque ellos 
+            // solo reciben recuperación de capital, no intereses
         }
 
         await _context.SaveChangesAsync();
