@@ -83,6 +83,7 @@ function App() {
   const [pagosDiaFechaInicio, setPagosDiaFechaInicio] = useState<string>(formatDateInput(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)));
   const [pagosDiaFechaFin, setPagosDiaFechaFin] = useState<string>(formatDateInput(new Date()));
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
+  const [prestamosDelDiaFecha, setPrestamosDelDiaFecha] = useState<string>(formatDateInput(new Date()));
 
 
   const handleStartEditGananciaAportador = (id: number, currentMonto: number) => {
@@ -372,10 +373,10 @@ function App() {
     }
   };
 
-  const loadPrestamosDelDia = async () => {
+  const loadPrestamosDelDia = async (fecha?: string) => {
     setLoadingPrestamosDelDia(true);
     try {
-      const data = await prestamosDelDiaApi.getPrestamosDelDia();
+      const data = await prestamosDelDiaApi.getPrestamosDelDia(fecha || prestamosDelDiaFecha);
       setPrestamosDelDia(data);
     } catch (error) {
       console.error('Error loading préstamos del día:', error);
@@ -1362,14 +1363,31 @@ function App() {
           {/* Préstamos del Día Tab */}
           {activeTab === 'prestamosdia' && (
             <div>
+              <div className="filters-bar" style={{ marginBottom: '1rem' }}>
+                <div className="filter-group">
+                  <label>Fecha</label>
+                  <input type="date" value={prestamosDelDiaFecha} onChange={e => setPrestamosDelDiaFecha(e.target.value)} />
+                </div>
+                <button className="btn btn-primary" onClick={() => loadPrestamosDelDia()}>🔍 Buscar</button>
+                <button className="btn btn-secondary" onClick={() => {
+                  const hoy = formatDateInput(new Date());
+                  setPrestamosDelDiaFecha(hoy);
+                  loadPrestamosDelDia(hoy);
+                }}>📅 Hoy</button>
+                <button className="btn btn-secondary" onClick={() => {
+                  const ayer = formatDateInput(new Date(Date.now() - 24 * 60 * 60 * 1000));
+                  setPrestamosDelDiaFecha(ayer);
+                  loadPrestamosDelDia(ayer);
+                }}>⏮️ Ayer</button>
+              </div>
               {loadingPrestamosDelDia ? (
                 <div className="loading"><div className="spinner"></div></div>
               ) : prestamosDelDia ? (
                 <>
                   <div className="kpi-grid" style={{ marginBottom: '1rem' }}>
-                    <div className="kpi-card"><span className="kpi-title">📋 Préstamos Hoy ({prestamosDelDia.resumen.totalPrestamosHoy})</span><span className="kpi-value">{formatMoney(prestamosDelDia.resumen.montoTotalDesembolsado)}</span></div>
+                    <div className="kpi-card"><span className="kpi-title">📋 Préstamos ({formatDate(prestamosDelDia.fecha)} - {prestamosDelDia.resumen.totalPrestamosHoy})</span><span className="kpi-value">{formatMoney(prestamosDelDia.resumen.montoTotalDesembolsado)}</span></div>
                   </div>
-                  <h4 style={{ color: '#10b981', margin: '1rem 0 0.5rem' }}>📋 Préstamos Creados Hoy</h4>
+                  <h4 style={{ color: '#10b981', margin: '1rem 0 0.5rem' }}>📋 Préstamos del {formatDate(prestamosDelDia.fecha)}</h4>
                   <div className="table-container">
                     <table><thead><tr><th>ID</th><th>Cliente</th><th>Monto</th><th>Interés</th><th>Cuotas</th><th>Cobrador</th><th>Estado</th><th>Acciones</th></tr></thead>
                       <tbody>{prestamosDelDia.prestamosHoy.map(p => (
@@ -1390,7 +1408,7 @@ function App() {
                             </div>
                           </td>
                         </tr>
-                      ))}{prestamosDelDia.prestamosHoy.length === 0 && <tr><td colSpan={8} className="empty-state">No hay préstamos creados hoy</td></tr>}</tbody>
+                      ))}{prestamosDelDia.prestamosHoy.length === 0 && <tr><td colSpan={8} className="empty-state">No hay préstamos creados en esta fecha</td></tr>}</tbody>
                     </table>
                   </div>
                 </>

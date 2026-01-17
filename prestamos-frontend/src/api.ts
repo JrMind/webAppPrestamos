@@ -614,11 +614,15 @@ export const cobrosDelMesApi = {
 import type { PrestamosDelDia } from './types';
 
 export const prestamosDelDiaApi = {
-    getPrestamosDelDia: async (): Promise<PrestamosDelDia> => {
-        const response = await fetch(`${API_URL}/prestamos/dia`, { headers: getHeaders() });
+    getPrestamosDelDia: async (fecha?: string): Promise<PrestamosDelDia> => {
+        const url = fecha
+            ? `${API_URL}/prestamos/dia?fecha=${fecha}`
+            : `${API_URL}/prestamos/dia`;
+        const response = await fetch(url, { headers: getHeaders() });
         return handleResponse<PrestamosDelDia>(response);
     },
 };
+
 
 
 // Mi Balance (nuevo endpoint para balance personal con cálculo de interés)

@@ -114,9 +114,11 @@ public class PrestamosController : BaseApiController
     }
 
     [HttpGet("dia")]
-    public async Task<ActionResult<object>> GetPrestamosDelDia()
+    public async Task<ActionResult<object>> GetPrestamosDelDia([FromQuery] DateTime? fecha = null)
     {
-        var today = DateTime.UtcNow.Date;
+        var targetDate = fecha.HasValue 
+            ? DateTime.SpecifyKind(fecha.Value.Date, DateTimeKind.Utc) 
+            : DateTime.UtcNow.Date;
         var userId = GetCurrentUserId();
         var isCobrador = IsCobrador();
 
@@ -131,9 +133,9 @@ public class PrestamosController : BaseApiController
             baseQuery = baseQuery.Where(p => p.CobradorId == userId.Value);
         }
 
-        // Préstamos creados hoy
+        // Préstamos creados en la fecha especificada
         var prestamosHoy = await baseQuery
-            .Where(p => p.FechaPrestamo.Date == today)
+            .Where(p => p.FechaPrestamo.Date == targetDate)
             .OrderByDescending(p => p.Id)
             .Select(p => new
             {
@@ -156,7 +158,7 @@ public class PrestamosController : BaseApiController
 
         return Ok(new
         {
-            fecha = today,
+            fecha = targetDate,
             prestamosHoy,
             resumen = new
             {
