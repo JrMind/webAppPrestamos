@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi } from './api';
-import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MiBalance, Costo, CreateCostoDto } from './types';
+import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi } from './api';
+import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, PrestamosDelDia, MiBalance, Costo, CreateCostoDto } from './types';
 import './App.css';
 
 const formatMoney = (amount: number): string => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount);
@@ -23,7 +23,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias'>('prestamos');
+  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'prestamosdia' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias'>('prestamos');
 
   // Data states
   const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
@@ -40,6 +40,7 @@ function App() {
   const [smsCampaigns, setSmsCampaigns] = useState<SmsCampaign[]>([]);
   const [smsHistoryData, setSmsHistoryData] = useState<SmsHistory[]>([]);
   const [cobrosDelMes, setCobrosDelMes] = useState<CobrosDelMes | null>(null);
+  const [prestamosDelDia, setPrestamosDelDia] = useState<PrestamosDelDia | null>(null);
   const [miBalance, setMiBalance] = useState<MiBalance | null>(null);
   const [resumenParticipacion, setResumenParticipacion] = useState<ResumenParticipacion | null>(null);
   const [showSmsCampaignModal, setShowSmsCampaignModal] = useState(false);
@@ -293,6 +294,7 @@ function App() {
   const [editingPrestamoId, setEditingPrestamoId] = useState<number | null>(null);
   const [editingClienteId, setEditingClienteId] = useState<number | null>(null);
   const [loadingCobros, setLoadingCobros] = useState(false);
+  const [loadingPrestamosDelDia, setLoadingPrestamosDelDia] = useState(false);
 
   const loadData = useCallback(async () => {
     if (!isAuthenticated) { setLoading(false); return; }
@@ -333,6 +335,7 @@ function App() {
 
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => { if (activeTab === 'cobros') loadCobrosDelMes(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'prestamosdia') loadPrestamosDelDia(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'socios') loadBalanceSocios(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'usuarios') loadUsuarios(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'clientes') loadClientes(); }, [activeTab]);
@@ -366,6 +369,19 @@ function App() {
       showToast('Error al cargar cobros', 'error');
     } finally {
       setLoadingCobros(false);
+    }
+  };
+
+  const loadPrestamosDelDia = async () => {
+    setLoadingPrestamosDelDia(true);
+    try {
+      const data = await prestamosDelDiaApi.getPrestamosDelDia();
+      setPrestamosDelDia(data);
+    } catch (error) {
+      console.error('Error loading préstamos del día:', error);
+      showToast('Error al cargar préstamos del día', 'error');
+    } finally {
+      setLoadingPrestamosDelDia(false);
     }
   };
 
@@ -1125,6 +1141,7 @@ function App() {
             <button className={`tab ${activeTab === 'prestamos' ? 'active' : ''}`} onClick={() => setActiveTab('prestamos')}>Préstamos</button>
             <button className={`tab ${activeTab === 'clientes' ? 'active' : ''}`} onClick={() => setActiveTab('clientes')}>Clientes</button>
             <button className={`tab ${activeTab === 'cobros' ? 'active' : ''}`} onClick={() => setActiveTab('cobros')}>📋 Cobros</button>
+            <button className={`tab ${activeTab === 'prestamosdia' ? 'active' : ''}`} onClick={() => setActiveTab('prestamosdia')}>📋 Préstamos/Día</button>
             <button className={`tab ${activeTab === 'pagosdia' ? 'active' : ''}`} onClick={() => setActiveTab('pagosdia')}>💵 Pagos/Día</button>
             <button className={`tab ${activeTab === 'socios' ? 'active' : ''}`} onClick={() => setActiveTab('socios')}>Socios</button>
             <button className={`tab ${activeTab === 'balance' ? 'active' : ''}`} onClick={() => setActiveTab('balance')}>💰 Mi Balance</button>
@@ -1337,6 +1354,45 @@ function App() {
                       </div>
                     </>
                   )}
+                </>
+              ) : null}
+            </div>
+          )}
+
+          {/* Préstamos del Día Tab */}
+          {activeTab === 'prestamosdia' && (
+            <div>
+              {loadingPrestamosDelDia ? (
+                <div className="loading"><div className="spinner"></div></div>
+              ) : prestamosDelDia ? (
+                <>
+                  <div className="kpi-grid" style={{ marginBottom: '1rem' }}>
+                    <div className="kpi-card"><span className="kpi-title">📋 Préstamos Hoy ({prestamosDelDia.resumen.totalPrestamosHoy})</span><span className="kpi-value">{formatMoney(prestamosDelDia.resumen.montoTotalDesembolsado)}</span></div>
+                  </div>
+                  <h4 style={{ color: '#10b981', margin: '1rem 0 0.5rem' }}>📋 Préstamos Creados Hoy</h4>
+                  <div className="table-container">
+                    <table><thead><tr><th>ID</th><th>Cliente</th><th>Monto</th><th>Interés</th><th>Cuotas</th><th>Cobrador</th><th>Estado</th><th>Acciones</th></tr></thead>
+                      <tbody>{prestamosDelDia.prestamosHoy.map(p => (
+                        <tr key={p.id}>
+                          <td>#{p.id}</td>
+                          <td><strong>{p.clienteNombre}</strong><div style={{ fontSize: '0.75rem' }}>{p.clienteCedula}</div></td>
+                          <td className="money">{formatMoney(p.montoPrestado)}</td>
+                          <td>{p.tasaInteres}%</td>
+                          <td>{p.numeroCuotas}</td>
+                          <td>{p.cobradorNombre || '-'}</td>
+                          <td><span className={`badge ${p.estadoPrestamo === 'Activo' ? 'badge-green' : 'badge-gray'}`}>{p.estadoPrestamo}</span></td>
+                          <td>
+                            <div className="actions">
+                              <button className="btn btn-secondary btn-sm" onClick={async () => {
+                                const prestamo = await prestamosApi.getById(p.id);
+                                openDetalle(prestamo);
+                              }}>Ver</button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}{prestamosDelDia.prestamosHoy.length === 0 && <tr><td colSpan={8} className="empty-state">No hay préstamos creados hoy</td></tr>}</tbody>
+                    </table>
+                  </div>
                 </>
               ) : null}
             </div>

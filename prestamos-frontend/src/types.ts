@@ -428,6 +428,34 @@ export interface CobrosDelMes {
   };
 }
 
+// Préstamos del Día
+export interface PrestamoDelDia {
+  id: number;
+  clienteId: number;
+  clienteNombre: string;
+  clienteCedula: string;
+  clienteTelefono?: string;
+  montoPrestado: number;
+  tasaInteres: number;
+  tipoInteres: string;
+  frecuenciaPago: string;
+  numeroCuotas: number;
+  fechaPrestamo: string;
+  cobradorNombre?: string;
+  porcentajeCobrador: number;
+  estadoPrestamo: string;
+}
+
+export interface PrestamosDelDia {
+  fecha: string;
+  prestamosHoy: PrestamoDelDia[];
+  resumen: {
+    totalPrestamosHoy: number;
+    montoTotalDesembolsado: number;
+  };
+}
+
+
 // Mi Balance Types
 export interface AporteDetalle {
   id: number;

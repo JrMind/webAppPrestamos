@@ -113,6 +113,60 @@ public class PrestamosController : BaseApiController
         return Ok(prestamos);
     }
 
+    [HttpGet("dia")]
+    public async Task<ActionResult<object>> GetPrestamosDelDia()
+    {
+        var today = DateTime.UtcNow.Date;
+        var userId = GetCurrentUserId();
+        var isCobrador = IsCobrador();
+
+        var baseQuery = _context.Prestamos
+            .Include(p => p.Cliente)
+            .Include(p => p.Cobrador)
+            .AsQueryable();
+
+        // Si es cobrador, filtrar solo sus préstamos asignados
+        if (isCobrador && userId.HasValue)
+        {
+            baseQuery = baseQuery.Where(p => p.CobradorId == userId.Value);
+        }
+
+        // Préstamos creados hoy
+        var prestamosHoy = await baseQuery
+            .Where(p => p.FechaPrestamo.Date == today)
+            .OrderByDescending(p => p.Id)
+            .Select(p => new
+            {
+                p.Id,
+                p.ClienteId,
+                ClienteNombre = p.Cliente!.Nombre,
+                ClienteCedula = p.Cliente.Cedula,
+                ClienteTelefono = p.Cliente.Telefono,
+                p.MontoPrestado,
+                p.TasaInteres,
+                p.TipoInteres,
+                p.FrecuenciaPago,
+                p.NumeroCuotas,
+                p.FechaPrestamo,
+                CobradorNombre = p.Cobrador != null ? p.Cobrador.Nombre : null,
+                p.PorcentajeCobrador,
+                p.EstadoPrestamo
+            })
+            .ToListAsync();
+
+        return Ok(new
+        {
+            fecha = today,
+            prestamosHoy,
+            resumen = new
+            {
+                totalPrestamosHoy = prestamosHoy.Count,
+                montoTotalDesembolsado = prestamosHoy.Sum(p => p.MontoPrestado)
+            }
+        });
+    }
+
+
     [HttpGet("{id}")]
     public async Task<ActionResult<PrestamoDto>> GetPrestamo(int id)
     {
