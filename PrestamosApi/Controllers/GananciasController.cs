@@ -220,14 +220,14 @@ public class GananciasController : ControllerBase
             TotalInteresesProyectados = Math.Round(totalInteresesGenerados, 0),
             DescuentoAportador3Porciento = Math.Round(descuentoAportador, 0),
             GananciaInteresPorSocio = Math.Round(gananciaInteresPorSocio, 0),
-            ProyeccionInteresesMesActual = Math.Round(globalInteresMes, 0),
+            ProyeccionInteresesMesActual = Math.Round(globalInteresMes, 0), // Interés bruto SIN descuentos
             FlujoTotalMes = Math.Round(globalFlujoMes, 0), // Capital + Intereses del mes
 
             TotalGananciaCobradores = Math.Round(cobradoresAgrupados.Sum(c => c.GananciaProyectada), 0),
             GastoMensualAportadores = Math.Round(gastoMensualAportadores, 0),
             CostosTotalesMes = Math.Round(costosTotalesMes, 0),
             // Ganancia Interés Neta = Intereses - Cobradores - Aportadores - Costos
-            GananciaInteresNeta = Math.Round(globalInteresMes, 0), // Full interest net (no cost deductions)
+            GananciaInteresNeta = Math.Round(globalInteresMes - globalGananciaCobradoresMes - gastoMensualAportadores - costosTotalesMes, 0),
             NumeroSociosFijo = NUM_SOCIOS
         };
 
