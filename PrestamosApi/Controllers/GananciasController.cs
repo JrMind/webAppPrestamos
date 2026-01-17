@@ -226,8 +226,8 @@ public class GananciasController : ControllerBase
             TotalGananciaCobradores = Math.Round(cobradoresAgrupados.Sum(c => c.GananciaProyectada), 0),
             GastoMensualAportadores = Math.Round(gastoMensualAportadores, 0),
             CostosTotalesMes = Math.Round(costosTotalesMes, 0),
-            // Ganancia Interés Neta = Intereses - Cobradores - Aportadores - Costos
-            GananciaInteresNeta = Math.Round(globalInteresMes - globalGananciaCobradoresMes - gastoMensualAportadores - costosTotalesMes, 0),
+            // Ganancia Interés Neta = Intereses - Cobradores - Costos (aportadores ya están en costos)
+            GananciaInteresNeta = Math.Round(globalInteresMes - globalGananciaCobradoresMes - costosTotalesMes, 0),
             NumeroSociosFijo = NUM_SOCIOS
         };
 
