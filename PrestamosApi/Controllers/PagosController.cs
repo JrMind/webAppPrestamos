@@ -60,14 +60,45 @@ public class PagosController : ControllerBase
     /// Obtener pagos agrupados por día con totales
     /// </summary>
     [HttpGet("por-dia")]
-    public async Task<ActionResult<object>> GetPagosPorDia([FromQuery] DateTime? fechaInicio = null, [FromQuery] DateTime? fechaFin = null)
+    public async Task<ActionResult<object>> GetPagosPorDia([FromQuery] string? fechaInicio = null, [FromQuery] string? fechaFin = null)
     {
-        // Por defecto, últimos 30 días
-        var inicio = fechaInicio ?? DateTime.UtcNow.AddDays(-30);
-        var fin = fechaFin ?? DateTime.UtcNow;
+        DateTime inicio;
+        DateTime fin;
         
-        inicio = DateTime.SpecifyKind(inicio.Date, DateTimeKind.Utc);
-        fin = DateTime.SpecifyKind(fin.Date.AddDays(1).AddSeconds(-1), DateTimeKind.Utc);
+        // Parsear fechas como UTC explícitamente
+        if (!string.IsNullOrEmpty(fechaInicio))
+        {
+            if (!DateTime.TryParseExact(fechaInicio, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out inicio))
+            {
+                return BadRequest(new { message = "Formato de fechaInicio inválido. Use yyyy-MM-dd" });
+            }
+        }
+        else
+        {
+            inicio = DateTime.UtcNow.AddDays(-30);
+        }
+        
+        if (!string.IsNullOrEmpty(fechaFin))
+        {
+            if (!DateTime.TryParseExact(fechaFin, "yyyy-MM-dd",
+                System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out fin))
+            {
+                return BadRequest(new { message = "Formato de fechaFin inválido. Use yyyy-MM-dd" });
+            }
+        }
+        else
+        {
+            fin = DateTime.UtcNow;
+        }
+        
+        // Ajustar a inicio y fin del día en UTC
+        inicio = inicio.Date;
+        fin = fin.Date.AddDays(1).AddTicks(-1);
 
         var pagos = await _context.Pagos
             .Include(p => p.Prestamo)

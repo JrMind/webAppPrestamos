@@ -116,11 +116,22 @@ public class PrestamosController : BaseApiController
     [HttpGet("dia")]
     public async Task<ActionResult<object>> GetPrestamosDelDia([FromQuery] string? fecha = null)
     {
-        // Parse fecha string (formato: yyyy-MM-dd) para evitar problemas de zona horaria
+        // Parse fecha string (formato: yyyy-MM-dd) como UTC para evitar problemas de zona horaria
         DateTime targetDate;
-        if (!string.IsNullOrEmpty(fecha) && DateTime.TryParse(fecha, out var parsedDate))
+        if (!string.IsNullOrEmpty(fecha))
         {
-            targetDate = parsedDate.Date;
+            // Parsear explícitamente como UTC: "2026-01-17" -> 2026-01-17 00:00:00 UTC
+            if (DateTime.TryParseExact(fecha, "yyyy-MM-dd", 
+                System.Globalization.CultureInfo.InvariantCulture, 
+                System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+                out var parsedDate))
+            {
+                targetDate = parsedDate.Date;
+            }
+            else
+            {
+                return BadRequest(new { message = "Formato de fecha inválido. Use yyyy-MM-dd (ejemplo: 2026-01-17)" });
+            }
         }
         else
         {
