@@ -639,6 +639,7 @@ function App() {
     clearCobradorSelection();
     setClienteSearch('');
     setShowFuentesSection(false);
+    setCobradorTouched(false);
     setShowPrestamoModal(true);
   };
 
@@ -680,6 +681,7 @@ function App() {
   // Fixed Quota Mode State
   const [mantenerCuota, setMantenerCuota] = useState(false);
   const [targetCuota, setTargetCuota] = useState(0);
+  const [cobradorTouched, setCobradorTouched] = useState(false);
 
   // Recalculate duration when maintaining quota
   const handleMontoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -829,9 +831,22 @@ function App() {
     setEditMode(true);
     setEditingPrestamoId(prestamo.id);
 
-    // Cargar cliente
-    const cliente = clientes.find(c => c.id === prestamo.clienteId);
-    if (cliente) selectCliente(cliente);
+    // Usar la información del cliente que ya viene en el objeto prestamo
+    // en lugar de buscar en la lista de clientes que puede no estar cargada
+    const clienteData: Cliente = {
+      id: prestamo.clienteId,
+      nombre: prestamo.clienteNombre,
+      cedula: prestamo.clienteCedula,
+      telefono: prestamo.clienteTelefono,
+      direccion: '',
+      email: '',
+      fechaRegistro: '',
+      estado: 'Activo',
+      prestamosActivos: 0,
+      totalPrestado: 0
+    };
+    setSelectedCliente(clienteData);
+    setClienteSearch(`${prestamo.clienteNombre} - ${prestamo.clienteCedula}`);
 
     // Cargar cobrador
     if (prestamo.cobradorId) {
@@ -2061,7 +2076,8 @@ function App() {
                         setPrestamoForm({
                           ...prestamoForm,
                           tasaInteres: nuevaTasa,
-                          porcentajeCobrador: sugerido !== null ? sugerido : prestamoForm.porcentajeCobrador
+                          // Solo actualizar porcentajeCobrador si el usuario no lo ha tocado manualmente
+                          porcentajeCobrador: (!cobradorTouched && sugerido !== null) ? sugerido : prestamoForm.porcentajeCobrador
                         });
                       }}
                     />
@@ -2141,7 +2157,7 @@ function App() {
                       )}
                     </div>
                   </div>
-                  <div className="form-group"><label>% Cobrador</label><input type="number" min="0" max="15" step="0.5" value={prestamoForm.porcentajeCobrador} onChange={e => setPrestamoForm({ ...prestamoForm, porcentajeCobrador: Number(e.target.value) })} /></div>
+                  <div className="form-group"><label>% Cobrador</label><input type="number" min="0" max="15" step="0.5" value={prestamoForm.porcentajeCobrador} onChange={e => { setCobradorTouched(true); setPrestamoForm({ ...prestamoForm, porcentajeCobrador: Number(e.target.value) }); }} /></div>
                   {prestamoForm.frecuenciaPago === 'Semanal' && (
                     <div className="form-group">
                       <label>Día de pago *</label>

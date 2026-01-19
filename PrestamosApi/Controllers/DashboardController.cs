@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PrestamosApi.Data;
 using PrestamosApi.DTOs;
+using PrestamosApi.Services;
 
 namespace PrestamosApi.Controllers;
 
@@ -10,10 +11,12 @@ namespace PrestamosApi.Controllers;
 public class DashboardController : ControllerBase
 {
     private readonly PrestamosDbContext _context;
+    private readonly IGananciasService _gananciasService;
 
-    public DashboardController(PrestamosDbContext context)
+    public DashboardController(PrestamosDbContext context, IGananciasService gananciasService)
     {
         _context = context;
+        _gananciasService = gananciasService;
     }
 
     [HttpGet("metricas")]
@@ -77,15 +80,8 @@ public class DashboardController : ControllerBase
         var dineroCirculando = capitalPrestamosActivos - capitalRecuperado;
         if (dineroCirculando < 0) dineroCirculando = 0;
         
-        // Capital usado de la reserva para préstamos activos
-        var capitalUsadoDeReserva = await _context.FuentesCapitalPrestamo
-            .Include(f => f.Prestamo)
-            .Where(f => f.Tipo == "Reserva" && f.Prestamo!.EstadoPrestamo == "Activo")
-            .SumAsync(f => f.MontoAportado);
-        
-        // Reserva disponible = Total cobrado - Lo que ya se usó de la reserva para préstamos activos
-        var reservaDisponible = totalCobrado - capitalUsadoDeReserva;
-        if (reservaDisponible < 0) reservaDisponible = 0;
+        // Usar el método completo de GananciasService para calcular la reserva correctamente
+        var reservaDisponible = await _gananciasService.CalcularReservaDisponibleAsync();
 
         // Cuotas vencidas hoy - comparar solo la parte de fecha
         var cuotasVencidasHoy = await _context.CuotasPrestamo
