@@ -302,7 +302,9 @@ public record CostoDto(
     string? Descripcion,
     bool Activo,
     DateTime FechaCreacion,
-    DateTime? FechaFin
+    DateTime? FechaFin,
+    decimal TotalPagado,
+    decimal Restante
 );
 
 public record CreateCostoDto(
@@ -319,4 +321,11 @@ public record UpdateCostoDto(
     string? Descripcion,
     bool Activo,
     DateTime? FechaFin
+);
+
+public record PagarCostoDto(
+    decimal Monto,
+    string? MetodoPago,
+    string? Comprobante,
+    string? Observaciones
 );

@@ -25,6 +25,7 @@ public class PrestamosDbContext : DbContext
     public DbSet<SmsCampaign> SmsCampaigns => Set<SmsCampaign>();
     public DbSet<SmsHistory> SmsHistories => Set<SmsHistory>();
     public DbSet<Costo> Costos => Set<Costo>();
+    public DbSet<PagoCosto> PagosCostos => Set<PagoCosto>();
     public DbSet<ConfiguracionSistema> ConfiguracionesSistema => Set<ConfiguracionSistema>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -353,6 +354,28 @@ public class PrestamosDbContext : DbContext
             entity.Property(e => e.Activo).HasColumnName("activo").HasDefaultValue(true);
             entity.Property(e => e.FechaCreacion).HasColumnName("fechacreacion").HasDefaultValueSql("NOW()");
             entity.Property(e => e.FechaFin).HasColumnName("fechafin");
+            entity.Property(e => e.TotalPagado).HasColumnName("totalpagado").HasColumnType("decimal(18,2)").HasDefaultValue(0);
+        });
+
+        // PagoCosto
+        modelBuilder.Entity<PagoCosto>(entity =>
+        {
+            entity.ToTable("pagoscostos");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CostoId).HasColumnName("costoid");
+            entity.Property(e => e.MontoPagado).HasColumnName("montopagado").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.FechaPago).HasColumnName("fechapago").HasDefaultValueSql("NOW()");
+            entity.Property(e => e.MetodoPago).HasColumnName("metodopago").HasMaxLength(50);
+            entity.Property(e => e.Comprobante).HasColumnName("comprobante").HasMaxLength(255);
+            entity.Property(e => e.Observaciones).HasColumnName("observaciones");
+
+            entity.HasOne(e => e.Costo)
+                .WithMany(c => c.Pagos)
+                .HasForeignKey(e => e.CostoId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.CostoId).HasDatabaseName("idx_pagoscostos_costo");
+            entity.HasIndex(e => e.FechaPago).HasDatabaseName("idx_pagoscostos_fecha");
         });
 
         // ConfiguracionSistema

@@ -38,52 +38,35 @@ public class GananciasService : IGananciasService
 
     public async Task<decimal> CalcularReservaDisponibleAsync()
     {
-        // 1. Capital de socios (aportes iniciales)
-        var capitalSocios = await _context.Aportes.SumAsync(a => a.MontoInicial);
+        // NUEVO CÁLCULO BASADO EN FLUJO DE CAJA REAL
+        // Reserva = Capital recuperado de pagos - Gastos pagados
         
-        // 2. Capital de aportadores externos
-        var capitalAportadoresExternos = await _context.AportadoresExternos
-            .Where(a => a.Estado == "Activo")
-            .SumAsync(a => a.MontoTotalAportado);
+        // 1. Capital recuperado de todos los pagos recibidos
+        var capitalRecuperado = 0m;
         
-        // 3. Capital reinvertido (ganancias de socios acumuladas)
-        var capitalReinvertido = await _context.Usuarios
-            .Where(u => u.Activo && u.Rol == RolUsuario.Socio)
-            .SumAsync(u => u.CapitalActual);
-        
-        // 4. Capital en la calle (pendiente de cobrar en préstamos activos)
-        var prestamosActivos = await _context.Prestamos
-            .Include(p => p.Cuotas)
-            .Where(p => p.EstadoPrestamo == "Activo")
+        var cuotasConPagos = await _context.CuotasPrestamo
+            .Where(c => c.MontoPagado > 0)
             .ToListAsync();
-            
-        decimal capitalEnCalle = 0;
-        foreach (var prestamo in prestamosActivos)
+        
+        foreach (var cuota in cuotasConPagos)
         {
-            if (prestamo.Cuotas.Any())
+            if (cuota.MontoCuota > 0)
             {
-                foreach (var cuota in prestamo.Cuotas)
-                {
-                    if (cuota.MontoCuota > 0) 
-                    {
-                        // Proporción de capital en esta cuota específica
-                        var ratioCapital = cuota.MontoCapital / cuota.MontoCuota;
-                        
-                        // Capital pendiente = Saldo pendiente de la cuota * ratio de capital
-                        capitalEnCalle += cuota.SaldoPendiente * ratioCapital;
-                    }
-                }
-            }
-            else
-            {
-                // Fallback si no tiene cuotas generadas
-                capitalEnCalle += prestamo.MontoPrestado;
+                // Proporción de capital en esta cuota
+                var ratioCapital = cuota.MontoCapital / cuota.MontoCuota;
+                
+                // Capital recuperado = MontoPagado de la cuota * ratio de capital
+                capitalRecuperado += cuota.MontoPagado * ratioCapital;
             }
         }
         
-        // Fórmula completa de Reserva Disponible:
-        // = (Capital Socios + Capital Externos + Ganancias Reinvertidas) - Capital En Calle
-        return capitalSocios + capitalAportadoresExternos + capitalReinvertido - capitalEnCalle;
+        // 2. Total de gastos pagados
+        var gastosPagados = await _context.PagosCostos
+            .SumAsync(pc => (decimal?)pc.MontoPagado) ?? 0;
+        
+        // 3. Fórmula correcta de Reserva Disponible (Caja Real)
+        // Esto representa el dinero físico disponible, no capital teórico
+        return capitalRecuperado - gastosPagados;
     }
 
     public async Task AplicarInteresMensualAsync()

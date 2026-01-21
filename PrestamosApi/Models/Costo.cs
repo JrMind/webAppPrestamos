@@ -10,4 +10,9 @@ public class Costo
     public bool Activo { get; set; } = true;
     public DateTime FechaCreacion { get; set; } = DateTime.UtcNow;
     public DateTime? FechaFin { get; set; }  // Para costos temporales
+    public decimal TotalPagado { get; set; } = 0;  // Total pagado hasta ahora
+    
+    // Navegación
+    public ICollection<PagoCosto> Pagos { get; set; } = new List<PagoCosto>();
 }
+

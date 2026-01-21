@@ -36,7 +36,9 @@ public class CostosController : ControllerBase
                 c.Descripcion,
                 c.Activo,
                 c.FechaCreacion,
-                c.FechaFin
+                c.FechaFin,
+                c.TotalPagado,
+                c.Monto - c.TotalPagado // Restante
             ))
             .ToListAsync();
 
@@ -60,7 +62,9 @@ public class CostosController : ControllerBase
             costo.Descripcion,
             costo.Activo,
             costo.FechaCreacion,
-            costo.FechaFin
+            costo.FechaFin,
+            costo.TotalPagado,
+            costo.Monto - costo.TotalPagado
         ));
     }
 
@@ -91,7 +95,9 @@ public class CostosController : ControllerBase
             costo.Descripcion,
             costo.Activo,
             costo.FechaCreacion,
-            costo.FechaFin
+            costo.FechaFin,
+            costo.TotalPagado,
+            costo.Monto - costo.TotalPagado
         ));
     }
 
@@ -121,7 +127,9 @@ public class CostosController : ControllerBase
             costo.Descripcion,
             costo.Activo,
             costo.FechaCreacion,
-            costo.FechaFin
+            costo.FechaFin,
+            costo.TotalPagado,
+            costo.Monto - costo.TotalPagado
         ));
     }
 
@@ -165,6 +173,84 @@ public class CostosController : ControllerBase
             CostosMensuales = costosMensuales,
             CostosQuincenales = costosQuincenales,
             TotalMensualizado = totalMensual
+        });
+    }
+
+    /// <summary>
+    /// Pagar (total o parcial) un gasto
+    /// </summary>
+    [HttpPost("{id}/pagar")]
+    public async Task<ActionResult> PagarCosto(
+        int id,
+        [FromBody] PagarCostoDto dto,
+        [FromHeader(Name = "X-User-Email")] string userEmail,
+        [FromHeader(Name = "Authorization")] string authorization)
+    {
+        var costo = await _context.Costos
+            .Include(c => c.Pagos)
+            .FirstOrDefaultAsync(c => c.Id == id);
+            
+        if (costo == null)
+            return NotFound("Costo no encontrado");
+        
+        // Calcular restante
+        var restante = costo.Monto - costo.TotalPagado;
+        
+        // Validar que no se pague más del restante
+        if (dto.Monto > restante)
+            return BadRequest(new
+            {
+                Error = $"El monto a pagar ({dto.Monto:C}) excede el restante del gasto ({restante:C})"
+            });
+        
+        // Crear servicio de ganancias para validar reserva
+        var gananciasService = new Services.GananciasService(_context);
+        var reservaActual = await gananciasService.CalcularReservaDisponibleAsync();
+        
+        // Validar que haya suficiente en reserva
+        if (dto.Monto > reservaActual)
+            return BadRequest(new
+            {
+                Error = $"Fondos insuficientes en reserva",
+                ReservaDisponible = reservaActual,
+                MontoSolicitado = dto.Monto,
+                Faltante = dto.Monto - reservaActual
+            });
+        
+        // Registrar el pago
+        var pago = new PagoCosto
+        {
+            CostoId = id,
+            MontoPagado = dto.Monto,
+            FechaPago = DateTime.UtcNow,
+            MetodoPago = dto.MetodoPago,
+            Comprobante = dto.Comprobante,
+            Observaciones = dto.Observaciones
+        };
+        
+        _context.PagosCostos.Add(pago);
+        
+        // Actualizar total pagado
+        costo.TotalPagado += dto.Monto;
+        
+        await _context.SaveChangesAsync();
+        
+        // Recalcular reserva después del pago
+        var nuevaReserva = await gananciasService.CalcularReservaDisponibleAsync();
+        
+        // Responder con información completa
+        return Ok(new
+        {
+            PagoId = pago.Id,
+            CostoId = id,
+            NombreCosto = costo.Nombre,
+            MontoPagado = dto.Monto,
+            MontoTotalCosto = costo.Monto,
+            TotalPagado = costo.TotalPagado,
+            Restante = costo.Monto - costo.TotalPagado,
+            ReservaAnterior = reservaActual,
+            ReservaActual = nuevaReserva,
+            FechaPago = pago.FechaPago
         });
     }
 }
