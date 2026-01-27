@@ -189,8 +189,8 @@ public class DashboardController : ControllerBase
                 .Where(p => p.FechaPrestamo >= mesInicio && p.FechaPrestamo < mesFin)
                 .ToListAsync();
             
-            var promedioInteres = prestamosDelMes.Any() 
-                ? prestamosDelMes.Average(p => p.MontoIntereses / p.MontoTotal) 
+            var promedioInteres = prestamosDelMes.Any(p => p.MontoTotal > 0)
+                ? prestamosDelMes.Where(p => p.MontoTotal > 0).Average(p => p.MontoIntereses / p.MontoTotal) 
                 : 0.15m;
 
             var interesesGanados = totalPagado * promedioInteres;
