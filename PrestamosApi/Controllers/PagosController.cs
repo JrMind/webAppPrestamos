@@ -11,7 +11,7 @@ namespace PrestamosApi.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class PagosController : ControllerBase
+public class PagosController : BaseApiController
 {
     private readonly PrestamosDbContext _context;
     private readonly ITwilioService _twilioService;
@@ -150,6 +150,12 @@ public class PagosController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<PagoDto>> CreatePago(CreatePagoDto dto)
     {
+        // Solo socios pueden registrar pagos
+        if (!IsSocio() && GetCurrentUserRole() != RolUsuario.Admin)
+        {
+            return Forbid();
+        }
+
         // Validar préstamo existe - IMPORTANTE: incluir Cliente para SMS
         var prestamo = await _context.Prestamos
             .Include(p => p.Cliente)  // <-- CRÍTICO: para enviar SMS al cliente correcto
@@ -315,6 +321,45 @@ public class PagosController : ControllerBase
 
         await _context.SaveChangesAsync();
 
+        // ACTUALIZAR RESERVA: Agregar capital recuperado de todas las cuotas afectadas
+        decimal capitalTotalRecuperado = 0;
+        
+        // Calcular capital recuperado de la cuota principal
+        if (dto.CuotaId.HasValue)
+        {
+            var cuotaPrincipal = await _context.CuotasPrestamo.FindAsync(dto.CuotaId.Value);
+            if (cuotaPrincipal != null && cuotaPrincipal.MontoCuota > 0)
+            {
+                var ratioCapital = cuotaPrincipal.MontoCapital / cuotaPrincipal.MontoCuota;
+                
+                // Aplicar ratio solo al monto que efectivamente se aplicó a esta cuota
+                decimal montoAplicadoACuota = Math.Min(dto.MontoPago, cuotaPrincipal.MontoPagado);
+                capitalTotalRecuperado += montoAplicadoACuota * ratioCapital;
+            }
+        }
+        else
+        {
+            // Si no hay cuota específica, calcular sobre todas las cuotas que recibieron el pago
+            // (en caso de distribución automática a futuras cuotas)
+            var cuotasAfectadas = prestamo.Cuotas
+                .Where(c => c.MontoPagado > 0 && c.MontoCuota > 0)
+                .ToList();
+            
+            foreach (var cuota in cuotasAfectadas)
+            {
+                var ratioCapital = cuota.MontoCapital / cuota.MontoCuota;
+                // Aproximado: asumimos que el pago reciente contribuyó proporcionalmente
+                capitalTotalRecuperado += (dto.MontoPago / cuotasAfectadas.Count) * ratioCapital;
+            }
+        }
+        
+        // Actualizar reserva con el capital recuperado
+        if (capitalTotalRecuperado > 0)
+        {
+            var gananciasService = new GananciasService(_context);
+            await gananciasService.ActualizarReservaAsync(capitalTotalRecuperado, $"Pago préstamo #{prestamo.Id} - ${dto.MontoPago:N0}");
+        }
+
         // *** DISTRIBUIR GANANCIAS SEGÚN FUENTES DE CAPITAL ***
         try
         {
@@ -378,6 +423,12 @@ public class PagosController : ControllerBase
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeletePago(int id)
     {
+        // Solo socios pueden eliminar pagos
+        if (!IsSocio() && GetCurrentUserRole() != RolUsuario.Admin)
+        {
+            return Forbid();
+        }
+
         var pago = await _context.Pagos
             .Include(p => p.Cuota)
             .FirstOrDefaultAsync(p => p.Id == id);

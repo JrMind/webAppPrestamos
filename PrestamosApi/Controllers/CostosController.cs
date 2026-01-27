@@ -235,6 +235,9 @@ public class CostosController : ControllerBase
         
         await _context.SaveChangesAsync();
         
+        // ACTUALIZAR RESERVA: Descontar el monto pagado
+        await gananciasService.ActualizarReservaAsync(-dto.Monto, $"Pago costo: {costo.Nombre} - ${dto.Monto:N0}");
+        
         // Recalcular reserva después del pago
         var nuevaReserva = await gananciasService.CalcularReservaDisponibleAsync();
         

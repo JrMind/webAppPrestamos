@@ -418,6 +418,9 @@ public class PrestamosController : BaseApiController
             };
             _context.FuentesCapitalPrestamo.Add(fuenteCapital);
             await _context.SaveChangesAsync();
+            
+            // ACTUALIZAR RESERVA: Descontar el monto prestado
+            await _gananciasService.ActualizarReservaAsync(-dto.MontoPrestado, $"Préstamo #{prestamo.Id} - ${dto.MontoPrestado:N0}");
         }
         else
         {
@@ -524,6 +527,8 @@ public class PrestamosController : BaseApiController
         // Registrar fuentes de capital
         if (dto.FuentesCapital != null)
         {
+            decimal totalReservaUsada = 0;
+            
             foreach (var fuente in dto.FuentesCapital)
             {
                 var fuenteCapital = new FuenteCapitalPrestamo
@@ -547,12 +552,24 @@ public class PrestamosController : BaseApiController
                         aportador.SaldoPendiente += fuente.MontoAportado;
                     }
                 }
+                
+                // Acumular total de reserva usada
+                if (fuente.Tipo == "Reserva")
+                {
+                    totalReservaUsada += fuente.MontoAportado;
+                }
 
                 // NOTA: NO modificamos CapitalActual del socio aquí.
                 // El CapitalActual solo cambia por:
                 // 1. Intereses ganados (en DistribucionGananciasService)
                 // 2. Aportes/Retiros directos (en AportesController)
                 // Usar capital reinvertido NO debe afectar el balance del socio.
+            }
+            
+            // ACTUALIZAR RESERVA: Descontar el total usado de la reserva
+            if (totalReservaUsada > 0)
+            {
+                await _gananciasService.ActualizarReservaAsync(-totalReservaUsada, $"Préstamo #{prestamo.Id} - ${totalReservaUsada:N0}");
             }
         }
 

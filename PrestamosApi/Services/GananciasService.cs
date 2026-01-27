@@ -13,6 +13,10 @@ public interface IGananciasService
     Task RegistrarAporteAsync(int usuarioId, decimal monto, string? descripcion);
     Task RegistrarRetiroAsync(int usuarioId, decimal monto, string? descripcion);
     Task DistribuirGananciasPrestamoAsync(int prestamoId);
+    
+    // Métodos para gestión de reserva dinámica
+    Task<decimal> ObtenerReservaActualAsync();
+    Task ActualizarReservaAsync(decimal montoIncremento, string descripcion);
 }
 
 public class GananciasService : IGananciasService
@@ -38,7 +42,16 @@ public class GananciasService : IGananciasService
 
     public async Task<decimal> CalcularReservaDisponibleAsync()
     {
-        // NUEVO CÁLCULO BASADO EN FLUJO DE CAJA REAL
+        // PRIORIDAD 1: Usar valor almacenado si existe
+        var config = await _context.ConfiguracionesSistema
+            .FirstOrDefaultAsync(c => c.Clave == "ReservaDisponibleManual");
+        
+        if (config != null && decimal.TryParse(config.Valor, out var reservaManual))
+        {
+            return reservaManual;
+        }
+        
+        // PRIORIDAD 2: Calcular si no hay valor manual (modo legacy)
         // Reserva = Capital recuperado de pagos - Gastos pagados
         
         // 1. Capital recuperado de todos los pagos recibidos
@@ -264,6 +277,64 @@ public class GananciasService : IGananciasService
         }
 
         _context.DistribucionesGanancia.AddRange(distribuciones);
+        await _context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Obtiene el valor actual de la reserva almacenada en la BD
+    /// </summary>
+    public async Task<decimal> ObtenerReservaActualAsync()
+    {
+        var config = await _context.ConfiguracionesSistema
+            .FirstOrDefaultAsync(c => c.Clave == "ReservaDisponibleManual");
+        
+        if (config != null && decimal.TryParse(config.Valor, out var reserva))
+        {
+            return reserva;
+        }
+        
+        // Si no existe, retornar 0 (debe ser inicializado manualmente)
+        return 0;
+    }
+
+    /// <summary>
+    /// Actualiza la reserva sumando o restando el monto especificado
+    /// </summary>
+    /// <param name="montoIncremento">Monto a sumar (positivo) o restar (negativo)</param>
+    /// <param name="descripcion">Descripción del movimiento</param>
+    public async Task ActualizarReservaAsync(decimal montoIncremento, string descripcion)
+    {
+        var config = await _context.ConfiguracionesSistema
+            .FirstOrDefaultAsync(c => c.Clave == "ReservaDisponibleManual");
+        
+        if (config == null)
+        {
+            // Si no existe, crear con el incremento inicial
+            config = new ConfiguracionSistema
+            {
+                Clave = "ReservaDisponibleManual",
+                Valor = montoIncremento.ToString("F2"),
+                FechaActualizacion = DateTime.UtcNow,
+                Descripcion = $"Inicializado por: {descripcion}"
+            };
+            _context.ConfiguracionesSistema.Add(config);
+        }
+        else
+        {
+            // Parsear valor actual y sumar incremento
+            decimal reservaActual = 0;
+            if (decimal.TryParse(config.Valor, out var valorParsed))
+            {
+                reservaActual = valorParsed;
+            }
+            
+            var nuevaReserva = reservaActual + montoIncremento;
+            
+            config.Valor = nuevaReserva.ToString("F2");
+            config.FechaActualizacion = DateTime.UtcNow;
+            config.Descripcion = $"Última actualización: {descripcion}";
+        }
+        
         await _context.SaveChangesAsync();
     }
 }

@@ -143,6 +143,17 @@ public class CobrosController : BaseApiController
             {
                 await _distribucionService.DistribuirGananciasPago(cuota.PrestamoId, cuota.MontoPagado);
             }
+            
+            // ACTUALIZAR RESERVA: Agregar capital recuperado (no intereses)
+            // Capital recuperado = MontoPagado * (MontoCapital / MontoCuota)
+            if (cuota.MontoCuota > 0)
+            {
+                var ratioCapital = cuota.MontoCapital / cuota.MontoCuota;
+                var capitalRecuperado = cuota.MontoPagado * ratioCapital;
+                
+                var gananciasService = new Services.GananciasService(_context);
+                await gananciasService.ActualizarReservaAsync(capitalRecuperado, $"Pago cuota #{cuota.NumeroCuota} préstamo #{cuota.PrestamoId}");
+            }
         }
         else if (!dto.Cobrado)
         {
