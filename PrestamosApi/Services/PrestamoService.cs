@@ -200,20 +200,32 @@ public class PrestamoService : IPrestamoService
 
     private DateTime CalcularProximaFecha(DateTime fechaAnterior, string frecuencia, string? diaSemana)
     {
+        DateTime proximaFecha;
+
         if (frecuencia == "Semanal" && !string.IsNullOrEmpty(diaSemana))
         {
              // Si ya estamos en una fecha alineada al día, sumamos 7. Si no, buscamos el día.
-             return CalcularFechaSemanalPorDia(fechaAnterior.AddDays(1), 1, diaSemana);
+             proximaFecha = CalcularFechaSemanalPorDia(fechaAnterior.AddDays(1), 1, diaSemana);
+        }
+        else
+        {
+             proximaFecha = frecuencia switch
+            {
+                "Diario" => fechaAnterior.AddDays(1),
+                "Semanal" => fechaAnterior.AddDays(7),
+                "Quincenal" => fechaAnterior.AddDays(15),
+                "Mensual" => fechaAnterior.AddMonths(1),
+                _ => fechaAnterior.AddMonths(1)
+            };
         }
 
-         return frecuencia switch
+        // EXCLUIR DOMINGOS: Si cae domingo, pasar al lunes
+        if (proximaFecha.DayOfWeek == DayOfWeek.Sunday)
         {
-            "Diario" => fechaAnterior.AddDays(1),
-            "Semanal" => fechaAnterior.AddDays(7),
-            "Quincenal" => fechaAnterior.AddDays(15),
-            "Mensual" => fechaAnterior.AddMonths(1),
-            _ => fechaAnterior.AddMonths(1)
-        };
+            proximaFecha = proximaFecha.AddDays(1);
+        }
+
+        return proximaFecha;
     }
 
     private int CalcularDiasTotales(int duracion, string unidadDuracion)

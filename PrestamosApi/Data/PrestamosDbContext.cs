@@ -27,6 +27,7 @@ public class PrestamosDbContext : DbContext
     public DbSet<Costo> Costos => Set<Costo>();
     public DbSet<PagoCosto> PagosCostos => Set<PagoCosto>();
     public DbSet<ConfiguracionSistema> ConfiguracionesSistema => Set<ConfiguracionSistema>();
+    public DbSet<NotaPrestamo> NotasPrestamo => Set<NotaPrestamo>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -388,6 +389,29 @@ public class PrestamosDbContext : DbContext
             entity.Property(e => e.FechaActualizacion).HasColumnName("fechaactualizacion").HasDefaultValueSql("NOW()");
             entity.Property(e => e.Descripcion).HasColumnName("descripcion");
             entity.HasIndex(e => e.Clave).IsUnique();
+        });
+
+        // NotasPrestamo
+        modelBuilder.Entity<NotaPrestamo>(entity =>
+        {
+            entity.ToTable("notasprestamo");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.PrestamoId).HasColumnName("prestamoid");
+            entity.Property(e => e.Contenido).HasColumnName("contenido").IsRequired();
+            entity.Property(e => e.FechaCreacion).HasColumnName("fechacreacion").HasDefaultValueSql("NOW()");
+            entity.Property(e => e.UsuarioId).HasColumnName("usuarioid");
+
+            entity.HasOne(e => e.Prestamo)
+                .WithMany(p => p.Notas)
+                .HasForeignKey(e => e.PrestamoId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasOne(e => e.Usuario)
+                .WithMany()
+                .HasForeignKey(e => e.UsuarioId)
+                .OnDelete(DeleteBehavior.SetNull);
+
+            entity.HasIndex(e => e.PrestamoId).HasDatabaseName("idx_notas_prestamo");
         });
     }
 }

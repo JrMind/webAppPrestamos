@@ -628,115 +628,99 @@ public class PrestamosController : BaseApiController
             // }
 
             // Recalcular préstamo completamente
-            // Necesitamos la 'Duración' y 'Unidad' originales o inferirlas. 
-            // Como el DTO de Update es simplificado, asumiremos que si cambia la estructura, recalculamos valores base.
-            // PERO: El UpdatePrestamoDto actual no tiene Duracion/Unidad. 
-            // Para simplificar, asumiremos que 'NumeroCuotas' en el UpdateDto viene correcto o 
-            // ajustaremos lógica futura. 
-            // CORRECCION: El DTO de Update debe tener los datos necesarios para recalcular.
-            // Si faltan, no podemos recalcular bien los intereses compuestos/simples desde cero sin saber la unidad de tiempo.
-            // Por ahora actualizaremos los valores directos y regeneraremos cuotas.
+            
+            // Inferir Duración y Unidad para poder usar el servicio de cálculo centralizado
+            // Esto asegura que se manejen correctamente intereses Simples, Compuestos y Congelados
+            string unidadInferida = dto.FrecuenciaPago switch
+            {
+                "Diario" => "Dias",
+                "Semanal" => "Semanas",
+                "Quincenal" => "Quincenas",
+                "Mensual" => "Meses",
+                _ => "Meses"
+            };
+            int duracionInferida = dto.NumeroCuotas;
 
+            // Usar el servicio para obtener los nuevos cálculos totales
+            var (nuevoMontoTotal, nuevoMontoIntereses, nuevoMontoCuota, _, _) = 
+                _prestamoService.CalcularPrestamo(
+                    dto.MontoPrestado, dto.TasaInteres, dto.TipoInteres,
+                    dto.FrecuenciaPago, duracionInferida, unidadInferida,
+                    DateTime.SpecifyKind(dto.FechaPrestamo, DateTimeKind.Utc),
+                    dto.EsCongelado, dto.NumeroCuotas);
+
+            // Actualizar entidad
             prestamo.MontoPrestado = dto.MontoPrestado;
             prestamo.TasaInteres = dto.TasaInteres;
             prestamo.TipoInteres = dto.TipoInteres;
             prestamo.FrecuenciaPago = dto.FrecuenciaPago;
+            prestamo.NumeroCuotas = dto.NumeroCuotas;
             prestamo.DiaSemana = dto.DiaSemana;
+            prestamo.EsCongelado = dto.EsCongelado;
             prestamo.FechaPrestamo = DateTime.SpecifyKind(dto.FechaPrestamo, DateTimeKind.Utc);
             
-            // Recalcular montos totales e intereses (logica simplificada aqui o llamar servicio)
-            // Llamamos al servicio para obtener los nuevos cálculos totales
-            // Nota: Como no tenemos 'Duracion' en el UpdateDto, usaremos NumeroCuotas y Frecuencia para estimar o 
-            // deberíamos agregar Duracion al DTO. Por ahora, usaremos el NumeroCuotas que viene.
+            prestamo.MontoTotal = nuevoMontoTotal;
+            prestamo.MontoIntereses = nuevoMontoIntereses;
+            prestamo.MontoCuota = nuevoMontoCuota;
             
-            // Calculo manual de totales para actualizar modelo
-            // OJO: Esto es riesgoso si la lógica de intereses complejos depende de la duración original.
-            // Asumiremos Interés Simple y recálculo básico o confiaremos en los valores que vienen si el front los calcula?
-            // Mejor: Usar el servicio GenerarCuotas para recalcular fechas, pero los montos totales deben calcularse antes.
-            
-            // Para hacerlo bien, necesitamos la Duracion en el UpdateDto. 
-            // Como no la pusimos, la inferimos o la pedimos. 
-            // Vamos a confiar en que el usuario no cambia la duración drásticamente o que el front manda los datos correctos si los agregamos.
-            
-            // Voy a RECALCULAR usando el servicio con los datos actuales del prestamo, excepto que faltan parametros.
-            // Solución rápida: Actualizar propiedades y regenerar cuotas con los datos actuales.
-            
-            // 1. Calcular total pagado históricamente (según tabla Pagos, que es la fuente de verdad)
+            // 1. Calcular total pagado históricamente (según tabla Pagos)
             decimal totalPagadoHist = prestamo.Pagos.Sum(p => p.MontoPago);
             
-            // 2. Desvincular pagos de las cuotas antiguas para evitar errores de FK al borrarlas (y mantener el historial de pagos como "Saldo a favor")
+            // 2. Desvincular pagos de las cuotas antiguas
             foreach(var pago in prestamo.Pagos) pago.CuotaId = null; 
 
-            // Eliminar cuotas anteriores
+            // 3. Eliminar cuotas anteriores
             _context.CuotasPrestamo.RemoveRange(prestamo.Cuotas);
             
-            // Regenerar cuotas con la nueva fecha de inicio (FechaPrimerPago si existe, o FechaPrestamo)
-            var fechaInicio = dto.FechaPrimerPago.HasValue ? DateTime.SpecifyKind(dto.FechaPrimerPago.Value, DateTimeKind.Utc) : prestamo.FechaPrestamo;
+            // 4. Regenerar cuotas
+            var fechaInicio = dto.FechaPrimerPago.HasValue 
+                ? DateTime.SpecifyKind(dto.FechaPrimerPago.Value, DateTimeKind.Utc) 
+                : prestamo.FechaPrestamo;
             
-            // IMPORTANTE: PrestamoService.GenerarCuotas usa prestamo.NumeroCuotas. 
-            // Si el update cambia la duración, prestamo.NumeroCuotas debe actualizarse.
-            prestamo.NumeroCuotas = dto.NumeroCuotas; 
-
-            // Recalcular montos (Interés Simple por defecto si no podemos recalcular complejo)
-            // A futuro: Agregar endpoints de Recalcular en backend.
-            // Por ahora, recálculo básico de interés simple:
-             if (prestamo.TipoInteres == "Simple") {
-                // Inferir meses según la frecuencia de pago
-                decimal meses;
-                switch (prestamo.FrecuenciaPago) {
-                    case "Diario":
-                        meses = prestamo.NumeroCuotas / 30m;
-                        break;
-                    case "Semanal":
-                        meses = prestamo.NumeroCuotas / 4m;
-                        break;
-                    case "Quincenal":
-                        meses = prestamo.NumeroCuotas / 2m;
-                        break;
-                    case "Mensual":
-                        meses = prestamo.NumeroCuotas;
-                        break;
-                    default:
-                        meses = prestamo.NumeroCuotas;
-                        break;
-                }
-                
-                prestamo.MontoIntereses = prestamo.MontoPrestado * (prestamo.TasaInteres / 100m) * meses;
-                prestamo.MontoTotal = prestamo.MontoPrestado + prestamo.MontoIntereses;
-                prestamo.MontoCuota = prestamo.MontoTotal / prestamo.NumeroCuotas;
-             }
-
-             var nuevasCuotas = _prestamoService.GenerarCuotas(prestamo, fechaInicio);
+            var nuevasCuotas = _prestamoService.GenerarCuotas(prestamo, fechaInicio);
              
-             // 5. Re-aplicar pagos históricos a las nuevas cuotas
-             if (totalPagadoHist > 0)
-             {
-                 var cuotasOrdenadas = nuevasCuotas.OrderBy(c => c.FechaCobro).ToList();
-                 decimal remanente = totalPagadoHist;
-                 
-                 foreach (var c in cuotasOrdenadas)
-                 {
-                     if (remanente <= 0) break;
-                     
-                     decimal abono = Math.Min(remanente, c.MontoCuota);
-                     c.MontoPagado = abono;
-                     c.SaldoPendiente = c.MontoCuota - abono;
-                     c.EstadoCuota = c.SaldoPendiente <= 0.01m ? "Pagada" : "Parcial";
-                     // Si está pagada, podríamos ponerle una fecha de pago simulada (hoy o la original), 
-                     // pero como son múltiples pagos, lo dejamos null o ponemos la fecha de préstamo.
-                     // Mejor no inventar fechas en Cuota.FechaPago si no corresponde a un único pago.
-                     
-                     remanente -= abono;
-                 }
-                 
-                 // Nota: Si sobra dinero (remanente > 0) porque redujo el préstamo drásticamente, 
-                 // ese dinero queda "flotando" en la suma de Pagos pero sin asignar a cuotas.
-                 // El SaldoPendiente del Prestamo se calcula sumando Cuotas, así que el préstamo podría quedar negativo o pagado en exceso?
-                 // El sistema calcula SaldoPendiente sumando (Cuota.MontoCuota - Cuota.MontoPagado).
-                 // Si las cuotas no absorben todo el pago, el saldo será 0 (todas pagadas).
-             }
+            // 5. Re-aplicar pagos históricos a las nuevas cuotas
+            if (totalPagadoHist > 0 && !prestamo.EsCongelado)
+            {
+                // Si es congelado, la lógica de "pagado histórico" es compleja porque paga intereses, no capital.
+                // Si cambiamos un préstamo a congelado, los pagos previos se consideran abonos a intereses pasados.
+                // Si ERA congelado y sigue siéndolo, reasignamos.
+                
+                var cuotasOrdenadas = nuevasCuotas.OrderBy(c => c.FechaCobro).ToList();
+                decimal remanente = totalPagadoHist;
+                
+                foreach (var c in cuotasOrdenadas)
+                {
+                    if (remanente <= 0) break;
+                    
+                    decimal abono = Math.Min(remanente, c.MontoCuota);
+                    c.MontoPagado = abono;
+                    c.SaldoPendiente = c.MontoCuota - abono;
+                    c.EstadoCuota = c.SaldoPendiente <= 0.01m ? "Pagada" : "Parcial";
+                    
+                    // Re-vincular pagos históricos a las nuevas cuotas si calzan?
+                    // Es difícil mapear N pagos a M cuotas exactamente sin lógica compleja.
+                    // Dejamos los pagos sueltos (CuotaId = null) pero el saldo de las cuotas actualizado.
+                    
+                    remanente -= abono;
+                }
+            }
+            else if (totalPagadoHist > 0 && prestamo.EsCongelado)
+            {
+                 // Si es congelado, solo tenemos 1 cuota generada (la próxima).
+                 // Los pagos históricos ya se consumieron en cuotas anteriores que "desaparecieron".
+                 // No debemos aplicarlos a la "próxima" cuota a menos que sean saldo a favor.
+                 // PERO al editar, estamos "reseteando" el préstamo.
+                 // Si el usuario edita, asume que replanifica.
+                 // En Congelado, GenerarCuotas devuelve 1 cuota.
+                 // Si aplicamos el total pagado histórico a esa única cuota, podría quedar pagada por años.
+                 // LOGICA: Si es congelado, el "TotalPagadoHist" son intereses ya cobrados.
+                 // No deberían reducir la NUEVA cuota de interés, salvo que sea un saldo a favor real.
+                 // Por seguridad, en edición de congelados no re-aplicamos automáticamente a la cuota futura
+                 // para evitar "regalar" meses de interés.
+            }
 
-             _context.CuotasPrestamo.AddRange(nuevasCuotas);
+            _context.CuotasPrestamo.AddRange(nuevasCuotas);
         }
 
         await _context.SaveChangesAsync();

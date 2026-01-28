@@ -26,11 +26,12 @@ public class CobrosController : BaseApiController
     }
 
     [HttpGet("hoy")]
-    public async Task<ActionResult<object>> GetCobrosHoy()
+    public async Task<ActionResult<object>> GetCobrosHoy([FromQuery] int? cobradorId)
     {
         var today = DateTime.UtcNow.Date;
         var userId = GetCurrentUserId();
         var isCobrador = IsCobrador();
+        var isAdmin = IsAdmin();
 
         // Base query
         var baseQuery = _context.CuotasPrestamo
@@ -40,10 +41,16 @@ public class CobrosController : BaseApiController
                 .ThenInclude(p => p!.Cobrador)
             .AsQueryable();
 
-        // Si es cobrador, filtrar solo sus préstamos asignados
+        // Filtrado por permisos y parámetros
         if (isCobrador && userId.HasValue)
         {
+            // Cobradores solo ven sus propios cobros
             baseQuery = baseQuery.Where(c => c.Prestamo!.CobradorId == userId.Value);
+        }
+        else if ((isAdmin || IsSocio()) && cobradorId.HasValue)
+        {
+            // Admins/Socios pueden filtrar por un cobrador específico
+            baseQuery = baseQuery.Where(c => c.Prestamo!.CobradorId == cobradorId.Value);
         }
 
         // Cuotas de hoy
@@ -260,13 +267,14 @@ public class CobrosController : BaseApiController
     }
 
     [HttpGet("mes")]
-    public async Task<ActionResult<object>> GetCobrosDelMes()
+    public async Task<ActionResult<object>> GetCobrosDelMes([FromQuery] int? cobradorId)
     {
         var today = DateTime.UtcNow.Date;
         var startOfMonth = new DateTime(today.Year, today.Month, 1, 0, 0, 0, DateTimeKind.Utc);
         var endOfMonth = startOfMonth.AddMonths(1).AddDays(-1);
         var userId = GetCurrentUserId();
         var isCobrador = IsCobrador();
+        var isAdmin = IsAdmin();
 
         // Base query
         var baseQuery = _context.CuotasPrestamo
@@ -277,10 +285,14 @@ public class CobrosController : BaseApiController
             .Where(c => c.EstadoCuota != "Pagada")
             .AsQueryable();
 
-        // Si es cobrador, filtrar solo sus préstamos asignados
+        // Filtrado por permisos y parámetros
         if (isCobrador && userId.HasValue)
         {
             baseQuery = baseQuery.Where(c => c.Prestamo!.CobradorId == userId.Value);
+        }
+        else if ((isAdmin || IsSocio()) && cobradorId.HasValue)
+        {
+            baseQuery = baseQuery.Where(c => c.Prestamo!.CobradorId == cobradorId.Value);
         }
 
         // Cuotas de hoy
@@ -494,6 +506,106 @@ public class CobrosController : BaseApiController
         {
             return BadRequest(new { message = $"Error: {ex.Message}" });
         }
+    }
+
+    [HttpPost("abonar")]
+    public async Task<IActionResult> AbonarPrestamo([FromBody] AbonarPrestamoDto dto)
+    {
+        if (dto.Monto <= 0)
+            return BadRequest(new { message = "El monto debe ser mayor a 0" });
+
+        var prestamo = await _context.Prestamos
+            .Include(p => p.Cuotas)
+            .Include(p => p.FuentesCapital)
+            .Include(p => p.Cliente)
+            .Include(p => p.Cobrador)
+            .FirstOrDefaultAsync(p => p.Id == dto.PrestamoId);
+
+        if (prestamo == null)
+            return NotFound(new { message = "Préstamo no encontrado" });
+
+        // Obtener cuotas pendientes ordenadas por fecha
+        var cuotasPendientes = prestamo.Cuotas
+            .Where(c => c.EstadoCuota != "Pagada")
+            .OrderBy(c => c.FechaCobro)
+            .ToList();
+
+        if (!cuotasPendientes.Any())
+            return BadRequest(new { message = "El préstamo no tiene cuotas pendientes" });
+
+        decimal montoRestante = dto.Monto;
+        decimal capitalRecuperadoTotal = 0;
+        int cuotasPagadasCount = 0;
+        var cuotasAfectadas = 0;
+
+        var gananciasService = new Services.GananciasService(_context);
+
+        foreach (var cuota in cuotasPendientes)
+        {
+            if (montoRestante <= 0) break;
+
+            decimal montoAbonar = Math.Min(montoRestante, cuota.SaldoPendiente);
+            
+            // Actualizar estado de la cuota
+            cuota.MontoPagado += montoAbonar;
+            cuota.SaldoPendiente -= montoAbonar;
+            cuota.FechaPago = DateTime.UtcNow; // Actualizar fecha último pago
+            cuotasAfectadas++;
+
+            // Crear registro de PAgo
+            var pago = new Pago
+            {
+                PrestamoId = prestamo.Id,
+                CuotaId = cuota.Id,
+                MontoPago = montoAbonar,
+                FechaPago = DateTime.UtcNow,
+                MetodoPago = "Abono",
+                Observaciones = "Abono a cuota futura/pendiente"
+            };
+            _context.Pagos.Add(pago);
+
+            // Calcular capital recuperado de este abono
+            if (cuota.MontoCuota > 0)
+            {
+                var ratioCapital = cuota.MontoCapital / cuota.MontoCuota;
+                var capitalRecuperadoCuota = montoAbonar * ratioCapital;
+                capitalRecuperadoTotal += capitalRecuperadoCuota;
+            }
+
+            // Verificar si se completó la cuota
+            if (cuota.SaldoPendiente <= 0.01m) // Margen por redondeo
+            {
+                cuota.SaldoPendiente = 0;
+                cuota.EstadoCuota = "Pagada";
+                cuota.Cobrado = true;
+                cuotasPagadasCount++;
+
+                // Distribuir ganancias si se completó
+                await _distribucionService.DistribuirGananciasPago(prestamo.Id, cuota.MontoPagado);
+            }
+            else
+            {
+                cuota.EstadoCuota = "Parcial";
+            }
+
+            montoRestante -= montoAbonar;
+        }
+
+        // Actualizar Reserva con el capital total recuperado
+        if (capitalRecuperadoTotal > 0)
+        {
+            await gananciasService.ActualizarReservaAsync(capitalRecuperadoTotal, $"Abono a préstamo #{prestamo.Id}");
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new 
+        { 
+            message = $"Abono aplicado exitosamente. {cuotasPagadasCount} cuotas completadas.",
+            montoAbonado = dto.Monto - montoRestante,
+            montoRestante = montoRestante, // Si el abono excedió la deuda total
+            cuotasAfectadas
+        });
     }
 }
 

@@ -28,4 +28,5 @@ public class Prestamo
     public ICollection<Pago> Pagos { get; set; } = new List<Pago>();
     public ICollection<DistribucionGanancia> Distribuciones { get; set; } = new List<DistribucionGanancia>();
     public ICollection<FuenteCapitalPrestamo> FuentesCapital { get; set; } = new List<FuenteCapitalPrestamo>();
+    public ICollection<NotaPrestamo> Notas { get; set; } = new List<NotaPrestamo>();
 }
