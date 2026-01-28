@@ -26,7 +26,7 @@ public class CobrosController : BaseApiController
     }
 
     [HttpGet("hoy")]
-    public async Task<ActionResult<object>> GetCobrosHoy([FromQuery] int? cobradorId)
+    public async Task<ActionResult<object>> GetCobrosHoy([FromQuery(Name = "cobradorId")] int? cobradorId)
     {
         var today = DateTime.UtcNow.Date;
         var userId = GetCurrentUserId();
@@ -267,7 +267,7 @@ public class CobrosController : BaseApiController
     }
 
     [HttpGet("mes")]
-    public async Task<ActionResult<object>> GetCobrosDelMes([FromQuery] int? cobradorId)
+    public async Task<ActionResult<object>> GetCobrosDelMes([FromQuery(Name = "cobradorId")] int? cobradorId)
     {
         var today = DateTime.UtcNow.Date;
         var startOfMonth = new DateTime(today.Year, today.Month, 1, 0, 0, 0, DateTimeKind.Utc);
