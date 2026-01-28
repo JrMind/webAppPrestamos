@@ -10,13 +10,7 @@ const formatDateInput = (date: Date): string => date.toISOString().split('T')[0]
 
 interface Toast { id: number; message: string; type: 'success' | 'error' | 'warning'; }
 
-const getPorcentajeCobradorSugerido = (tasa: number) => {
-  if (tasa === 10) return 2;
-  if (tasa === 12) return 4;
-  if (tasa === 15) return 5;
-  if (tasa === 20) return 10;
-  return null;
-};
+
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!getAuthToken());
@@ -630,7 +624,7 @@ function App() {
       unidadDuracion: 'Meses',
       fechaPrestamo: new Date().toISOString().split('T')[0],
       descripcion: '',
-      porcentajeCobrador: 5,
+      porcentajeCobrador: 0,
       diaSemana: undefined,
       esCongelado: false
     });
@@ -639,7 +633,6 @@ function App() {
     clearCobradorSelection();
     setClienteSearch('');
     setShowFuentesSection(false);
-    setCobradorTouched(false);
     setShowPrestamoModal(true);
   };
 
@@ -671,7 +664,7 @@ function App() {
     clienteId: 0, montoPrestado: 0, tasaInteres: 15, tipoInteres: 'Simple',
     frecuenciaPago: 'Quincenal', duracion: 3, unidadDuracion: 'Meses',
     fechaPrestamo: formatDateInput(new Date()), descripcion: '',
-    cobradorId: undefined, porcentajeCobrador: 5, esCongelado: false
+    cobradorId: undefined, porcentajeCobrador: 0, esCongelado: false
   });
   const [pagoForm, setPagoForm] = useState<CreatePagoDto>({
     prestamoId: 0, cuotaId: undefined, montoPago: 0,
@@ -681,7 +674,7 @@ function App() {
   // Fixed Quota Mode State
   const [mantenerCuota, setMantenerCuota] = useState(false);
   const [targetCuota, setTargetCuota] = useState(0);
-  const [cobradorTouched, setCobradorTouched] = useState(false);
+
 
   // Recalculate duration when maintaining quota
   const handleMontoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -2072,12 +2065,10 @@ function App() {
                       value={prestamoForm.tasaInteres}
                       onChange={e => {
                         const nuevaTasa = Number(e.target.value);
-                        const sugerido = getPorcentajeCobradorSugerido(nuevaTasa);
+                        // Solo actualizar la tasa, NO el porcentaje del cobrador automáticamente
                         setPrestamoForm({
                           ...prestamoForm,
-                          tasaInteres: nuevaTasa,
-                          // Solo actualizar porcentajeCobrador si el usuario no lo ha tocado manualmente
-                          porcentajeCobrador: (!cobradorTouched && sugerido !== null) ? sugerido : prestamoForm.porcentajeCobrador
+                          tasaInteres: nuevaTasa
                         });
                       }}
                     />
@@ -2157,7 +2148,7 @@ function App() {
                       )}
                     </div>
                   </div>
-                  <div className="form-group"><label>% Cobrador</label><input type="number" min="0" max="15" step="0.5" value={prestamoForm.porcentajeCobrador} onChange={e => { setCobradorTouched(true); setPrestamoForm({ ...prestamoForm, porcentajeCobrador: Number(e.target.value) }); }} /></div>
+                  <div className="form-group"><label>% Cobrador</label><input type="number" min="0" max="15" step="0.5" value={prestamoForm.porcentajeCobrador} onChange={e => { setPrestamoForm({ ...prestamoForm, porcentajeCobrador: Number(e.target.value) }); }} /></div>
                   {prestamoForm.frecuenciaPago === 'Semanal' && (
                     <div className="form-group">
                       <label>Día de pago *</label>
