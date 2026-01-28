@@ -33,25 +33,47 @@ public class CobrosController : BaseApiController
         var isCobrador = IsCobrador();
         var isAdmin = IsAdmin();
 
-        // Base query
-        var baseQuery = _context.CuotasPrestamo
-            .Include(c => c.Prestamo)
-                .ThenInclude(p => p!.Cliente)
-            .Include(c => c.Prestamo)
-                .ThenInclude(p => p!.Cobrador)
-            .AsQueryable();
-
-        // Filtrado por permisos y parámetros
+        // Determine cobrador filter - this will be applied to all queries
+        int? effectiveCobradorId = null;
+        bool hasCobradorFilter = false;
+        
         if (isCobrador && userId.HasValue)
         {
             // Cobradores solo ven sus propios cobros
-            baseQuery = baseQuery.Where(c => c.Prestamo!.CobradorId == userId.Value);
+            effectiveCobradorId = userId.Value;
+            hasCobradorFilter = true;
         }
         else if ((isAdmin || IsSocio()) && cobradorId.HasValue)
         {
             // Admins/Socios pueden filtrar por un cobrador específico
-            baseQuery = baseQuery.Where(c => c.Prestamo!.CobradorId == cobradorId.Value);
+            effectiveCobradorId = cobradorId.Value;
+            hasCobradorFilter = true;
         }
+
+        // Build query based on filter
+        IQueryable<CuotaPrestamo> baseQuery;
+        
+        if (hasCobradorFilter && effectiveCobradorId.HasValue)
+        {
+            // Apply cobrador filter explicitly
+            var targetCobradorId = effectiveCobradorId.Value;
+            baseQuery = _context.CuotasPrestamo
+                .Include(c => c.Prestamo)
+                    .ThenInclude(p => p!.Cliente)
+                .Include(c => c.Prestamo)
+                    .ThenInclude(p => p!.Cobrador)
+                .Where(c => c.Prestamo!.CobradorId == targetCobradorId);
+        }
+        else
+        {
+            // No cobrador filter - show all
+            baseQuery = _context.CuotasPrestamo
+                .Include(c => c.Prestamo)
+                    .ThenInclude(p => p!.Cliente)
+                .Include(c => c.Prestamo)
+                    .ThenInclude(p => p!.Cobrador);
+        }
+
 
         // Cuotas de hoy
         var cuotasHoy = await baseQuery
@@ -276,23 +298,47 @@ public class CobrosController : BaseApiController
         var isCobrador = IsCobrador();
         var isAdmin = IsAdmin();
 
-        // Base query
-        var baseQuery = _context.CuotasPrestamo
-            .Include(c => c.Prestamo)
-                .ThenInclude(p => p!.Cliente)
-            .Include(c => c.Prestamo)
-                .ThenInclude(p => p!.Cobrador)
-            .Where(c => c.EstadoCuota != "Pagada")
-            .AsQueryable();
-
-        // Filtrado por permisos y parámetros
+        // Determine cobrador filter - this will be applied to all queries
+        int? effectiveCobradorId = null;
+        bool hasCobradorFilter = false;
+        
         if (isCobrador && userId.HasValue)
         {
-            baseQuery = baseQuery.Where(c => c.Prestamo!.CobradorId == userId.Value);
+            // Cobradores solo ven sus propios cobros
+            effectiveCobradorId = userId.Value;
+            hasCobradorFilter = true;
         }
         else if ((isAdmin || IsSocio()) && cobradorId.HasValue)
         {
-            baseQuery = baseQuery.Where(c => c.Prestamo!.CobradorId == cobradorId.Value);
+            // Admins/Socios pueden filtrar por un cobrador específico
+            effectiveCobradorId = cobradorId.Value;
+            hasCobradorFilter = true;
+        }
+
+        // Build query based on filter
+        IQueryable<CuotaPrestamo> baseQuery;
+        
+        if (hasCobradorFilter && effectiveCobradorId.HasValue)
+        {
+            // Apply cobrador filter explicitly
+            var targetCobradorId = effectiveCobradorId.Value;
+            baseQuery = _context.CuotasPrestamo
+                .Include(c => c.Prestamo)
+                    .ThenInclude(p => p!.Cliente)
+                .Include(c => c.Prestamo)
+                    .ThenInclude(p => p!.Cobrador)
+                .Where(c => c.EstadoCuota != "Pagada")
+                .Where(c => c.Prestamo!.CobradorId == targetCobradorId);
+        }
+        else
+        {
+            // No cobrador filter - show all
+            baseQuery = _context.CuotasPrestamo
+                .Include(c => c.Prestamo)
+                    .ThenInclude(p => p!.Cliente)
+                .Include(c => c.Prestamo)
+                    .ThenInclude(p => p!.Cobrador)
+                .Where(c => c.EstadoCuota != "Pagada");
         }
 
         // Cuotas de hoy
