@@ -604,8 +604,11 @@ export const smsHistoryApi = {
 
 // Cobros del Mes (Tareas Diarias)
 export const cobrosDelMesApi = {
-    getCobrosDelMes: async (): Promise<CobrosDelMes> => {
-        const response = await fetch(`${API_URL}/cobros/mes`, { headers: getHeaders() });
+    getCobrosDelMes: async (cobradorId?: number): Promise<CobrosDelMes> => {
+        const url = cobradorId
+            ? `${API_URL}/cobros/mes?cobradorId=${cobradorId}`
+            : `${API_URL}/cobros/mes`;
+        const response = await fetch(url, { headers: getHeaders() });
         return handleResponse<CobrosDelMes>(response);
     },
 };

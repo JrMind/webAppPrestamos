@@ -223,6 +223,8 @@ function App() {
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
   const [filtroClienteId] = useState<number | undefined>();
   const [filtroClienteBusqueda, setFiltroClienteBusqueda] = useState('');
+  const [filtroCobradorId, setFiltroCobradorId] = useState<number | undefined>();
+  const [cobradoresList, setCobradoresList] = useState<Cobrador[]>([]);
 
   // Modals
   const [showClienteModal, setShowClienteModal] = useState(false);
@@ -329,8 +331,10 @@ function App() {
   };
 
   useEffect(() => { loadData(); }, [loadData]);
-  useEffect(() => { if (activeTab === 'cobros') loadCobrosDelMes(); }, [activeTab]);
+  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => { if (activeTab === 'cobros') { loadCobrosDelMes(); loadCobradoresList(); } }, [activeTab, filtroCobradorId]);
   useEffect(() => { if (activeTab === 'prestamosdia') loadPrestamosDelDia(); }, [activeTab]);
+
   useEffect(() => { if (activeTab === 'socios') loadBalanceSocios(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'usuarios') loadUsuarios(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'clientes') loadClientes(); }, [activeTab]);
@@ -354,10 +358,18 @@ function App() {
     } catch (error) { console.error('Error loading SMS history:', error); }
   };
 
+  const loadCobradoresList = async () => {
+    try {
+      const data = await usuariosApi.getCobradores();
+      setCobradoresList(data);
+    } catch (error) { console.error('Error loading cobradores list:', error); }
+  };
+
   const loadCobrosDelMes = async () => {
     setLoadingCobros(true);
+    setLoadingCobros(true);
     try {
-      const data = await cobrosDelMesApi.getCobrosDelMes();
+      const data = await cobrosDelMesApi.getCobrosDelMes(filtroCobradorId);
       setCobrosDelMes(data);
     } catch (error) {
       console.error('Error loading cobros del mes:', error);
@@ -1263,6 +1275,24 @@ function App() {
           {/* Cobros Tab */}
           {activeTab === 'cobros' && (
             <div>
+              {/* Filtro de Cobrador */}
+              {currentUser?.rol !== 'Cobrador' && (
+                <div className="filters-bar" style={{ marginBottom: '1rem' }}>
+                  <div className="filter-group">
+                    <label>Filtrar por Cobrador</label>
+                    <select
+                      value={filtroCobradorId || ''}
+                      onChange={e => setFiltroCobradorId(e.target.value ? Number(e.target.value) : undefined)}
+                      style={{ minWidth: '200px' }}
+                    >
+                      <option value="">Todos</option>
+                      {cobradoresList.map(c => (
+                        <option key={c.id} value={c.id}>{c.nombre}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+              )}
               {loadingCobros ? (
                 <div className="loading"><div className="spinner"></div></div>
               ) : cobrosDelMes ? (
