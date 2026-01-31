@@ -37,6 +37,7 @@ public class PrestamosController : BaseApiController
         [FromQuery] string? estado,
         [FromQuery] string? frecuencia,
         [FromQuery] int? clienteId,
+        [FromQuery] int? cobradorId,
         [FromQuery] string? busqueda)
     {
         var userId = GetCurrentUserId();
@@ -53,6 +54,10 @@ public class PrestamosController : BaseApiController
         if (isCobrador && userId.HasValue)
         {
             query = query.Where(p => p.CobradorId == userId.Value);
+        }
+        else if (cobradorId.HasValue)
+        {
+            query = query.Where(p => p.CobradorId == cobradorId.Value);
         }
 
         if (fechaDesde.HasValue)
@@ -73,7 +78,8 @@ public class PrestamosController : BaseApiController
         if (!string.IsNullOrEmpty(busqueda))
             query = query.Where(p => 
                 p.Cliente!.Nombre.ToLower().Contains(busqueda.ToLower()) ||
-                p.Cliente!.Cedula.Contains(busqueda));
+                p.Cliente!.Cedula.Contains(busqueda) || 
+                (p.Cobrador != null && p.Cobrador.Nombre.ToLower().Contains(busqueda.ToLower())));
 
         var prestamos = await query
             .OrderByDescending(p => p.FechaPrestamo)
