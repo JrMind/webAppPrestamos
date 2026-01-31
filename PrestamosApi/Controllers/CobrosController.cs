@@ -43,9 +43,10 @@ public class CobrosController : BaseApiController
             effectiveCobradorId = userId.Value;
             hasCobradorFilter = true;
         }
-        else if ((isAdmin || IsSocio()) && cobradorId.HasValue)
+        else if (cobradorId.HasValue)
         {
-            // Admins/Socios pueden filtrar por un cobrador específico
+            // Permitir filtrar por cobrador a cualquier usuario no-cobrador (Admins, Socios, etc)
+            // Ya que por defecto ven TODO, filtrar es una restricción, no una elevación de privilegios.
             effectiveCobradorId = cobradorId.Value;
             hasCobradorFilter = true;
         }
@@ -308,9 +309,9 @@ public class CobrosController : BaseApiController
             effectiveCobradorId = userId.Value;
             hasCobradorFilter = true;
         }
-        else if ((isAdmin || IsSocio()) && cobradorId.HasValue)
+        else if (cobradorId.HasValue)
         {
-            // Admins/Socios pueden filtrar por un cobrador específico
+            // Permitir filtrar por cobrador a cualquier usuario no-cobrador
             effectiveCobradorId = cobradorId.Value;
             hasCobradorFilter = true;
         }

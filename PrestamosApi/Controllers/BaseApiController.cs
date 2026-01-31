@@ -24,7 +24,7 @@ public abstract class BaseApiController : ControllerBase
     protected RolUsuario? GetCurrentUserRole()
     {
         var roleClaim = User.FindFirst(ClaimTypes.Role)?.Value;
-        return Enum.TryParse<RolUsuario>(roleClaim, out var role) ? role : null;
+        return Enum.TryParse<RolUsuario>(roleClaim, true, out var role) ? role : null;
     }
 
     /// <summary>
