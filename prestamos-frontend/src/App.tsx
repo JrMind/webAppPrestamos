@@ -1103,9 +1103,9 @@ function App() {
         {/* Flujo de Capital */}
         <div className="kpi-grid" style={{ marginTop: '1rem' }}>
           <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b', background: 'linear-gradient(135deg, rgba(245,158,11,0.1) 0%, transparent 100%)' }}>
-            <div className="kpi-header"><span className="kpi-title">💰 Capital Inicial</span></div>
+            <div className="kpi-header"><span className="kpi-title">💰 Capital</span></div>
             <span className="kpi-value" style={{ color: '#f59e0b' }}>{formatMoney(metricas?.capitalInicial || 0)}</span>
-            <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Capital aún en circulación</span>
+            <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Capital total en préstamos activos</span>
           </div>
           <div className="kpi-card" style={{ borderLeft: '4px solid #10b981', background: 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, transparent 100%)' }}>
             <div className="kpi-header"><span className="kpi-title">🏦 Reserva Disponible</span></div>
@@ -2463,7 +2463,8 @@ function App() {
                     <tr>
                       <th style={{ width: '40px' }}>✓</th>
                       <th>#</th>
-                      <th>Fecha</th>
+                      <th>Fecha Cobro</th>
+                      <th>Fecha Pago</th>
                       <th>Valor Cuota</th>
                       <th>Pagado</th>
                       <th>Pendiente</th>
@@ -2472,45 +2473,52 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
-                    {cuotasDetalle.map(c => (
-                      <tr key={c.id} style={{ opacity: c.estadoCuota === 'Pagada' ? 0.6 : 1, background: c.estadoCuota === 'Vencida' ? 'rgba(239,68,68,0.1)' : undefined }}>
-                        <td>
-                          <input
-                            type="checkbox"
-                            checked={c.estadoCuota === 'Pagada'}
-                            onChange={async (e) => {
-                              try {
-                                await cobrosApi.marcarCobrado(c.id, e.target.checked);
-                                showToast(e.target.checked ? 'Cuota marcada como pagada' : 'Marca removida', 'success');
-                                // Recargar cuotas
-                                const cuotas = await cuotasApi.getByPrestamo(selectedPrestamo.id);
-                                setCuotasDetalle(cuotas);
-                                // Recargar préstamos para actualizar totales
-                                loadData();
-                              } catch { showToast('Error al marcar cuota', 'error'); }
-                            }}
-                            style={{ width: '18px', height: '18px', cursor: 'pointer' }}
-                          />
-                        </td>
-                        <td>{c.numeroCuota}</td>
-                        <td>{formatDate(c.fechaCobro)}</td>
-                        <td className="money">{formatMoney(c.montoCuota)}</td>
-                        <td className="money" style={{ color: '#10b981' }}>{formatMoney(c.montoPagado)}</td>
-                        <td className="money" style={{ color: c.saldoPendiente > 0 ? '#ef4444' : '#10b981' }}>{formatMoney(c.saldoPendiente)}</td>
-                        <td>
-                          <span className={`badge ${c.estadoCuota === 'Pagada' ? 'badge-green' : c.estadoCuota === 'Vencida' ? 'badge-red' : c.estadoCuota === 'Parcial' ? 'badge-orange' : 'badge-gray'}`}>
-                            {c.estadoCuota}
-                          </span>
-                        </td>
-                        <td>
-                          {c.estadoCuota !== 'Pagada' && (
-                            <button className="btn btn-primary btn-sm" onClick={() => openPagoModal(c)}>
-                              💰 Pagar
-                            </button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
+                    {cuotasDetalle.map((c, idx) => {
+                      // Resaltar la próxima cuota a pagar (primera no pagada)
+                      const esSiguiente = c.estadoCuota !== 'Pagada' && !cuotasDetalle.slice(0, idx).some(prev => prev.estadoCuota !== 'Pagada');
+                      return (
+                        <tr key={c.id} style={{
+                          opacity: c.estadoCuota === 'Pagada' ? 0.6 : 1,
+                          background: esSiguiente ? 'rgba(59,130,246,0.15)' : c.estadoCuota === 'Vencida' ? 'rgba(239,68,68,0.1)' : undefined,
+                          borderLeft: esSiguiente ? '3px solid #3b82f6' : undefined
+                        }}>
+                          <td>
+                            <input
+                              type="checkbox"
+                              checked={c.estadoCuota === 'Pagada'}
+                              onChange={async (e) => {
+                                try {
+                                  await cobrosApi.marcarCobrado(c.id, e.target.checked);
+                                  showToast(e.target.checked ? 'Cuota marcada como pagada' : 'Marca removida', 'success');
+                                  const cuotas = await cuotasApi.getByPrestamo(selectedPrestamo.id);
+                                  setCuotasDetalle(cuotas);
+                                  loadData();
+                                } catch { showToast('Error al marcar cuota', 'error'); }
+                              }}
+                              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                            />
+                          </td>
+                          <td>{esSiguiente ? <strong>→ {c.numeroCuota}</strong> : c.numeroCuota}</td>
+                          <td>{formatDate(c.fechaCobro)}</td>
+                          <td style={{ color: c.fechaPago ? '#10b981' : '#666' }}>{c.fechaPago ? formatDate(c.fechaPago) : '-'}</td>
+                          <td className="money">{formatMoney(c.montoCuota)}</td>
+                          <td className="money" style={{ color: '#10b981' }}>{formatMoney(c.montoPagado)}</td>
+                          <td className="money" style={{ color: c.saldoPendiente > 0 ? '#ef4444' : '#10b981' }}>{formatMoney(c.saldoPendiente)}</td>
+                          <td>
+                            <span className={`badge ${c.estadoCuota === 'Pagada' ? 'badge-green' : c.estadoCuota === 'Vencida' ? 'badge-red' : c.estadoCuota === 'Parcial' ? 'badge-orange' : 'badge-gray'}`}>
+                              {c.estadoCuota === 'Pagada' ? '✅ Pagada' : c.estadoCuota === 'Vencida' ? '⚠️ Vencida' : c.estadoCuota === 'Parcial' ? '🔄 Parcial' : '⏳ Pendiente'}
+                            </span>
+                          </td>
+                          <td>
+                            {c.estadoCuota !== 'Pagada' && (
+                              <button className="btn btn-primary btn-sm" onClick={() => openPagoModal(c)}>
+                                💰 Pagar
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -2553,6 +2561,11 @@ function App() {
                   <div className="form-group"><label>Fecha *</label><input type="date" required value={pagoForm.fechaPago} onChange={e => setPagoForm({ ...pagoForm, fechaPago: e.target.value })} /></div>
                   <div className="form-group"><label>Método</label><select value={pagoForm.metodoPago || ''} onChange={e => setPagoForm({ ...pagoForm, metodoPago: e.target.value })}><option>Efectivo</option><option>Transferencia</option><option>Nequi</option><option>Daviplata</option></select></div>
                 </div>
+                {pagoForm.montoPago > selectedCuota.saldoPendiente && (
+                  <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(59,130,246,0.1)', borderRadius: '6px', marginTop: '0.5rem', fontSize: '0.85rem', color: '#3b82f6' }}>
+                    💡 El excedente de <strong>{formatMoney(pagoForm.montoPago - selectedCuota.saldoPendiente)}</strong> se aplicará automáticamente a cuotas futuras.
+                  </div>
+                )}
               </div>
               <div className="modal-footer"><button type="button" className="btn btn-secondary" onClick={() => setShowPagoModal(false)}>Cancelar</button><button type="submit" className="btn btn-primary">Registrar</button></div>
             </form>

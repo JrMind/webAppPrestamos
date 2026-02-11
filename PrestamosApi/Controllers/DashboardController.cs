@@ -224,30 +224,11 @@ public class DashboardController : ControllerBase
                 ))
                 .ToListAsync();
 
-            // Capital Inicial = Total Prestado - Capital Recuperado (cuota por cuota)
-            // Para cada cuota: si tiene pagos, calcular qué porción del pago corresponde a capital
-            // Fórmula por cuota: capitalRecuperado = MontoPagado * (MontoCapital / MontoCuota)
-            var cuotasConPagos = await _context.CuotasPrestamo
-                .Where(c => c.MontoPagado > 0)
-                .Select(c => new {
-                    c.MontoPagado,
-                    c.MontoCuota,
-                    c.MontoCapital,
-                    c.MontoInteres
-                })
-                .ToListAsync();
-            
-            decimal capitalRecuperadoTotal = 0;
-            foreach (var cuota in cuotasConPagos)
-            {
-                if (cuota.MontoCuota > 0)
-                {
-                    // Proporción del pago que corresponde a capital
-                    var proporcionCapitalCuota = cuota.MontoCapital / cuota.MontoCuota;
-                    capitalRecuperadoTotal += cuota.MontoPagado * proporcionCapitalCuota;
-                }
-            }
-            var capitalInicial = totalPrestado - capitalRecuperadoTotal;
+            // Capital = Suma del capital prestado de préstamos activos (dinero en la calle)
+            // Se actualiza dinámicamente al crear préstamos o recibir pagos
+            var capitalInicial = await _context.Prestamos
+                .Where(p => p.EstadoPrestamo == "Activo")
+                .SumAsync(p => p.MontoPrestado);
 
             return Ok(new DashboardMetricasDto(
                 totalPrestado,
