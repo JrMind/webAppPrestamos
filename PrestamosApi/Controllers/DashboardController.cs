@@ -225,28 +225,32 @@ public class DashboardController : ControllerBase
                 .ToListAsync();
 
             // Capital = Capital Activo (Saldo de capital por cobrar)
-            // Congelados: MontoPrestado es el saldo actual (se reduce directamente con abonos)
-            // Normales: MontoPrestado Original - Capital Amortizado en cuotas
+            // Congelados: MontoPrestado es el saldo actual
+            // Normales: Cálculo proporcional (Capital = Principal - (Pagado * (Principal/Total)))
+            // ya que la columna MontoCapital no existe en la BD.
             var prestamosActivosData = await _context.Prestamos
                 .Where(p => p.EstadoPrestamo == "Activo")
-                .Include(p => p.Cuotas)
+                .Select(p => new {
+                    p.Id,
+                    p.MontoPrestado,
+                    p.MontoTotal,
+                    p.EsCongelado,
+                    TotalPagado = p.Cuotas.Sum(c => c.MontoPagado)
+                })
                 .ToListAsync();
 
             decimal capitalEnCalle = 0;
             foreach (var p in prestamosActivosData)
             {
-                if (p.EsCongelado == true) // Nullable bool check
+                if (p.EsCongelado == true) 
                 {
                      capitalEnCalle += p.MontoPrestado; 
                 }
                 else 
                 {
-                    decimal capitalAmortizado = p.Cuotas.Sum(c => {
-                        if (c.EstadoCuota == "Pagada") return c.MontoCapital;
-                        // Si es pago parcial, primero cubre interés, resto a capital (hasta tope MontoCapital)
-                        if (c.MontoPagado > c.MontoInteres) return Math.Min(c.MontoCapital, c.MontoPagado - c.MontoInteres);
-                        return 0m;
-                    });
+                    // Si MontoTotal es 0 (error datos), asumimos ratio 1 (todo es capital)
+                    decimal ratio = p.MontoTotal > 0 ? p.MontoPrestado / p.MontoTotal : 1;
+                    decimal capitalAmortizado = p.TotalPagado * ratio;
                     capitalEnCalle += (p.MontoPrestado - capitalAmortizado);
                 }
             }

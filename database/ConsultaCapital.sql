@@ -1,36 +1,23 @@
 -- CONSULTA DE CAPITAL REAL EN LA CALLE (SALDO DE CAPITAL PENDIENTE)
--- Excluye intereses, excluye préstamos pagados/finalizados.
--- Resta el capital que ya ha sido amortizado en las cuotas.
+-- Versión corregida: Usa cálculo proporcional porque la columna 'MontoCapital' no existe en la BD.
+-- Fórmula: CapitalPendiente = MontoPrestado - (TotalPagado * (MontoPrestado / MontoTotal))
 
 SELECT 
     -- Capital Total
     SUM(
         CASE 
             WHEN p.EsCongelado = true THEN p.MontoPrestado -- En congelados, el monto bajará si hay abonos a capital
-            ELSE (p.MontoPrestado - COALESCE(amortizado.CapitalPagado, 0))
+            ELSE (p.MontoPrestado - (
+                -- Total pagado en cuotas * Proporción de Capital
+                COALESCE((SELECT SUM(MontoPagado) FROM CuotasPrestamo WHERE PrestamoId = p.Id), 0) * 
+                (p.MontoPrestado / NULLIF(p.MontoTotal, 0))
+            ))
         END
     ) as CapitalPendienteReal,
     
     COUNT(p.Id) as TotalPrestamosActivos
 
 FROM Prestamos p
-LEFT JOIN (
-    -- Subconsulta para calcular cuánto capital se ha amortizado en cada préstamo normal
-    SELECT 
-        PrestamoId,
-        SUM(
-            CASE 
-                -- Si la cuota está 100% pagada, tomamos todo su capital programado
-                WHEN EstadoCuota = 'Pagada' THEN MontoCapital
-                -- Si es pago parcial y cubre intereses, el resto va a capital (tope MontoCapital)
-                WHEN MontoPagado > MontoInteres THEN LEAST(MontoCapital, MontoPagado - MontoInteres)
-                ELSE 0 
-            END
-        ) as CapitalPagado
-    FROM CuotasPrestamo
-    GROUP BY PrestamoId
-) amortizado ON p.Id = amortizado.PrestamoId
-
 WHERE p.EstadoPrestamo = 'Activo';
 
 
@@ -39,25 +26,16 @@ SELECT
     c.Nombre,
     p.EsCongelado,
     p.MontoPrestado as MontoOriginal,
-    COALESCE(amortizado.CapitalPagado, 0) as CapitalAmortizado,
+    p.MontoTotal as DeudaTotal,
+    COALESCE((SELECT SUM(MontoPagado) FROM CuotasPrestamo WHERE PrestamoId = p.Id), 0) as TotalPagado,
     (CASE 
         WHEN p.EsCongelado = true THEN p.MontoPrestado
-        ELSE (p.MontoPrestado - COALESCE(amortizado.CapitalPagado, 0))
+        ELSE (p.MontoPrestado - (
+            COALESCE((SELECT SUM(MontoPagado) FROM CuotasPrestamo WHERE PrestamoId = p.Id), 0) * 
+            (p.MontoPrestado / NULLIF(p.MontoTotal, 0))
+        ))
      END) as SaldoCapitalPendiente
 FROM Prestamos p
 JOIN Clientes c ON p.ClienteId = c.Id
-LEFT JOIN (
-    SELECT 
-        PrestamoId,
-        SUM(
-            CASE 
-                WHEN EstadoCuota = 'Pagada' THEN MontoCapital
-                WHEN MontoPagado > MontoInteres THEN LEAST(MontoCapital, MontoPagado - MontoInteres)
-                ELSE 0 
-            END
-        ) as CapitalPagado
-    FROM CuotasPrestamo
-    GROUP BY PrestamoId
-) amortizado ON p.Id = amortizado.PrestamoId
 WHERE p.EstadoPrestamo = 'Activo'
 ORDER BY SaldoCapitalPendiente DESC;
