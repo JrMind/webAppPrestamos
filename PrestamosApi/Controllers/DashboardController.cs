@@ -224,11 +224,33 @@ public class DashboardController : ControllerBase
                 ))
                 .ToListAsync();
 
-            // Capital = Suma del capital prestado de préstamos activos (dinero en la calle)
-            // Se actualiza dinámicamente al crear préstamos o recibir pagos
-            var capitalInicial = await _context.Prestamos
+            // Capital = Capital Activo (Saldo de capital por cobrar)
+            // Congelados: MontoPrestado es el saldo actual (se reduce directamente con abonos)
+            // Normales: MontoPrestado Original - Capital Amortizado en cuotas
+            var prestamosActivosData = await _context.Prestamos
                 .Where(p => p.EstadoPrestamo == "Activo")
-                .SumAsync(p => p.MontoPrestado);
+                .Include(p => p.Cuotas)
+                .ToListAsync();
+
+            decimal capitalEnCalle = 0;
+            foreach (var p in prestamosActivosData)
+            {
+                if (p.EsCongelado == true) // Nullable bool check
+                {
+                     capitalEnCalle += p.MontoPrestado; 
+                }
+                else 
+                {
+                    decimal capitalAmortizado = p.Cuotas.Sum(c => {
+                        if (c.EstadoCuota == "Pagada") return c.MontoCapital;
+                        // Si es pago parcial, primero cubre interés, resto a capital (hasta tope MontoCapital)
+                        if (c.MontoPagado > c.MontoInteres) return Math.Min(c.MontoCapital, c.MontoPagado - c.MontoInteres);
+                        return 0m;
+                    });
+                    capitalEnCalle += (p.MontoPrestado - capitalAmortizado);
+                }
+            }
+            var capitalInicial = capitalEnCalle;
 
             return Ok(new DashboardMetricasDto(
                 totalPrestado,
