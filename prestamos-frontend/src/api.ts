@@ -1,7 +1,8 @@
 import {
     Cliente, CreateClienteDto, CreatePagoDto, CreatePrestamoDto,
     Cuota, DashboardMetricas, Pago, Prestamo, LoginDto, AuthResponse,
-    Usuario, Cobrador, BalanceSocio, CobrosHoy, MovimientoCapital, Aporte
+    Usuario, Cobrador, BalanceSocio, CobrosHoy, MovimientoCapital, Aporte,
+    MetricasGenerales
 } from './types';
 
 const API_URL = import.meta.env.DEV
@@ -413,6 +414,10 @@ export const dashboardApi = {
     getMetricas: async (): Promise<DashboardMetricas> => {
         const response = await fetch(`${API_URL}/dashboard/metricas`, { headers: getHeaders() });
         return handleResponse<DashboardMetricas>(response);
+    },
+    getMetricasCobradores: async (): Promise<MetricasGenerales> => {
+        const response = await fetch(`${API_URL}/dashboard/metricas-cobradores`, { headers: getHeaders() });
+        return handleResponse<MetricasGenerales>(response);
     },
 };
 

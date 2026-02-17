@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi } from './api';
 import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, PrestamosDelDia, MiBalance, Costo, CreateCostoDto } from './types';
+import { MetricasCobradores } from './components/MetricasCobradores';
 import './App.css';
 
 const formatMoney = (amount: number): string => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount);
@@ -17,7 +18,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'prestamosdia' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias'>('prestamos');
+  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'prestamosdia' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias' | 'metricas'>('prestamos');
 
   // Data states
   const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
@@ -1171,6 +1172,7 @@ function App() {
             {currentUser?.rol === 'Socio' && <button className={`tab ${activeTab === 'usuarios' ? 'active' : ''}`} onClick={() => setActiveTab('usuarios')}>👤 Usuarios</button>}
             <button className={`tab ${activeTab === 'aportadores' ? 'active' : ''}`} onClick={() => setActiveTab('aportadores')}>Aportadores</button>
             <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); loadCostos(); }}>📊 Ganancias</button>
+            {currentUser?.rol === 'Socio' && <button className={`tab ${activeTab === 'metricas' ? 'active' : ''}`} onClick={() => setActiveTab('metricas')}>📈 Métricas</button>}
           </div>
 
           {/* Prestamos Tab */}
@@ -1307,7 +1309,7 @@ function App() {
                     <table><thead><tr><th>✓</th><th>Cliente</th><th>Cuota</th><th>Monto</th><th>Cobrador</th><th>Acciones</th></tr></thead>
                       <tbody>{cobrosDelMes.cuotasHoy.map(c => (
                         <tr key={c.id} style={{ opacity: c.cobrado ? 0.6 : 1 }}>
-                          <td><input type="checkbox" checked={c.cobrado} onChange={e => handleMarcarCobrado(c.id, e.target.checked)} /></td>
+                          <td><input type="checkbox" checked={c.cobrado} onChange={e => handleMarcarCobrado(c.id, e.target.checked)} disabled={currentUser?.rol !== 'Socio'} /></td>
                           <td><strong>{c.clienteNombre}</strong><div style={{ fontSize: '0.75rem' }}>{c.clienteTelefono}</div></td>
                           <td>#{c.numeroCuota}</td>
                           <td className="money">{formatMoney(c.saldoPendiente)}</td>
@@ -1367,7 +1369,7 @@ function App() {
                         <table><thead><tr><th>✓</th><th>Cliente</th><th>Fecha</th><th>Días</th><th>Monto</th><th>Cobrador</th><th>Acciones</th></tr></thead>
                           <tbody>{cobrosDelMes.cuotasVencidas.map(c => (
                             <tr key={c.id} style={{ background: 'rgba(239,68,68,0.1)' }}>
-                              <td><input type="checkbox" checked={c.cobrado} onChange={e => handleMarcarCobrado(c.id, e.target.checked)} /></td>
+                              <td><input type="checkbox" checked={c.cobrado} onChange={e => handleMarcarCobrado(c.id, e.target.checked)} disabled={currentUser?.rol !== 'Socio'} /></td>
                               <td><strong>{c.clienteNombre}</strong><div style={{ fontSize: '0.75rem' }}>{c.clienteTelefono}</div></td>
                               <td style={{ color: '#ef4444' }}>{formatDate(c.fechaCobro)}</td>
                               <td><span className="badge badge-red">{Math.abs(c.diasParaVencer)}d</span></td>
@@ -2486,6 +2488,7 @@ function App() {
                             <input
                               type="checkbox"
                               checked={c.estadoCuota === 'Pagada'}
+                              disabled={currentUser?.rol !== 'Socio'}
                               onChange={async (e) => {
                                 try {
                                   await cobrosApi.marcarCobrado(c.id, e.target.checked);
@@ -2495,7 +2498,7 @@ function App() {
                                   loadData();
                                 } catch { showToast('Error al marcar cuota', 'error'); }
                               }}
-                              style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                              style={{ width: '18px', height: '18px', cursor: currentUser?.rol === 'Socio' ? 'pointer' : 'not-allowed', opacity: currentUser?.rol !== 'Socio' ? 0.5 : 1 }}
                             />
                           </td>
                           <td>{esSiguiente ? <strong>→ {c.numeroCuota}</strong> : c.numeroCuota}</td>
@@ -2561,9 +2564,12 @@ function App() {
                   <div className="form-group"><label>Fecha *</label><input type="date" required value={pagoForm.fechaPago} onChange={e => setPagoForm({ ...pagoForm, fechaPago: e.target.value })} /></div>
                   <div className="form-group"><label>Método</label><select value={pagoForm.metodoPago || ''} onChange={e => setPagoForm({ ...pagoForm, metodoPago: e.target.value })}><option>Efectivo</option><option>Transferencia</option><option>Nequi</option><option>Daviplata</option></select></div>
                 </div>
+                <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(16,185,129,0.1)', borderRadius: '6px', marginTop: '0.5rem', fontSize: '0.85rem', color: '#059669', border: '1px solid rgba(16,185,129,0.2)' }}>
+                  💡 <strong>Nota:</strong> Puede pagar más del saldo pendiente. El excedente se aplicará automáticamente a las siguientes cuotas.
+                </div>
                 {pagoForm.montoPago > selectedCuota.saldoPendiente && (
-                  <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(59,130,246,0.1)', borderRadius: '6px', marginTop: '0.5rem', fontSize: '0.85rem', color: '#3b82f6' }}>
-                    💡 El excedente de <strong>{formatMoney(pagoForm.montoPago - selectedCuota.saldoPendiente)}</strong> se aplicará automáticamente a cuotas futuras.
+                  <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(59,130,246,0.1)', borderRadius: '6px', marginTop: '0.5rem', fontSize: '0.85rem', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.2)' }}>
+                    ✅ El excedente de <strong>{formatMoney(pagoForm.montoPago - selectedCuota.saldoPendiente)}</strong> se aplicará automáticamente a cuotas futuras.
                   </div>
                 )}
               </div>
@@ -2750,6 +2756,13 @@ function App() {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* Métricas de Cobradores Tab */}
+      {activeTab === 'metricas' && (
+        <div className="section">
+          <MetricasCobradores />
         </div>
       )}
     </div>

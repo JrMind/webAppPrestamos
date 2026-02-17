@@ -533,3 +533,21 @@ export interface PrestamoConGanancias {
   interesNetoSocios: number;
   gananciasSocios: GananciaSocioPrestamo[];
 }
+
+// Métricas de Cobradores
+export interface EstadisticasCobrador {
+  cobradorId: number;
+  cobradorNombre: string;
+  alias: string; // "Cobrador 1", "Cobrador 2"
+  promedioTasaInteres: number;
+  promedioTasaInteresNeto: number; // Restando 8%
+  capitalTotalPrestado: number;
+  totalCreditosActivos: number;
+}
+
+export interface MetricasGenerales {
+  promedioTasasActivos: number;
+  capitalFantasma: number;
+  totalPrestamosActivos: number;
+  estadisticasCobradores: EstadisticasCobrador[];
+}
