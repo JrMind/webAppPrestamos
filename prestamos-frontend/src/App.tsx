@@ -13,9 +13,17 @@ interface Toast { id: number; message: string; type: 'success' | 'error' | 'warn
 
 
 
+// Recuperar usuario guardado del localStorage (evita pantalla en blanco al refrescar)
+const getStoredUser = (): Usuario | null => {
+  try {
+    const stored = localStorage.getItem('currentUser');
+    return stored ? JSON.parse(stored) : null;
+  } catch { return null; }
+};
+
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(!!getAuthToken());
-  const [currentUser, setCurrentUser] = useState<Usuario | null>(null);
+  const [currentUser, setCurrentUser] = useState<Usuario | null>(getStoredUser);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'prestamosdia' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias' | 'metricas'>('prestamos');
@@ -273,6 +281,7 @@ function App() {
     setLoginError('');
     try {
       const response = await authApi.login(loginForm);
+      // authApi.login ya guarda el usuario en localStorage
       setCurrentUser(response.usuario);
       setIsAuthenticated(true);
       showToast('Bienvenido ' + response.usuario.nombre, 'success');
@@ -282,6 +291,7 @@ function App() {
   };
 
   const handleLogout = () => {
+    // authApi.logout ya elimina currentUser del localStorage
     authApi.logout();
     setIsAuthenticated(false);
     setCurrentUser(null);
@@ -332,7 +342,25 @@ function App() {
   };
 
   useEffect(() => { loadData(); }, [loadData]);
-  useEffect(() => { loadData(); }, [loadData]);
+
+  // Al iniciar con token existente, validar con el servidor y refrescar el usuario
+  // Esto garantiza que si el rol cambió en BD, el frontend siempre tenga el dato fresco
+  useEffect(() => {
+    if (!getAuthToken()) return;
+    authApi.me()
+      .then(usuario => {
+        setCurrentUser(usuario);
+        localStorage.setItem('currentUser', JSON.stringify(usuario));
+      })
+      .catch(() => {
+        // Token inválido o expirado: limpiar sesión
+        authApi.logout();
+        setIsAuthenticated(false);
+        setCurrentUser(null);
+      });
+  // Solo al montar la app (equivale a componentDidMount)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   useEffect(() => { if (activeTab === 'cobros') { loadCobrosDelMes(); loadCobradoresList(); } }, [activeTab, filtroCobradorId]);
   useEffect(() => { if (activeTab === 'prestamosdia') loadPrestamosDelDia(); }, [activeTab]);
 

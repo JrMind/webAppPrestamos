@@ -54,6 +54,8 @@ export const authApi = {
         });
         const result = await handleResponse<AuthResponse>(response);
         setAuthToken(result.token);
+        // Persistir usuario en localStorage para recuperarlo al refrescar
+        localStorage.setItem('currentUser', JSON.stringify(result.usuario));
         return result;
     },
 
@@ -68,6 +70,13 @@ export const authApi = {
 
     logout: () => {
         setAuthToken(null);
+        localStorage.removeItem('currentUser');
+    },
+
+    // Recuperar usuario actual desde el token (para restaurar sesión al refrescar)
+    me: async (): Promise<Usuario> => {
+        const response = await fetch(`${API_URL}/auth/me`, { headers: getHeaders() });
+        return handleResponse<Usuario>(response);
     }
 };
 

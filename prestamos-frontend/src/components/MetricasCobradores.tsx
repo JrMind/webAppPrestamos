@@ -130,10 +130,12 @@ export const MetricasCobradores = () => {
                 <tr key={c.cobradorId} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
                   <td style={s.td}>
                     <div style={s.aliasCell}>
-                      <div style={s.avatar(AVATAR_COLORS[i % AVATAR_COLORS.length])}>{i + 1}</div>
+                      <div style={s.avatar(AVATAR_COLORS[i % AVATAR_COLORS.length])}>
+                        {c.cobradorNombre.charAt(0).toUpperCase()}
+                      </div>
                       <div>
-                        <div style={s.aliasName}>{c.alias}</div>
-                        <div style={s.aliasId}>ID #{c.cobradorId}</div>
+                        <div style={s.aliasName}>{c.cobradorNombre}</div>
+                        <div style={s.aliasId}>{c.totalCreditosActivos === 1 ? '1 crédito' : `${c.totalCreditosActivos} créditos`}</div>
                       </div>
                     </div>
                   </td>
@@ -170,7 +172,7 @@ export const MetricasCobradores = () => {
         <p style={s.infoTitle}>ℹ️ Información</p>
         <p style={s.infoItem}>• <strong>% Neto (−8%)</strong>: Porcentaje promedio después de restar el 8% base</p>
         <p style={s.infoItem}>• <strong>Capital Fantasma</strong>: Suma del monto original prestado en activos (sin considerar pagos)</p>
-        <p style={s.infoItem}>• Los alias <strong>Cobrador 1, 2...</strong> protegen la identidad de los cobradores</p>
+        <p style={s.infoItem}>• <strong>Capital Fantasma</strong>: no descuenta pagos ya realizados, es el monto bruto prestado en activos</p>
       </div>
     </div>
   );

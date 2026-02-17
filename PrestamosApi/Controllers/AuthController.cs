@@ -1,6 +1,9 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using PrestamosApi.Data;
 using PrestamosApi.Models;
 using PrestamosApi.Services;
+using System.Security.Claims;
 
 namespace PrestamosApi.Controllers;
 
@@ -9,10 +12,38 @@ namespace PrestamosApi.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly PrestamosDbContext _context;
 
-    public AuthController(IAuthService authService)
+    public AuthController(IAuthService authService, PrestamosDbContext context)
     {
         _authService = authService;
+        _context = context;
+    }
+
+    /// <summary>
+    /// Devuelve el usuario autenticado actual a partir del token JWT.
+    /// Usado para restaurar la sesión al refrescar la página.
+    /// </summary>
+    [HttpGet("me")]
+    [Authorize]
+    public async Task<IActionResult> Me()
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!int.TryParse(userIdClaim, out var userId))
+            return Unauthorized(new { message = "Token inválido" });
+
+        var usuario = await _context.Usuarios.FindAsync(userId);
+        if (usuario == null)
+            return Unauthorized(new { message = "Usuario no encontrado" });
+
+        return Ok(new
+        {
+            usuario.Id,
+            usuario.Nombre,
+            usuario.Email,
+            Rol = usuario.Rol?.ToString() ?? "Pendiente",
+            usuario.Telefono
+        });
     }
 
     [HttpPost("login")]
