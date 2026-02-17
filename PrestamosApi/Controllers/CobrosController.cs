@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PrestamosApi.Data;
 using PrestamosApi.Models;
+using PrestamosApi.Attributes;
 
 namespace PrestamosApi.Controllers;
 
@@ -142,6 +143,7 @@ public class CobrosController : BaseApiController
     }
 
     [HttpPut("{cuotaId}/marcar")]
+    [AuthorizeRoles(RolUsuario.Socio, RolUsuario.Admin)]
     public async Task<IActionResult> MarcarCobrado(int cuotaId, [FromBody] MarcarCobradoDto dto)
     {
         var cuota = await _context.CuotasPrestamo

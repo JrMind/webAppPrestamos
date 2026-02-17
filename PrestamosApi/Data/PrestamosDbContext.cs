@@ -69,6 +69,7 @@ public class PrestamosDbContext : DbContext
             entity.Property(e => e.EstadoPrestamo).HasColumnName("estadoprestamo").HasMaxLength(20).HasDefaultValue("Activo");
             entity.Property(e => e.Descripcion).HasColumnName("descripcion");
             entity.Property(e => e.PorcentajeCobrador).HasColumnName("porcentajecobrador").HasColumnType("decimal(5,2)").HasDefaultValue(5);
+            entity.Property(e => e.EsCongelado).HasColumnName("EsCongelado").HasDefaultValue(false);
             
             entity.HasOne(e => e.Cliente)
                 .WithMany(c => c.Prestamos)

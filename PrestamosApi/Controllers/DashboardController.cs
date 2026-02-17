@@ -3,6 +3,9 @@ using Microsoft.EntityFrameworkCore;
 using PrestamosApi.Data;
 using PrestamosApi.DTOs;
 using PrestamosApi.Services;
+using PrestamosApi.Models.DTOs;
+using PrestamosApi.Attributes;
+using PrestamosApi.Models;
 
 namespace PrestamosApi.Controllers;
 
@@ -283,6 +286,67 @@ public class DashboardController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { message = "Error interno calculando métricas", error = ex.Message, stackDetails = ex.StackTrace });
+        }
+    }
+
+    [HttpGet("metricas-cobradores")]
+    [AuthorizeRoles(RolUsuario.Socio, RolUsuario.Admin)]
+    public async Task<ActionResult<MetricasGeneralesDto>> GetMetricasCobradores()
+    {
+        try
+        {
+            var prestamosActivos = await _context.Prestamos
+                .Include(p => p.Cobrador)
+                .Where(p => p.EstadoPrestamo == "Activo")
+                .ToListAsync();
+
+            if (!prestamosActivos.Any())
+            {
+                return Ok(new MetricasGeneralesDto
+                {
+                    PromedioTasasActivos = 0,
+                    CapitalFantasma = 0,
+                    TotalPrestamosActivos = 0,
+                    EstadisticasCobradores = new List<EstadisticasCobradorDto>()
+                });
+            }
+
+            // 1. Promedio de tasas de interés de todos los préstamos activos
+            var promedioTasasActivos = prestamosActivos.Average(p => p.TasaInteres);
+
+            // 2. Capital Fantasma: suma de todo el MontoPrestado de préstamos activos
+            var capitalFantasma = prestamosActivos.Sum(p => p.MontoPrestado);
+
+            // 3. Estadísticas por cobrador
+            var cobradores = prestamosActivos
+                .Where(p => p.CobradorId.HasValue)
+                .GroupBy(p => new { p.CobradorId, CobradorNombre = p.Cobrador!.Nombre })
+                .OrderBy(g => g.Key.CobradorId)
+                .Select((g, index) => new EstadisticasCobradorDto
+                {
+                    CobradorId = g.Key.CobradorId!.Value,
+                    CobradorNombre = g.Key.CobradorNombre,
+                    Alias = $"Cobrador {index + 1}", // Cobrador 1, Cobrador 2, etc.
+                    PromedioTasaInteres = Math.Round(g.Average(p => p.TasaInteres), 2),
+                    PromedioTasaInteresNeto = Math.Round(g.Average(p => p.TasaInteres) - 8, 2), // Restando 8%
+                    CapitalTotalPrestado = Math.Round(g.Sum(p => p.MontoPrestado), 2),
+                    TotalCreditosActivos = g.Count()
+                })
+                .ToList();
+
+            var resultado = new MetricasGeneralesDto
+            {
+                PromedioTasasActivos = Math.Round(promedioTasasActivos, 2),
+                CapitalFantasma = Math.Round(capitalFantasma, 2),
+                TotalPrestamosActivos = prestamosActivos.Count,
+                EstadisticasCobradores = cobradores
+            };
+
+            return Ok(resultado);
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error calculando métricas de cobradores", error = ex.Message });
         }
     }
 }
