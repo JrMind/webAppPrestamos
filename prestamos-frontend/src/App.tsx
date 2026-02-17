@@ -1169,10 +1169,10 @@ function App() {
             <button className={`tab ${activeTab === 'balance' ? 'active' : ''}`} onClick={() => setActiveTab('balance')}>💰 Mi Balance</button>
             <button className={`tab ${activeTab === 'sms' ? 'active' : ''}`} onClick={() => setActiveTab('sms')}>📱 SMS</button>
             <button className={`tab ${activeTab === 'smshistory' ? 'active' : ''}`} onClick={() => setActiveTab('smshistory')}>📨 Historial</button>
-            {currentUser?.rol === 'Socio' && <button className={`tab ${activeTab === 'usuarios' ? 'active' : ''}`} onClick={() => setActiveTab('usuarios')}>👤 Usuarios</button>}
+            {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'usuarios' ? 'active' : ''}`} onClick={() => setActiveTab('usuarios')}>👤 Usuarios</button>}
             <button className={`tab ${activeTab === 'aportadores' ? 'active' : ''}`} onClick={() => setActiveTab('aportadores')}>Aportadores</button>
             <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); loadCostos(); }}>📊 Ganancias</button>
-            {currentUser?.rol === 'Socio' && <button className={`tab ${activeTab === 'metricas' ? 'active' : ''}`} onClick={() => setActiveTab('metricas')}>📈 Métricas</button>}
+            {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'metricas' ? 'active' : ''}`} onClick={() => setActiveTab('metricas')}>📈 Métricas</button>}
           </div>
 
           {/* Prestamos Tab */}

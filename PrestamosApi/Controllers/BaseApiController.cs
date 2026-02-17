@@ -33,9 +33,9 @@ public abstract class BaseApiController : ControllerBase
     protected bool IsCobrador() => GetCurrentUserRole() == RolUsuario.Cobrador;
 
     /// <summary>
-    /// Checks if the current user is a Socio
+    /// Checks if the current user is a Socio (or Admin, who has all Socio permissions)
     /// </summary>
-    protected bool IsSocio() => GetCurrentUserRole() == RolUsuario.Socio;
+    protected bool IsSocio() => GetCurrentUserRole() == RolUsuario.Socio || GetCurrentUserRole() == RolUsuario.Admin;
 
     /// <summary>
     /// Checks if the current user is an Admin
