@@ -329,3 +329,55 @@ public record PagarCostoDto(
     string? Comprobante,
     string? Observaciones
 );
+
+// ──────────────────────────────────────────────────
+// Liquidación / Comisiones de Cobradores
+// ──────────────────────────────────────────────────
+
+/// <summary>Detalle de una cuota pagada con su comisión</summary>
+public record ComisionCuotaDto(
+    int CuotaId,
+    int NumeroCuota,
+    DateTime? FechaPago,
+    decimal MontoCuota,
+    decimal MontoPagado,
+    decimal MontoCapital,
+    decimal MontoInteres,
+    decimal PorcentajeCobrador,
+    decimal ComisionCuota       // MontoPagado * PorcentajeCobrador / 100
+);
+
+/// <summary>Resumen de comisiones por préstamo</summary>
+public record ComisionPrestamoDto(
+    int PrestamoId,
+    string ClienteNombre,
+    string ClienteCedula,
+    decimal MontoPrestado,
+    string EstadoPrestamo,
+    decimal PorcentajeCobrador,
+    int CuotasTotales,
+    int CuotasPagadas,
+    int CuotasParciales,
+    decimal TotalRecaudado,         // Suma de MontoPagado en cuotas pagadas/abonadas
+    decimal TotalRecaudadoParcial,  // Suma de MontoPagado en cuotas parciales
+    decimal ComisionPrestamo,       // Comisión sobre cuotas pagadas/abonadas
+    decimal ComisionParcial,        // Comisión proporcional sobre cuotas parciales
+    List<ComisionCuotaDto> CuotasPagadasDetalle
+);
+
+/// <summary>Liquidación completa de un cobrador: todo lo que ha generado</summary>
+public record LiquidacionCobradorDto(
+    int CobradorId,
+    string CobradorNombre,
+    string? CobradorTelefono,
+    int TotalPrestamos,
+    int TotalCuotasPagadas,
+    int TotalCuotasParciales,
+    decimal TotalRecaudado,         // Base de comisión (solo pagadas/abonadas)
+    decimal TotalRecaudadoParcial,  // Cuotas parciales
+    decimal TotalComision,          // Comisión devengada sobre pagadas/abonadas
+    decimal TotalComisionParcial,   // Comisión proporcional sobre parciales
+    decimal TotalComisionGeneral,   // TotalComision + TotalComisionParcial
+    DateTime FechaConsulta,
+    List<ComisionPrestamoDto> Prestamos
+);

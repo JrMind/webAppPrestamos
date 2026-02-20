@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using PrestamosApi.Data;
+using PrestamosApi.DTOs;
 using PrestamosApi.Models;
 using PrestamosApi.Attributes;
 
@@ -655,6 +656,145 @@ public class CobrosController : BaseApiController
             montoRestante = montoRestante, // Si el abono excedió la deuda total
             cuotasAfectadas
         });
+    }
+    // ──────────────────────────────────────────────────────────────
+    // LIQUIDACIÓN / COMISIONES DE COBRADORES
+    // ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Devuelve la liquidación acumulada de TODOS los cobradores.
+    /// Solo Admin y Socio pueden acceder.
+    /// GET /api/cobros/comisiones
+    /// GET /api/cobros/comisiones?incluirParciales=true
+    /// </summary>
+    [HttpGet("comisiones")]
+    [AuthorizeRoles(RolUsuario.Admin, RolUsuario.Socio)]
+    public async Task<ActionResult<List<LiquidacionCobradorDto>>> GetComisionesTodosCobradores(
+        [FromQuery] bool incluirParciales = false)
+    {
+        var liquidaciones = await BuildLiquidaciones(cobradorId: null, incluirParciales);
+        return Ok(liquidaciones);
+    }
+
+    /// <summary>
+    /// Devuelve la liquidación acumulada de UN cobrador específico.
+    /// El propio cobrador también puede consultar la suya.
+    /// GET /api/cobros/comisiones/{cobradorId}
+    /// GET /api/cobros/comisiones/{cobradorId}?incluirParciales=true
+    /// </summary>
+    [HttpGet("comisiones/{cobradorId:int}")]
+    public async Task<ActionResult<LiquidacionCobradorDto>> GetComisionCobrador(
+        int cobradorId,
+        [FromQuery] bool incluirParciales = false)
+    {
+        // Un cobrador solo puede ver la suya propia; admin/socio pueden ver cualquiera
+        var currentUserId = GetCurrentUserId();
+        if (IsCobrador() && currentUserId != cobradorId)
+            return Forbid();
+
+        var liquidaciones = await BuildLiquidaciones(cobradorId, incluirParciales);
+
+        if (!liquidaciones.Any())
+            return NotFound(new { message = "Cobrador no encontrado o sin préstamos asignados" });
+
+        return Ok(liquidaciones.First());
+    }
+
+    // ── Método privado compartido por los dos endpoints ──────────
+    private async Task<List<LiquidacionCobradorDto>> BuildLiquidaciones(
+        int? cobradorId, bool incluirParciales)
+    {
+        // Traer cobradores con sus préstamos y cuotas en una sola consulta
+        var cobradores = await _context.Usuarios
+            .Where(u => u.Rol == RolUsuario.Cobrador && u.Activo
+                        && (cobradorId == null || u.Id == cobradorId))
+            .Include(u => u.PrestamosComoCobrador)
+                .ThenInclude(p => p.Cliente)
+            .Include(u => u.PrestamosComoCobrador)
+                .ThenInclude(p => p.Cuotas)
+            .AsNoTracking()
+            .ToListAsync();
+
+        var resultado = new List<LiquidacionCobradorDto>();
+
+        foreach (var cobrador in cobradores)
+        {
+            var prestamosDto = new List<ComisionPrestamoDto>();
+
+            foreach (var prestamo in cobrador.PrestamosComoCobrador)
+            {
+                var pct = prestamo.PorcentajeCobrador;
+
+                // Cuotas completamente pagadas o abonadas
+                var cuotasPagadas = prestamo.Cuotas
+                    .Where(c => c.EstadoCuota == "Pagada" || c.EstadoCuota == "Abonada")
+                    .ToList();
+
+                // Cuotas con abono parcial (decisión del admin si incluirlas)
+                var cuotasParciales = incluirParciales
+                    ? prestamo.Cuotas.Where(c => c.EstadoCuota == "Parcial" && c.MontoPagado > 0).ToList()
+                    : new();
+
+                // Detalle de cuotas pagadas
+                var detallePagadas = cuotasPagadas.Select(c => new ComisionCuotaDto(
+                    CuotaId          : c.Id,
+                    NumeroCuota      : c.NumeroCuota,
+                    FechaPago        : c.FechaPago,
+                    MontoCuota       : Math.Round(c.MontoCuota, 2),
+                    MontoPagado      : Math.Round(c.MontoPagado, 2),
+                    MontoCapital     : Math.Round(c.MontoCapital, 2),
+                    MontoInteres     : Math.Round(c.MontoInteres, 2),
+                    PorcentajeCobrador: pct,
+                    ComisionCuota    : Math.Round(c.MontoPagado * pct / 100m, 2)
+                )).OrderBy(c => c.NumeroCuota).ToList();
+
+                var totalRecaudado  = cuotasPagadas.Sum(c => c.MontoPagado);
+                var comisionPrestamo = Math.Round(totalRecaudado * pct / 100m, 2);
+
+                var totalParcial    = cuotasParciales.Sum(c => c.MontoPagado);
+                var comisionParcial = Math.Round(totalParcial * pct / 100m, 2);
+
+                prestamosDto.Add(new ComisionPrestamoDto(
+                    PrestamoId          : prestamo.Id,
+                    ClienteNombre       : prestamo.Cliente?.Nombre ?? "—",
+                    ClienteCedula       : prestamo.Cliente?.Cedula ?? "—",
+                    MontoPrestado       : prestamo.MontoPrestado,
+                    EstadoPrestamo      : prestamo.EstadoPrestamo,
+                    PorcentajeCobrador  : pct,
+                    CuotasTotales       : prestamo.Cuotas.Count,
+                    CuotasPagadas       : cuotasPagadas.Count,
+                    CuotasParciales     : cuotasParciales.Count,
+                    TotalRecaudado      : Math.Round(totalRecaudado, 2),
+                    TotalRecaudadoParcial: Math.Round(totalParcial, 2),
+                    ComisionPrestamo    : comisionPrestamo,
+                    ComisionParcial     : comisionParcial,
+                    CuotasPagadasDetalle: detallePagadas
+                ));
+            }
+
+            var totalRec         = prestamosDto.Sum(p => p.TotalRecaudado);
+            var totalRecParcial  = prestamosDto.Sum(p => p.TotalRecaudadoParcial);
+            var totalCom         = prestamosDto.Sum(p => p.ComisionPrestamo);
+            var totalComParcial  = prestamosDto.Sum(p => p.ComisionParcial);
+
+            resultado.Add(new LiquidacionCobradorDto(
+                CobradorId          : cobrador.Id,
+                CobradorNombre      : cobrador.Nombre,
+                CobradorTelefono    : cobrador.Telefono,
+                TotalPrestamos      : prestamosDto.Count,
+                TotalCuotasPagadas  : prestamosDto.Sum(p => p.CuotasPagadas),
+                TotalCuotasParciales: prestamosDto.Sum(p => p.CuotasParciales),
+                TotalRecaudado      : Math.Round(totalRec, 2),
+                TotalRecaudadoParcial: Math.Round(totalRecParcial, 2),
+                TotalComision       : Math.Round(totalCom, 2),
+                TotalComisionParcial: Math.Round(totalComParcial, 2),
+                TotalComisionGeneral: Math.Round(totalCom + totalComParcial, 2),
+                FechaConsulta       : DateTime.UtcNow,
+                Prestamos           : prestamosDto.OrderBy(p => p.ClienteNombre).ToList()
+            ));
+        }
+
+        return resultado.OrderBy(c => c.CobradorNombre).ToList();
     }
 }
 
