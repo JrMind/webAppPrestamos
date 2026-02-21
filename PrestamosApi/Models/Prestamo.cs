@@ -1,3 +1,5 @@
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace PrestamosApi.Models;
 
 public class Prestamo
@@ -22,14 +24,19 @@ public class Prestamo
     public bool EsCongelado { get; set; } = false; // Préstamo congelado: solo paga intereses, capital no reduce salvo sobrepago
 
     // ── Cargos adicionales (aparte del préstamo) ────────────
+    [Column("valorsistema")]
     public decimal ValorSistema { get; set; } = 0;       // Cargo por concepto de sistema
+    [Column("sistemacobrado")]
     public bool SistemaCobrado { get; set; } = false;
+    [Column("fechasistemacobrado")]
     public DateTime? FechaSistemaCobrado { get; set; }
 
+    [Column("valorrenovacion")]
     public decimal ValorRenovacion { get; set; } = 0;    // Cargo por concepto de renovación
+    [Column("renovacioncobrada")]
     public bool RenovacionCobrada { get; set; } = false;
+    [Column("fecharenovacioncobrada")]
     public DateTime? FechaRenovacionCobrada { get; set; }
-
 
     // Navegación
     public Cliente? Cliente { get; set; }
