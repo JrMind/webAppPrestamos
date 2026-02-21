@@ -57,7 +57,14 @@ public record PrestamoDto(
     int? CobradorId = null,
     string? CobradorNombre = null,
     decimal PorcentajeCobrador = 5,
-    bool EsCongelado = false
+    bool EsCongelado = false,
+    // Cargos adicionales
+    decimal ValorSistema = 0,
+    bool SistemaCobrado = false,
+    DateTime? FechaSistemaCobrado = null,
+    decimal ValorRenovacion = 0,
+    bool RenovacionCobrada = false,
+    DateTime? FechaRenovacionCobrada = null
 );
 
 public record CuotaProximaDto(
@@ -79,7 +86,10 @@ public record CreatePrestamoDto(
     decimal PorcentajeCobrador = 5,
     string? DiaSemana = null, // Para Semanal: Lunes, Martes, etc.
     bool EsCongelado = false, // Préstamo congelado: solo intereses
-    int? NumeroCuotasDirecto = null // Override: usar X cuotas en vez de calcular
+    int? NumeroCuotasDirecto = null, // Override: usar X cuotas en vez de calcular
+    // Cargos adicionales
+    decimal ValorSistema = 0,
+    decimal ValorRenovacion = 0
 );
 
 public record UpdatePrestamoDto(
@@ -95,7 +105,12 @@ public record UpdatePrestamoDto(
     int? CobradorId,
     decimal PorcentajeCobrador,
     string? DiaSemana,
-    bool EsCongelado = false
+    bool EsCongelado = false,
+    // Cargos adicionales
+    decimal ValorSistema = 0,
+    bool SistemaCobrado = false,
+    decimal ValorRenovacion = 0,
+    bool RenovacionCobrada = false
 );
 
 // Cuota DTOs
@@ -381,3 +396,55 @@ public record LiquidacionCobradorDto(
     DateTime FechaConsulta,
     List<ComisionPrestamoDto> Prestamos
 );
+
+// ──────────────────────────────────────────────────
+// Cargos adicionales: Sistema y Renovación
+// ──────────────────────────────────────────────────
+
+/// <summary>Línea de detalle de un préstamo con sus cargos de sistema/renovación</summary>
+public record CargoAdicionalPrestamoDto(
+    int PrestamoId,
+    string ClienteNombre,
+    string ClienteCedula,
+    DateTime FechaPrestamo,
+    string EstadoPrestamo,
+    // Sistema
+    decimal ValorSistema,
+    bool SistemaCobrado,
+    DateTime? FechaSistemaCobrado,
+    // Renovación
+    decimal ValorRenovacion,
+    bool RenovacionCobrada,
+    DateTime? FechaRenovacionCobrada
+);
+
+/// <summary>Resumen acumulado de cargos adicionales (Sistema + Renovación)</summary>
+public record ResumenCargosAdicionalesDto(
+    // SISTEMA
+    decimal TotalSistemaFacturado,   // Suma de todos los ValorSistema
+    decimal TotalSistemaCobrado,     // Solo los que tienen SistemaCobrado = true
+    decimal TotalSistemaXCobrar,     // Pendientes
+    int PrestamosConSistema,
+    int SistemasCobrados,
+    int SistemasPendientes,
+    // RENOVACIÓN
+    decimal TotalRenovacionFacturada,
+    decimal TotalRenovacionCobrada,
+    decimal TotalRenovacionXCobrar,
+    int PrestamosConRenovacion,
+    int RenovacionesCobradas,
+    int RenovacionesPendientes,
+    // GRAN TOTAL
+    decimal TotalCargosFacturados,   // Sistema + Renovación facturados
+    decimal TotalCargosCobrados,     // Sistema + Renovación cobrados
+    decimal TotalCargosXCobrar,      // Pendientes totales
+    DateTime FechaConsulta,
+    List<CargoAdicionalPrestamoDto> Detalle
+);
+
+/// <summary>DTO para marcar sistema o renovación como cobrado</summary>
+public record MarcarCargoDto(
+    bool SistemaCobrado,
+    bool RenovacionCobrada
+);
+

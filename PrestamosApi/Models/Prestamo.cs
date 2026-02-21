@@ -21,6 +21,16 @@ public class Prestamo
     public decimal PorcentajeCobrador { get; set; } = 5; // % para el cobrador
     public bool EsCongelado { get; set; } = false; // Préstamo congelado: solo paga intereses, capital no reduce salvo sobrepago
 
+    // ── Cargos adicionales (aparte del préstamo) ────────────
+    public decimal ValorSistema { get; set; } = 0;       // Cargo por concepto de sistema
+    public bool SistemaCobrado { get; set; } = false;
+    public DateTime? FechaSistemaCobrado { get; set; }
+
+    public decimal ValorRenovacion { get; set; } = 0;    // Cargo por concepto de renovación
+    public bool RenovacionCobrada { get; set; } = false;
+    public DateTime? FechaRenovacionCobrada { get; set; }
+
+
     // Navegación
     public Cliente? Cliente { get; set; }
     public Usuario? Cobrador { get; set; }

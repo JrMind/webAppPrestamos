@@ -400,7 +400,10 @@ public class PrestamosController : BaseApiController
             EstadoPrestamo = "Activo",
             Descripcion = dto.Descripcion,
             PorcentajeCobrador = dto.PorcentajeCobrador,
-            EsCongelado = dto.EsCongelado
+            EsCongelado = dto.EsCongelado,
+            // Cargos adicionales
+            ValorSistema = dto.ValorSistema,
+            ValorRenovacion = dto.ValorRenovacion
         };
 
         _context.Prestamos.Add(prestamo);
@@ -524,7 +527,10 @@ public class PrestamosController : BaseApiController
             EstadoPrestamo = "Activo",
             Descripcion = dto.Descripcion,
             PorcentajeCobrador = dto.PorcentajeCobrador,
-            EsCongelado = dto.EsCongelado
+            EsCongelado = dto.EsCongelado,
+            // Cargos adicionales
+            ValorSistema = dto.ValorSistema,
+            ValorRenovacion = dto.ValorRenovacion
         };
 
         _context.Prestamos.Add(prestamo);
@@ -611,6 +617,9 @@ public class PrestamosController : BaseApiController
         prestamo.EstadoPrestamo = dto.EstadoPrestamo;
         prestamo.CobradorId = dto.CobradorId;
         prestamo.PorcentajeCobrador = dto.PorcentajeCobrador;
+        // Cargos adicionales (solo valores, cobrado se maneja con PUT /{id}/cargos)
+        prestamo.ValorSistema = dto.ValorSistema;
+        prestamo.ValorRenovacion = dto.ValorRenovacion;
 
         // Verificar si hay cambios estructurales (Monto, Tasa, Fechas, Frecuencia)
         bool cambiosEstructurales = 
@@ -818,5 +827,118 @@ public class PrestamosController : BaseApiController
         {
            return BadRequest(new { message = "Error recalculando distribuciones", error = ex.Message });
         }
+    }
+
+    // ──────────────────────────────────────────────────────────────
+    // CARGOS ADICIONALES: SISTEMA & RENOVACIÓN
+    // ──────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Resumen acumulado de todos los cargos de Sistema y Renovación.
+    /// GET /api/prestamos/cargos-adicionales
+    /// GET /api/prestamos/cargos-adicionales?soloConSaldo=true   (solo pendientes)
+    /// </summary>
+    [HttpGet("cargos-adicionales")]
+    [Attributes.AuthorizeRoles(RolUsuario.Admin, RolUsuario.Socio)]
+    public async Task<ActionResult<ResumenCargosAdicionalesDto>> GetResumenCargosAdicionales(
+        [FromQuery] bool soloConSaldo = false)
+    {
+        var query = _context.Prestamos
+            .Include(p => p.Cliente)
+            .Where(p => p.ValorSistema > 0 || p.ValorRenovacion > 0);
+
+        if (soloConSaldo)
+            query = query.Where(p =>
+                (p.ValorSistema > 0 && !p.SistemaCobrado) ||
+                (p.ValorRenovacion > 0 && !p.RenovacionCobrada));
+
+        var prestamos = await query
+            .OrderByDescending(p => p.FechaPrestamo)
+            .ToListAsync();
+
+        var detalle = prestamos.Select(p => new CargoAdicionalPrestamoDto(
+            PrestamoId          : p.Id,
+            ClienteNombre       : p.Cliente?.Nombre ?? "—",
+            ClienteCedula       : p.Cliente?.Cedula ?? "—",
+            FechaPrestamo       : p.FechaPrestamo,
+            EstadoPrestamo      : p.EstadoPrestamo,
+            ValorSistema        : p.ValorSistema,
+            SistemaCobrado      : p.SistemaCobrado,
+            FechaSistemaCobrado : p.FechaSistemaCobrado,
+            ValorRenovacion     : p.ValorRenovacion,
+            RenovacionCobrada   : p.RenovacionCobrada,
+            FechaRenovacionCobrada: p.FechaRenovacionCobrada
+        )).ToList();
+
+        var resumen = new ResumenCargosAdicionalesDto(
+            // SISTEMA
+            TotalSistemaFacturado   : Math.Round(prestamos.Sum(p => p.ValorSistema), 2),
+            TotalSistemaCobrado     : Math.Round(prestamos.Where(p => p.SistemaCobrado).Sum(p => p.ValorSistema), 2),
+            TotalSistemaXCobrar     : Math.Round(prestamos.Where(p => !p.SistemaCobrado).Sum(p => p.ValorSistema), 2),
+            PrestamosConSistema     : prestamos.Count(p => p.ValorSistema > 0),
+            SistemasCobrados        : prestamos.Count(p => p.SistemaCobrado),
+            SistemasPendientes      : prestamos.Count(p => p.ValorSistema > 0 && !p.SistemaCobrado),
+            // RENOVACIÓN
+            TotalRenovacionFacturada: Math.Round(prestamos.Sum(p => p.ValorRenovacion), 2),
+            TotalRenovacionCobrada  : Math.Round(prestamos.Where(p => p.RenovacionCobrada).Sum(p => p.ValorRenovacion), 2),
+            TotalRenovacionXCobrar  : Math.Round(prestamos.Where(p => !p.RenovacionCobrada).Sum(p => p.ValorRenovacion), 2),
+            PrestamosConRenovacion  : prestamos.Count(p => p.ValorRenovacion > 0),
+            RenovacionesCobradas    : prestamos.Count(p => p.RenovacionCobrada),
+            RenovacionesPendientes  : prestamos.Count(p => p.ValorRenovacion > 0 && !p.RenovacionCobrada),
+            // GRAN TOTAL
+            TotalCargosFacturados   : Math.Round(prestamos.Sum(p => p.ValorSistema + p.ValorRenovacion), 2),
+            TotalCargosCobrados     : Math.Round(prestamos.Where(p => p.SistemaCobrado).Sum(p => p.ValorSistema)
+                                                + prestamos.Where(p => p.RenovacionCobrada).Sum(p => p.ValorRenovacion), 2),
+            TotalCargosXCobrar      : Math.Round(prestamos.Where(p => !p.SistemaCobrado).Sum(p => p.ValorSistema)
+                                                + prestamos.Where(p => !p.RenovacionCobrada).Sum(p => p.ValorRenovacion), 2),
+            FechaConsulta           : DateTime.UtcNow,
+            Detalle                 : detalle
+        );
+
+        return Ok(resumen);
+    }
+
+    /// <summary>
+    /// Marca sistema y/o renovación como cobrado en un préstamo.
+    /// PUT /api/prestamos/{id}/cargos
+    /// </summary>
+    [HttpPut("{id}/cargos")]
+    [Attributes.AuthorizeRoles(RolUsuario.Admin, RolUsuario.Socio)]
+    public async Task<IActionResult> MarcarCargosAdicionales(int id, [FromBody] MarcarCargoDto dto)
+    {
+        var prestamo = await _context.Prestamos.FindAsync(id);
+        if (prestamo == null)
+            return NotFound(new { message = "Préstamo no encontrado" });
+
+        if (dto.SistemaCobrado && !prestamo.SistemaCobrado)
+        {
+            prestamo.SistemaCobrado = true;
+            prestamo.FechaSistemaCobrado = DateTime.UtcNow;
+        }
+        else if (!dto.SistemaCobrado)
+        {
+            prestamo.SistemaCobrado = false;
+            prestamo.FechaSistemaCobrado = null;
+        }
+
+        if (dto.RenovacionCobrada && !prestamo.RenovacionCobrada)
+        {
+            prestamo.RenovacionCobrada = true;
+            prestamo.FechaRenovacionCobrada = DateTime.UtcNow;
+        }
+        else if (!dto.RenovacionCobrada)
+        {
+            prestamo.RenovacionCobrada = false;
+            prestamo.FechaRenovacionCobrada = null;
+        }
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Cargos actualizados",
+            sistemaCobrado     = prestamo.SistemaCobrado,
+            renovacionCobrada  = prestamo.RenovacionCobrada
+        });
     }
 }
