@@ -112,7 +112,13 @@ public class PrestamosController : BaseApiController
                 p.CobradorId,
                 p.Cobrador != null ? p.Cobrador.Nombre : null,
                 p.PorcentajeCobrador,
-                p.EsCongelado
+                p.EsCongelado,
+                p.ValorSistema,
+                p.SistemaCobrado,
+                p.FechaSistemaCobrado,
+                p.ValorRenovacion,
+                p.RenovacionCobrada,
+                p.FechaRenovacionCobrada
             ))
             .ToListAsync();
 
@@ -233,7 +239,13 @@ public class PrestamosController : BaseApiController
                 p.CobradorId,
                 p.Cobrador != null ? p.Cobrador.Nombre : null,
                 p.PorcentajeCobrador,
-                p.EsCongelado
+                p.EsCongelado,
+                p.ValorSistema,
+                p.SistemaCobrado,
+                p.FechaSistemaCobrado,
+                p.ValorRenovacion,
+                p.RenovacionCobrada,
+                p.FechaRenovacionCobrada
             ))
             .FirstOrDefaultAsync();
 
@@ -352,7 +364,13 @@ public class PrestamosController : BaseApiController
                 p.CobradorId,
                 p.Cobrador != null ? p.Cobrador.Nombre : null,
                 p.PorcentajeCobrador,
-                p.EsCongelado
+                p.EsCongelado,
+                p.ValorSistema,
+                p.SistemaCobrado,
+                p.FechaSistemaCobrado,
+                p.ValorRenovacion,
+                p.RenovacionCobrada,
+                p.FechaRenovacionCobrada
             ))
             .ToListAsync();
 
