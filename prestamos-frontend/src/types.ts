@@ -161,6 +161,13 @@ export interface Prestamo {
   porcentajeCobrador: number;
   diaSemana?: string;
   esCongelado?: boolean; // Préstamo congelado: solo paga intereses
+  // Cargos adicionales
+  valorSistema: number;
+  sistemaCobrado: boolean;
+  fechaSistemaCobrado?: string;
+  valorRenovacion: number;
+  renovacionCobrada: boolean;
+  fechaRenovacionCobrada?: string;
 }
 
 export interface CreatePrestamoDto {
@@ -346,6 +353,52 @@ export interface CreatePrestamoConFuentesDto {
   cobradorId?: number;
   porcentajeCobrador: number;
   fuentesCapital: FuenteCapital[];
+  esCongelado?: boolean;
+  numeroCuotasDirecto?: number;
+  // Cargos adicionales
+  valorSistema?: number;
+  valorRenovacion?: number;
+}
+
+// Liquidación de comisiones de cobrador
+export interface LiquidacionRegistro {
+  id: number;
+  montoLiquidado: number;
+  fechaLiquidacion: string;
+  observaciones?: string;
+  realizadoPorNombre?: string;
+}
+
+export interface LiquidacionCobrador {
+  cobradorId: number;
+  cobradorNombre: string;
+  cobradorTelefono?: string;
+  totalPrestamos: number;
+  totalCuotasPagadas: number;
+  totalCuotasParciales: number;
+  totalRecaudado: number;
+  totalRecaudadoParcial: number;
+  totalComision: number;
+  totalComisionParcial: number;
+  totalComisionGeneral: number;
+  totalLiquidado: number;
+  saldoPendiente: number;
+  fechaConsulta: string;
+  prestamos: ComisionPrestamo[];
+  historialLiquidaciones?: LiquidacionRegistro[];
+}
+
+export interface ComisionPrestamo {
+  prestamoId: number;
+  clienteNombre: string;
+  clienteCedula: string;
+  montoPrestado: number;
+  estadoPrestamo: string;
+  porcentajeCobrador: number;
+  cuotasTotales: number;
+  cuotasPagadas: number;
+  totalRecaudado: number;
+  comisionPrestamo: number;
 }
 
 // SMS Campaign Types

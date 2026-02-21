@@ -207,7 +207,26 @@ export const cobrosApi = {
             headers: getHeaders(),
         });
         return handleResponse(response);
-    }
+    },
+
+    getComisiones: async (incluirParciales = false): Promise<import('./types').LiquidacionCobrador[]> => {
+        const response = await fetch(`${API_URL}/cobros/comisiones?incluirParciales=${incluirParciales}`, { headers: getHeaders() });
+        return handleResponse(response);
+    },
+
+    getComisionCobrador: async (cobradorId: number, incluirParciales = false): Promise<import('./types').LiquidacionCobrador> => {
+        const response = await fetch(`${API_URL}/cobros/comisiones/${cobradorId}?incluirParciales=${incluirParciales}`, { headers: getHeaders() });
+        return handleResponse(response);
+    },
+
+    liquidarCobrador: async (data: { cobradorId: number; monto: number; observaciones?: string }): Promise<{ message: string; liquidacionId: number }> => {
+        const response = await fetch(`${API_URL}/cobros/liquidar`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return handleResponse(response);
+    },
 };
 
 // Clientes

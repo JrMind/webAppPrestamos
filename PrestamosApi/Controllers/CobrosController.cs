@@ -715,6 +715,15 @@ public class CobrosController : BaseApiController
             .AsNoTracking()
             .ToListAsync();
 
+        // Traer todas las liquidaciones de esos cobradores de una vez
+        var cobradorIds = cobradores.Select(c => c.Id).ToList();
+        var liquidacionesPorCobrador = await _context.LiquidacionesCobrador
+            .Include(l => l.RealizadoPorUsuario)
+            .Where(l => cobradorIds.Contains(l.CobradorId))
+            .OrderByDescending(l => l.FechaLiquidacion)
+            .AsNoTracking()
+            .ToListAsync();
+
         var resultado = new List<LiquidacionCobradorDto>();
 
         foreach (var cobrador in cobradores)
@@ -777,6 +786,21 @@ public class CobrosController : BaseApiController
             var totalCom         = prestamosDto.Sum(p => p.ComisionPrestamo);
             var totalComParcial  = prestamosDto.Sum(p => p.ComisionParcial);
 
+            var totalComisionGeneral = Math.Round(totalCom + totalComParcial, 2);
+            var totalLiquidado = Math.Round(
+                liquidacionesPorCobrador.Where(l => l.CobradorId == cobrador.Id).Sum(l => l.MontoLiquidado), 2);
+            var saldoPendiente = Math.Round(totalComisionGeneral - totalLiquidado, 2);
+
+            var historial = liquidacionesPorCobrador
+                .Where(l => l.CobradorId == cobrador.Id)
+                .Select(l => new LiquidacionRegistroDto(
+                    Id: l.Id,
+                    MontoLiquidado: l.MontoLiquidado,
+                    FechaLiquidacion: l.FechaLiquidacion,
+                    Observaciones: l.Observaciones,
+                    RealizadoPorNombre: l.RealizadoPorUsuario?.Nombre
+                )).ToList();
+
             resultado.Add(new LiquidacionCobradorDto(
                 CobradorId          : cobrador.Id,
                 CobradorNombre      : cobrador.Nombre,
@@ -788,13 +812,55 @@ public class CobrosController : BaseApiController
                 TotalRecaudadoParcial: Math.Round(totalRecParcial, 2),
                 TotalComision       : Math.Round(totalCom, 2),
                 TotalComisionParcial: Math.Round(totalComParcial, 2),
-                TotalComisionGeneral: Math.Round(totalCom + totalComParcial, 2),
+                TotalComisionGeneral: totalComisionGeneral,
+                TotalLiquidado      : totalLiquidado,
+                SaldoPendiente      : saldoPendiente,
                 FechaConsulta       : DateTime.UtcNow,
-                Prestamos           : prestamosDto.OrderBy(p => p.ClienteNombre).ToList()
+                Prestamos           : prestamosDto.OrderBy(p => p.ClienteNombre).ToList(),
+                HistorialLiquidaciones: historial
             ));
         }
 
         return resultado.OrderBy(c => c.CobradorNombre).ToList();
+    }
+
+    /// <summary>
+    /// Registra un pago al cobrador (liquidación parcial o total).
+    /// POST /api/cobros/liquidar
+    /// </summary>
+    [HttpPost("liquidar")]
+    [AuthorizeRoles(RolUsuario.Admin, RolUsuario.Socio)]
+    public async Task<ActionResult<object>> LiquidarCobrador([FromBody] RegistrarLiquidacionDto dto)
+    {
+        if (dto.Monto <= 0)
+            return BadRequest(new { message = "El monto a liquidar debe ser mayor que cero" });
+
+        var cobrador = await _context.Usuarios
+            .FirstOrDefaultAsync(u => u.Id == dto.CobradorId && u.Rol == RolUsuario.Cobrador);
+
+        if (cobrador == null)
+            return NotFound(new { message = "Cobrador no encontrado" });
+
+        var liquidacion = new LiquidacionCobrador
+        {
+            CobradorId       = dto.CobradorId,
+            MontoLiquidado   = Math.Round(dto.Monto, 2),
+            FechaLiquidacion = DateTime.UtcNow,
+            Observaciones    = dto.Observaciones,
+            RealizadoPor     = GetCurrentUserId()
+        };
+
+        _context.LiquidacionesCobrador.Add(liquidacion);
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = $"Liquidación de ${dto.Monto:N2} registrada para {cobrador.Nombre}",
+            liquidacionId = liquidacion.Id,
+            cobradorNombre = cobrador.Nombre,
+            monto = liquidacion.MontoLiquidado,
+            fecha = liquidacion.FechaLiquidacion
+        });
     }
 }
 

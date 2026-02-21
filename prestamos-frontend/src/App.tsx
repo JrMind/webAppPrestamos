@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi } from './api';
-import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, PrestamosDelDia, MiBalance, Costo, CreateCostoDto } from './types';
+import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador } from './types';
 import { MetricasCobradores } from './components/MetricasCobradores';
 import './App.css';
 
@@ -26,7 +26,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(getStoredUser);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'prestamosdia' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias' | 'metricas'>('prestamos');
+  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'prestamosdia' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias' | 'metricas' | 'comisiones'>('prestamos');
 
   // Data states
   const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
@@ -68,6 +68,16 @@ function App() {
     frecuencia: 'Mensual',
     descripcion: ''
   });
+
+  // Estados de Comisiones / Liquidación
+  const [comisiones, setComisiones] = useState<LiquidacionCobrador[]>([]);
+  const [loadingComisiones, setLoadingComisiones] = useState(false);
+  const [showLiquidarModal, setShowLiquidarModal] = useState(false);
+  const [liquidarCobradorId, setLiquidarCobradorId] = useState<number | null>(null);
+  const [liquidarCobradorNombre, setLiquidarCobradorNombre] = useState('');
+  const [liquidarMonto, setLiquidarMonto] = useState('');
+  const [liquidarObservaciones, setLiquidarObservaciones] = useState('');
+  const [liquidarSaldoPendiente, setLiquidarSaldoPendiente] = useState(0);
 
   // Estado para Pagos por Día
   const [pagosPorDiaData, setPagosPorDiaData] = useState<{
@@ -358,12 +368,11 @@ function App() {
         setIsAuthenticated(false);
         setCurrentUser(null);
       });
-  // Solo al montar la app (equivale a componentDidMount)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // Solo al montar la app (equivale a componentDidMount)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => { if (activeTab === 'cobros') { loadCobrosDelMes(); loadCobradoresList(); } }, [activeTab, filtroCobradorId]);
   useEffect(() => { if (activeTab === 'prestamosdia') loadPrestamosDelDia(); }, [activeTab]);
-
   useEffect(() => { if (activeTab === 'socios') loadBalanceSocios(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'usuarios') loadUsuarios(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'clientes') loadClientes(); }, [activeTab]);
@@ -371,6 +380,7 @@ function App() {
   useEffect(() => { if (activeTab === 'sms') loadSmsCampaigns(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'smshistory') loadSmsHistory(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'balance') loadMiBalance(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'comisiones') loadComisiones(); }, [activeTab]);
 
   // New feature loaders
   const loadSmsCampaigns = async () => {
@@ -433,6 +443,47 @@ function App() {
       const data = await gananciasApi.getResumenParticipacion();
       setResumenParticipacion(data);
     } catch (error) { console.error('Error loading resumen participacion:', error); }
+  };
+
+  const loadComisiones = async () => {
+    setLoadingComisiones(true);
+    try {
+      const data = await cobrosApi.getComisiones(true);
+      setComisiones(data);
+    } catch (error) {
+      console.error('Error loading comisiones:', error);
+      showToast('Error al cargar comisiones', 'error');
+    } finally {
+      setLoadingComisiones(false);
+    }
+  };
+
+  const handleAbrirLiquidar = (cobrador: LiquidacionCobrador) => {
+    setLiquidarCobradorId(cobrador.cobradorId);
+    setLiquidarCobradorNombre(cobrador.cobradorNombre);
+    setLiquidarSaldoPendiente(cobrador.saldoPendiente);
+    setLiquidarMonto(cobrador.saldoPendiente > 0 ? cobrador.saldoPendiente.toFixed(0) : '');
+    setLiquidarObservaciones('');
+    setShowLiquidarModal(true);
+  };
+
+  const handleRegistrarLiquidacion = async () => {
+    if (!liquidarCobradorId || !liquidarMonto || Number(liquidarMonto) <= 0) {
+      showToast('Ingrese un monto válido', 'error');
+      return;
+    }
+    try {
+      await cobrosApi.liquidarCobrador({
+        cobradorId: liquidarCobradorId,
+        monto: Number(liquidarMonto),
+        observaciones: liquidarObservaciones || undefined
+      });
+      showToast(`Liquidación registrada para ${liquidarCobradorNombre}`, 'success');
+      setShowLiquidarModal(false);
+      loadComisiones();
+    } catch (error: unknown) {
+      showToast(error instanceof Error ? error.message : 'Error al registrar', 'error');
+    }
   };
 
   const handleCreateSmsCampaign = async (e: React.FormEvent) => {
@@ -1200,6 +1251,7 @@ function App() {
             {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'usuarios' ? 'active' : ''}`} onClick={() => setActiveTab('usuarios')}>👤 Usuarios</button>}
             <button className={`tab ${activeTab === 'aportadores' ? 'active' : ''}`} onClick={() => setActiveTab('aportadores')}>Aportadores</button>
             <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); loadCostos(); }}>📊 Ganancias</button>
+            {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'comisiones' ? 'active' : ''}`} onClick={() => setActiveTab('comisiones')}>💳 Comisiones</button>}
             {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'metricas' ? 'active' : ''}`} onClick={() => setActiveTab('metricas')}>📈 Métricas</button>}
           </div>
 
@@ -2008,8 +2060,163 @@ function App() {
             </div>
           )}
 
+          {/* Comisiones Tab */}
+          {activeTab === 'comisiones' && (currentUser?.rol === 'Admin' || currentUser?.rol === 'Socio') && (
+            <div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
+                <h3 style={{ margin: 0 }}>💳 Gestión de Comisiones</h3>
+                <button className="btn btn-secondary" onClick={loadComisiones} disabled={loadingComisiones}>
+                  {loadingComisiones ? 'Cargando...' : '🔄 Actualizar'}
+                </button>
+              </div>
+
+              {loadingComisiones ? (
+                <div className="loading"><div className="spinner"></div></div>
+              ) : comisiones.length === 0 ? (
+                <div className="empty-state">No hay cobradores con comisiones activas.</div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '1.5rem' }}>
+                  {comisiones.map(c => {
+                    const pct = c.totalComisionGeneral > 0
+                      ? Math.min(100, (c.totalLiquidado / c.totalComisionGeneral) * 100)
+                      : 0;
+                    const saldoColor = c.saldoPendiente > 0 ? '#f59e0b' : '#10b981';
+                    return (
+                      <div key={c.cobradorId} style={{ background: 'var(--surface)', borderRadius: '12px', padding: '1.25rem', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+                        {/* Header del card */}
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <strong style={{ fontSize: '1.05rem' }}>{c.cobradorNombre}</strong>
+                            {c.cobradorTelefono && <div style={{ color: '#888', fontSize: '0.8rem' }}>{c.cobradorTelefono}</div>}
+                          </div>
+                          <span style={{ background: c.saldoPendiente > 0 ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: saldoColor, borderRadius: '20px', padding: '0.3rem 0.8rem', fontSize: '0.85rem', fontWeight: 600 }}>
+                            {c.saldoPendiente > 0 ? 'Pendiente' : '✓ Al día'}
+                          </span>
+                        </div>
+
+                        {/* Métricas principales */}
+                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                          <div style={{ background: 'var(--background)', borderRadius: '8px', padding: '0.75rem' }}>
+                            <div style={{ color: '#888', fontSize: '0.75rem', marginBottom: '2px' }}>Comisión ganada</div>
+                            <div style={{ fontWeight: 700, color: '#3b82f6' }}>{formatMoney(c.totalComisionGeneral)}</div>
+                          </div>
+                          <div style={{ background: 'var(--background)', borderRadius: '8px', padding: '0.75rem' }}>
+                            <div style={{ color: '#888', fontSize: '0.75rem', marginBottom: '2px' }}>Total liquidado</div>
+                            <div style={{ fontWeight: 700, color: '#10b981' }}>{formatMoney(c.totalLiquidado)}</div>
+                          </div>
+                          <div style={{ background: 'var(--background)', borderRadius: '8px', padding: '0.75rem', gridColumn: '1 / -1' }}>
+                            <div style={{ color: '#888', fontSize: '0.75rem', marginBottom: '2px' }}>Saldo pendiente</div>
+                            <div style={{ fontWeight: 700, fontSize: '1.1rem', color: saldoColor }}>{formatMoney(c.saldoPendiente)}</div>
+                          </div>
+                        </div>
+
+                        {/* Barra de progreso */}
+                        <div>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#888', marginBottom: '4px' }}>
+                            <span>Liquidado</span>
+                            <span>{pct.toFixed(0)}%</span>
+                          </div>
+                          <div style={{ background: 'var(--border)', borderRadius: '999px', height: '6px' }}>
+                            <div style={{ background: pct >= 100 ? '#10b981' : '#3b82f6', width: `${pct}%`, height: '100%', borderRadius: '999px', transition: 'width 0.3s' }} />
+                          </div>
+                        </div>
+
+                        {/* Información adicional */}
+                        <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: '#888' }}>
+                          <span>📋 {c.totalPrestamos} préstamos</span>
+                          <span>✅ {c.totalCuotasPagadas} cuotas cobradas</span>
+                        </div>
+
+                        {/* Historial de liquidaciones */}
+                        {c.historialLiquidaciones && c.historialLiquidaciones.length > 0 && (
+                          <details style={{ fontSize: '0.8rem' }}>
+                            <summary style={{ cursor: 'pointer', color: '#888', marginBottom: '0.5rem' }}>
+                              Historial ({c.historialLiquidaciones.length} pagos)
+                            </summary>
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '160px', overflowY: 'auto' }}>
+                              {c.historialLiquidaciones.map(h => (
+                                <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0.6rem', background: 'var(--background)', borderRadius: '6px' }}>
+                                  <div>
+                                    <strong style={{ color: '#10b981' }}>{formatMoney(h.montoLiquidado)}</strong>
+                                    {h.observaciones && <span style={{ marginLeft: '0.4rem', color: '#888' }}>— {h.observaciones}</span>}
+                                  </div>
+                                  <span style={{ color: '#666' }}>{new Date(h.fechaLiquidacion).toLocaleDateString('es-CO')}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </details>
+                        )}
+
+                        {/* Botón liquidar */}
+                        <button
+                          className="btn btn-primary"
+                          style={{ width: '100%', opacity: c.saldoPendiente <= 0 ? 0.5 : 1 }}
+                          onClick={() => handleAbrirLiquidar(c)}
+                        >
+                          💳 {c.saldoPendiente > 0 ? 'Registrar Pago' : 'Registrar Abono'}
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
       </main>
+
+      {/* ─── Modal Liquidar ─── */}
+      {showLiquidarModal && (
+        <div className="modal-overlay" onClick={() => setShowLiquidarModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <h2>💳 Liquidar a {liquidarCobradorNombre}</h2>
+              <button className="modal-close" onClick={() => setShowLiquidarModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ background: 'rgba(59,130,246,0.08)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span style={{ color: '#888' }}>Saldo pendiente:</span>
+                  <strong style={{ color: liquidarSaldoPendiente > 0 ? '#10b981' : '#666', fontSize: '1.1rem' }}>{formatMoney(liquidarSaldoPendiente)}</strong>
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Monto a pagar *</label>
+                <input
+                  type="number"
+                  min="1"
+                  max={liquidarSaldoPendiente > 0 ? liquidarSaldoPendiente : undefined}
+                  value={liquidarMonto}
+                  onChange={e => setLiquidarMonto(e.target.value)}
+                  placeholder="Ingrese el monto"
+                  autoFocus
+                />
+                {liquidarSaldoPendiente > 0 && (
+                  <small style={{ color: '#888', marginTop: '4px', display: 'block' }}>
+                    Máximo recomendado: {formatMoney(liquidarSaldoPendiente)}
+                  </small>
+                )}
+              </div>
+              <div className="form-group">
+                <label>Observaciones</label>
+                <input
+                  type="text"
+                  value={liquidarObservaciones}
+                  onChange={e => setLiquidarObservaciones(e.target.value)}
+                  placeholder="Opcional..."
+                />
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button className="btn btn-secondary" onClick={() => setShowLiquidarModal(false)}>Cancelar</button>
+              <button className="btn btn-primary" onClick={handleRegistrarLiquidacion}>
+                ✅ Registrar Liquidación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modals */}
       {showClienteModal && (

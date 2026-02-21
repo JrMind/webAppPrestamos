@@ -396,8 +396,27 @@ public record LiquidacionCobradorDto(
     decimal TotalComision,          // Comisión devengada sobre pagadas/abonadas
     decimal TotalComisionParcial,   // Comisión proporcional sobre parciales
     decimal TotalComisionGeneral,   // TotalComision + TotalComisionParcial
+    decimal TotalLiquidado,         // Suma de pagos ya realizados al cobrador
+    decimal SaldoPendiente,         // TotalComisionGeneral - TotalLiquidado
     DateTime FechaConsulta,
-    List<ComisionPrestamoDto> Prestamos
+    List<ComisionPrestamoDto> Prestamos,
+    List<LiquidacionRegistroDto>? HistorialLiquidaciones = null
+);
+
+/// <summary>Registro de un pago individual al cobrador</summary>
+public record LiquidacionRegistroDto(
+    int Id,
+    decimal MontoLiquidado,
+    DateTime FechaLiquidacion,
+    string? Observaciones,
+    string? RealizadoPorNombre
+);
+
+/// <summary>DTO de entrada para registrar un pago al cobrador</summary>
+public record RegistrarLiquidacionDto(
+    int CobradorId,
+    decimal Monto,
+    string? Observaciones
 );
 
 // ──────────────────────────────────────────────────
