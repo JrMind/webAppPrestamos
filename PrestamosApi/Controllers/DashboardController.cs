@@ -324,4 +324,40 @@ public class DashboardController : ControllerBase
             return StatusCode(500, new { message = "Error calculando métricas de cobradores", error = ex.Message });
         }
     }
+
+    [HttpGet("mantenimiento/reparar-prestamos")]
+    public async Task<IActionResult> RepararStatusPrestamosPagados()
+    {
+        try
+        {
+            // Busca préstamos "Activos"
+            var prestamosReparar = await _context.Prestamos
+                .Include(p => p.Cuotas)
+                .Where(p => p.EstadoPrestamo == "Activo")
+                .ToListAsync();
+
+            int arreglados = 0;
+
+            foreach (var prestamo in prestamosReparar)
+            {
+                // Si TODAS sus cuotas existen y están pagadas, el préstamo en realidad está finalizado
+                if (prestamo.Cuotas != null && prestamo.Cuotas.Any() && prestamo.Cuotas.All(c => c.EstadoCuota == "Pagada"))
+                {
+                    prestamo.EstadoPrestamo = "Pagado";
+                    arreglados++;
+                }
+            }
+
+            if (arreglados > 0)
+            {
+                await _context.SaveChangesAsync();
+            }
+
+            return Ok(new { message = $"Se encontraron y repararon {arreglados} préstamos que estaban en 'Activo' pero realmente ya tenían todas sus cuotas en 'Pagada'." });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error reparando", error = ex.Message });
+        }
+    }
 }
