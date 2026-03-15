@@ -1281,7 +1281,11 @@ function App() {
                       {p.cobradorNombre && p.porcentajeCobrador ? <span style={{ fontSize: '0.75rem', color: '#6b7280', marginLeft: '4px' }}>({p.porcentajeCobrador}%)</span> : ''}
                     </td>
                     <td>{p.cuotasPagadas}/{p.numeroCuotas}</td>
-                    <td><span className={`badge ${p.estadoPrestamo === 'Activo' ? 'badge-green' : p.estadoPrestamo === 'Pagado' ? 'badge-blue' : 'badge-red'}`}>{p.estadoPrestamo}</span></td>
+                    <td>
+                      <span className={`badge ${(p.cuotasPagadas >= p.numeroCuotas || p.estadoPrestamo === 'Pagado') ? 'badge-blue' : p.estadoPrestamo === 'Activo' ? 'badge-green' : 'badge-red'}`}>
+                        {(p.cuotasPagadas >= p.numeroCuotas) ? 'Pagado' : p.estadoPrestamo}
+                      </span>
+                    </td>
                     <td><div className="actions"><button className="btn btn-secondary btn-sm" onClick={() => openDetalle(p)}>Ver</button><button className="btn btn-primary btn-sm" onClick={() => openEditPrestamo(p)}>✏️</button><button className="btn btn-danger btn-sm" onClick={() => handleDeletePrestamo(p.id)}>✕</button></div></td>
                   </tr>
                 ))}{prestamos.length === 0 && <tr><td colSpan={8} className="empty-state">No hay préstamos</td></tr>}</tbody>
