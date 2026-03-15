@@ -58,14 +58,15 @@ public class CobrosController : BaseApiController
         
         if (hasCobradorFilter && effectiveCobradorId.HasValue)
         {
-            // Apply cobrador filter explicitly
             var targetCobradorId = effectiveCobradorId.Value;
             baseQuery = _context.CuotasPrestamo
                 .Include(c => c.Prestamo)
                     .ThenInclude(p => p!.Cliente)
                 .Include(c => c.Prestamo)
                     .ThenInclude(p => p!.Cobrador)
-                .Where(c => c.Prestamo!.CobradorId == targetCobradorId);
+                .Where(c => targetCobradorId == 0 
+                            ? c.Prestamo!.CobradorId == null 
+                            : c.Prestamo!.CobradorId == targetCobradorId);
         }
         else
         {
@@ -324,7 +325,6 @@ public class CobrosController : BaseApiController
         
         if (hasCobradorFilter && effectiveCobradorId.HasValue)
         {
-            // Apply cobrador filter explicitly
             var targetCobradorId = effectiveCobradorId.Value;
             baseQuery = _context.CuotasPrestamo
                 .Include(c => c.Prestamo)
@@ -332,7 +332,9 @@ public class CobrosController : BaseApiController
                 .Include(c => c.Prestamo)
                     .ThenInclude(p => p!.Cobrador)
                 .Where(c => c.EstadoCuota != "Pagada")
-                .Where(c => c.Prestamo!.CobradorId == targetCobradorId);
+                .Where(c => targetCobradorId == 0 
+                            ? c.Prestamo!.CobradorId == null 
+                            : c.Prestamo!.CobradorId == targetCobradorId);
         }
         else
         {
