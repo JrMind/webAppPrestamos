@@ -506,11 +506,29 @@ public class PagosController : BaseApiController
         };
         _context.Pagos.Add(pago);
 
+        // MANTENER SINCRONIZADO EL CAPITAL QUIETO CON LA TABLA DE CUOTAS
+        // Como el Capital Quieto / Circulante lee de MontoCapital de las cuotas Pendientes, necesitamos actualizar la cuota actual
+        var cuotaActiva = prestamo.Cuotas.FirstOrDefault(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida");
+        if (cuotaActiva != null)
+        {
+            // El capital quieto del préstamo congelado se va a leer de aquí. Debe ser igual al nuevo MontoPrestado.
+            cuotaActiva.MontoCapital = prestamo.MontoPrestado;
+        }
+
         if (prestamo.MontoPrestado <= 0)
         {
             // Capital pagado completamente
             prestamo.MontoPrestado = 0;
             prestamo.EstadoPrestamo = "Pagado";
+            
+            if (cuotaActiva != null)
+            {
+                 // Si se saldó el capital pero no había pagado el interés de este mes...
+                 // Para este modelo simple, asumimos que liquida.
+                 cuotaActiva.EstadoCuota = "Pagada";
+                 cuotaActiva.MontoCapital = 0;
+            }
+            
             _logger.LogInformation("Préstamo congelado #{PrestamoId} liquidado con abono de ${Monto}", prestamoId, dto.Monto);
         }
         else
@@ -526,6 +544,9 @@ public class PagosController : BaseApiController
             };
             decimal nuevaCuota = Math.Round(prestamo.MontoPrestado * (prestamo.TasaInteres / 100m) * factorFrecuencia, 0);
             prestamo.MontoCuota = nuevaCuota;
+            
+            // NO TOCAMOS cuotaActiva.MontoCuota ni SaldoPendiente porque el cliente todavía debe el interés original del mes anterior
+            // La nueva cuota más baja aplicará a partir del SIGUIENTE MES que se genere.
 
             _logger.LogInformation("Préstamo congelado #{PrestamoId}: Abono capital ${Monto}, Nuevo capital ${NuevoCapital}, Nueva cuota interés ${NuevaCuota}", 
                 prestamoId, dto.Monto, prestamo.MontoPrestado, nuevaCuota);

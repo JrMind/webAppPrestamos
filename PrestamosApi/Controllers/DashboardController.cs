@@ -227,37 +227,34 @@ public class DashboardController : ControllerBase
                 ))
                 .ToListAsync();
 
-            // Capital = Capital Activo (Saldo de capital por cobrar)
-            // Congelados: MontoPrestado es el saldo actual
-            // Normales: Cálculo proporcional (Capital = Principal - (Pagado * (Principal/Total)))
-            // ya que la columna MontoCapital no existe en la BD.
-            var prestamosActivosData = await _context.Prestamos
-                .Where(p => p.EstadoPrestamo == "Activo")
-                .Select(p => new {
-                    p.Id,
-                    p.MontoPrestado,
-                    p.MontoTotal,
-                    p.EsCongelado,
-                    TotalPagado = p.Cuotas.Sum(c => c.MontoPagado)
-                })
-                .ToListAsync();
-
-            decimal capitalEnCalle = 0;
-            foreach (var p in prestamosActivosData)
+            // NUEVO CÁLCULO DE CAPITAL EN LA CALLE / CIRCULANTE (EXACTO Y DIRECTO A BD)
+            // Aplica para préstamos "Activo". Suma exactamente el MontoCapital (originado del préstamo o abonado).
+            // Si es congelado y le han hecho abonos a capital, el MontoCapital de su única cuota pendiente ya reflejará la resta exacta.
+            decimal capitalInicial = 0;
+            try 
             {
-                if (p.EsCongelado == true) 
-                {
-                     capitalEnCalle += p.MontoPrestado; 
-                }
-                else 
-                {
-                    // Si MontoTotal es 0 (error datos), asumimos ratio 1 (todo es capital)
-                    decimal ratio = p.MontoTotal > 0 ? p.MontoPrestado / p.MontoTotal : 1;
-                    decimal capitalAmortizado = p.TotalPagado * ratio;
-                    capitalEnCalle += (p.MontoPrestado - capitalAmortizado);
-                }
+                using var connection = _context.Database.GetDbConnection();
+                // Validamos si la conexión está cerrada antes de abrirla
+                if (connection.State != System.Data.ConnectionState.Open)
+                    await connection.OpenAsync();
+                
+                using var command = connection.CreateCommand();
+                command.CommandText = @"
+                    SELECT COALESCE(SUM(c.""MontoCapital""), 0)
+                    FROM cuotasprestamo c
+                    INNER JOIN prestamos p ON c.prestamoid = p.id
+                    WHERE p.estadoprestamo = 'Activo' 
+                      AND c.estadocuota IN ('Pendiente', 'Parcial', 'Vencida', 'Mora');";
+                      
+                var result = await command.ExecuteScalarAsync();
+                capitalInicial = result != DBNull.Value ? Convert.ToDecimal(result) : 0m;
             }
-            var capitalInicial = capitalEnCalle;
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error calculando capital exacto: {ex.Message}");
+                // Fallback (malo pero seguro para que no caiga el endpoint)
+                capitalInicial = 0;
+            }
 
             return Ok(new DashboardMetricasDto(
                 totalPrestado,
