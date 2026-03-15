@@ -118,7 +118,8 @@ public class PrestamosController : BaseApiController
                 p.FechaSistemaCobrado,
                 p.ValorRenovacion,
                 p.RenovacionCobrada,
-                p.FechaRenovacionCobrada
+                p.FechaRenovacionCobrada,
+                p.Cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
             ))
             .ToListAsync();
 
@@ -245,7 +246,8 @@ public class PrestamosController : BaseApiController
                 p.FechaSistemaCobrado,
                 p.ValorRenovacion,
                 p.RenovacionCobrada,
-                p.FechaRenovacionCobrada
+                p.FechaRenovacionCobrada,
+                p.Cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
             ))
             .FirstOrDefaultAsync();
 
@@ -370,7 +372,8 @@ public class PrestamosController : BaseApiController
                 p.FechaSistemaCobrado,
                 p.ValorRenovacion,
                 p.RenovacionCobrada,
-                p.FechaRenovacionCobrada
+                p.FechaRenovacionCobrada,
+                p.Cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
             ))
             .ToListAsync();
 
@@ -478,7 +481,14 @@ public class PrestamosController : BaseApiController
                 prestamo.CobradorId,
                 null, // CobradorNombre - no se carga aquí para evitar query extra
                 prestamo.PorcentajeCobrador,
-                prestamo.EsCongelado
+                prestamo.EsCongelado,
+                prestamo.ValorSistema,
+                prestamo.SistemaCobrado,
+                null, // FechaSistemaCobrado
+                prestamo.ValorRenovacion,
+                prestamo.RenovacionCobrada,
+                null, // FechaRenovacionCobrada
+                cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
             ));
     }
 
@@ -619,7 +629,14 @@ public class PrestamosController : BaseApiController
                 prestamo.CobradorId,
                 null,
                 prestamo.PorcentajeCobrador,
-                prestamo.EsCongelado
+                prestamo.EsCongelado,
+                prestamo.ValorSistema,
+                prestamo.SistemaCobrado,
+                null, // FechaSistemaCobrado
+                prestamo.ValorRenovacion,
+                prestamo.RenovacionCobrada,
+                null, // FechaRenovacionCobrada
+                cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
             ));
     }
 

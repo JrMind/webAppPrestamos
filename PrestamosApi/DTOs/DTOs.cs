@@ -64,7 +64,9 @@ public record PrestamoDto(
     DateTime? FechaSistemaCobrado = null,
     decimal ValorRenovacion = 0,
     bool RenovacionCobrada = false,
-    DateTime? FechaRenovacionCobrada = null
+    DateTime? FechaRenovacionCobrada = null,
+    // KPI para capital quieto/inmovilizado en el préstamo (suma de MontoCapital de cuotas no pagadas)
+    decimal CapitalQuieto = 0
 );
 
 public record CuotaProximaDto(
