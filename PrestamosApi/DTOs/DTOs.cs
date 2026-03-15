@@ -161,12 +161,12 @@ public record CreatePagoDto(
 public record DashboardMetricasDto(
     decimal TotalPrestado,
     decimal TotalACobrar,
-    decimal InteresMes,         // Intereses de cuotas del mes
-    decimal GananciaTotalMes,   // Total cuotas a cobrar del mes
     int PrestamosActivos,
     decimal MontoPrestamosActivos,
-    int CuotasVencidasHoy,
-    decimal MontoCuotasVencidasHoy,
+    int CuotasVencidasHistorico,
+    decimal MontoCuotasVencidasHistorico,
+    int CuotasConAbonoHistorico,
+    decimal MontoCuotasConAbonoHistorico,
     int CuotasProximas7Dias,
     decimal MontoCuotasProximas7Dias,
     decimal TasaPromedioInteres,
@@ -176,11 +176,13 @@ public record DashboardMetricasDto(
     DistribucionEstadosDto DistribucionEstados,
     List<IngresoMensualDto> IngresosMensuales,
     List<CuotaProximaDetalleDto> CuotasProximasDetalle,
+    // KPIs de Congelados
+    decimal CapitalCongelado = 0,
+    decimal RentaCongelados = 0,
     // Flujo de Capital
-    decimal TotalCobrado = 0,
     decimal DineroCirculando = 0,
     decimal ReservaDisponible = 0,
-    decimal CapitalInicial = 0   // Nuevo: suma prestamos - (pagos - intereses)
+    decimal CapitalInicial = 0   // Capital Circulante real
 );
 
 public record EvolucionPrestamosDto(
