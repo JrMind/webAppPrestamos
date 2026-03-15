@@ -36,24 +36,22 @@ public class DashboardController : ControllerBase
                 .Where(p => p.EstadoPrestamo == "Activo")
                 .SumAsync(p => p.MontoPrestado);
             
-            // Total a cobrar = suma de saldos pendientes de cuotas de préstamos activos
+            // Total a cobrar = suma de saldos pendientes de cuotas de préstamos NORMALES activos
             var totalACobrar = await _context.CuotasPrestamo
                 .Include(c => c.Prestamo)
-                .Where(c => c.Prestamo!.EstadoPrestamo == "Activo")
+                .Where(c => c.Prestamo!.EstadoPrestamo == "Activo" && c.Prestamo.EsCongelado == false)
                 .SumAsync(c => c.SaldoPendiente);
 
-            // Interés del mes - suma de intereses de cuotas del mes actual
-            var inicioMes = DateTime.SpecifyKind(new DateTime(hoy.Year, hoy.Month, 1), DateTimeKind.Utc);
-            var finMes = DateTime.SpecifyKind(inicioMes.AddMonths(1), DateTimeKind.Utc);
-            var interesMes = await _context.CuotasPrestamo
-                .Where(c => c.FechaCobro >= inicioMes && c.FechaCobro < finMes)
-                .SumAsync(c => (decimal?)c.MontoInteres) ?? 0;
+            // Nuevos KPIs de Congelados
+            var capitalCongelado = await _context.Prestamos
+                .Where(p => p.EsCongelado == true) // Monto de préstamos congelados histórico (incluye activos o pagados si aplica)
+                .SumAsync(p => p.MontoPrestado);
 
-            // Total de cuotas a cobrar del mes vigente (ganancia total del mes)
-            var gananciaTotalMes = await _context.CuotasPrestamo
-                .Where(c => c.FechaCobro >= inicioMes && c.FechaCobro < finMes
-                        && (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial"))
-                .SumAsync(c => (decimal?)c.SaldoPendiente) ?? 0;
+            // Renta de Congelados (Sumatoria de lo Recaudado de cuotas pagadas/abonadas que pertenecen a un préstamo congelado)
+            var rentaCongelados = await _context.Pagos
+                .Include(p => p.Prestamo)
+                .Where(p => p.Prestamo!.EsCongelado == true)
+                .SumAsync(p => p.MontoPago);
 
             var prestamosActivos = await _context.Prestamos
                 .Where(p => p.EstadoPrestamo == "Activo")
@@ -62,15 +60,9 @@ public class DashboardController : ControllerBase
             var montoPrestamosActivos = await _context.Prestamos
                 .Where(p => p.EstadoPrestamo == "Activo")
                 .SumAsync(p => p.MontoPrestado);
-
+            
             // Flujo de Capital
             var totalCobrado = await _context.Pagos.SumAsync(p => p.MontoPago);
-            
-            // Saldo pendiente de préstamos activos (lo que falta por cobrar - capital + intereses)
-            var saldoPendienteActivos = await _context.CuotasPrestamo
-                .Include(c => c.Prestamo)
-                .Where(c => c.Prestamo!.EstadoPrestamo == "Activo")
-                .SumAsync(c => c.SaldoPendiente);
             
             // Capital de préstamos activos que aún no se ha recuperado
             // Dinero Circulando = Capital prestado activo - proporción de capital cobrado
@@ -90,13 +82,19 @@ public class DashboardController : ControllerBase
             // Usar el método completo de GananciasService para calcular la reserva correctamente
             var reservaDisponible = await _gananciasService.CalcularReservaDisponibleAsync();
 
-            // Cuotas vencidas hoy - comparar solo la parte de fecha
-            var cuotasVencidasHoy = await _context.CuotasPrestamo
-                .Where(c => c.FechaCobro.Date == hoy && 
-                        (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial"))
+            // Cuotas Vencidas (AHORA HISTÓRICO GLOBAL, sin filtro de fecha hoy)
+            var cuotasVencidasHistorico = await _context.CuotasPrestamo
+                .Where(c => c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora")
                 .ToListAsync();
-            var cantidadCuotasVencidasHoy = cuotasVencidasHoy.Count;
-            var montoCuotasVencidasHoy = cuotasVencidasHoy.Sum(c => c.SaldoPendiente);
+            var cantidadCuotasVencidasHistorico = cuotasVencidasHistorico.Count;
+            var montoCuotasVencidasHistorico = cuotasVencidasHistorico.Sum(c => c.SaldoPendiente);
+
+            // Cuotas con Abono (Histórico Global)
+            var cuotasConAbonoHistorico = await _context.CuotasPrestamo
+                .Where(c => c.EstadoCuota == "Parcial")
+                .ToListAsync();
+            var cantidadCuotasConAbonoHistorico = cuotasConAbonoHistorico.Count;
+            var montoCuotasConAbonoHistorico = cuotasConAbonoHistorico.Sum(c => c.SaldoPendiente);
 
             // Cuotas próximos 7 días
             var cuotasProximas = await _context.CuotasPrestamo
@@ -256,12 +254,12 @@ public class DashboardController : ControllerBase
             return Ok(new DashboardMetricasDto(
                 totalPrestado,
                 totalACobrar,
-                interesMes,
-                gananciaTotalMes,
                 prestamosActivos,
                 montoPrestamosActivos,
-                cantidadCuotasVencidasHoy,
-                montoCuotasVencidasHoy,
+                cantidadCuotasVencidasHistorico,
+                montoCuotasVencidasHistorico,
+                cantidadCuotasConAbonoHistorico,
+                montoCuotasConAbonoHistorico,
                 cantidadCuotasProximas,
                 montoCuotasProximas,
                 Math.Round(tasaPromedioInteres, 2),
@@ -271,7 +269,10 @@ public class DashboardController : ControllerBase
                 distribucion,
                 ingresosMensuales,
                 cuotasProximasDetalle,
-                totalCobrado,
+                // Congelados
+                capitalCongelado,
+                rentaCongelados,
+                // Flujo
                 dineroCirculando,
                 reservaDisponible,
                 Math.Round(capitalInicial, 2)
