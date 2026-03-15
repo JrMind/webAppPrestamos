@@ -119,7 +119,7 @@ public class PrestamosController : BaseApiController
                 p.ValorRenovacion,
                 p.RenovacionCobrada,
                 p.FechaRenovacionCobrada,
-                p.Cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
+                p.EsCongelado ? p.MontoPrestado : p.Cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
             ))
             .ToListAsync();
 
@@ -247,7 +247,7 @@ public class PrestamosController : BaseApiController
                 p.ValorRenovacion,
                 p.RenovacionCobrada,
                 p.FechaRenovacionCobrada,
-                p.Cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
+                p.EsCongelado ? p.MontoPrestado : p.Cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
             ))
             .FirstOrDefaultAsync();
 
@@ -373,7 +373,7 @@ public class PrestamosController : BaseApiController
                 p.ValorRenovacion,
                 p.RenovacionCobrada,
                 p.FechaRenovacionCobrada,
-                p.Cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
+                p.EsCongelado ? p.MontoPrestado : p.Cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
             ))
             .ToListAsync();
 
@@ -488,7 +488,7 @@ public class PrestamosController : BaseApiController
                 prestamo.ValorRenovacion,
                 prestamo.RenovacionCobrada,
                 null, // FechaRenovacionCobrada
-                cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
+                prestamo.EsCongelado ? prestamo.MontoPrestado : cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
             ));
     }
 
@@ -636,7 +636,7 @@ public class PrestamosController : BaseApiController
                 prestamo.ValorRenovacion,
                 prestamo.RenovacionCobrada,
                 null, // FechaRenovacionCobrada
-                cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
+                prestamo.EsCongelado ? prestamo.MontoPrestado : cuotas.Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora").Sum(c => c.MontoCapital)
             ));
     }
 
