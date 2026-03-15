@@ -1171,13 +1171,13 @@ function App() {
           <button className="btn btn-secondary btn-sm" onClick={() => { setFiltroEstado('Todos'); setFiltroFrecuencia('Todos'); setFiltroBusqueda(''); }}>Limpiar</button>
         </div>
 
-        {/* KPIs */}
+        {/* KPIs Principales e Históricos */}
         <div className="kpi-grid">
           <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Total Prestado</span></div><span className="kpi-value">{formatMoney(metricas?.totalPrestado || 0)}</span></div>
-          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Total Cobrado</span></div><span className="kpi-value">{formatMoney(metricas?.totalCobrado || 0)}</span></div>
-          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Interés del Mes</span></div><span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(metricas?.interesMes || 0)}</span></div>
-          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Ganancia Total Mes</span></div><span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(metricas?.gananciaTotalMes || 0)}</span></div>
-          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Cuotas Vencidas</span></div><span className="kpi-value">{metricas?.cuotasVencidasHoy || 0}</span></div>
+          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Cuotas Vencidas Histórico</span></div><span className="kpi-value" style={{ color: '#ef4444' }}>{metricas?.cuotasVencidasHistorico || 0}</span><span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Monto: {formatMoney(metricas?.montoCuotasVencidasHistorico || 0)}</span></div>
+          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Cuotas con Abono Histórico</span></div><span className="kpi-value" style={{ color: '#f59e0b' }}>{metricas?.cuotasConAbonoHistorico || 0}</span><span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Monto: {formatMoney(metricas?.montoCuotasConAbonoHistorico || 0)}</span></div>
+          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Capital Congelado</span></div><span className="kpi-value" style={{ color: '#8b5cf6' }}>{formatMoney(metricas?.capitalCongelado || 0)}</span><span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Total de préstamos activos y pagados</span></div>
+          <div className="kpi-card"><div className="kpi-header"><span className="kpi-title">Renta de Congelados</span></div><span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(metricas?.rentaCongelados || 0)}</span><span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Recaudo total histórico de cuotas</span></div>
         </div>
 
         {/* Flujo de Capital */}

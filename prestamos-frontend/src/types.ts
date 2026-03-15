@@ -260,12 +260,12 @@ export interface CuotaProximaDetalle {
 export interface DashboardMetricas {
   totalPrestado: number;
   totalACobrar: number;
-  interesMes: number;         // Intereses de cuotas del mes
-  gananciaTotalMes: number;   // Total cuotas a cobrar del mes
   prestamosActivos: number;
   montoPrestamosActivos: number;
-  cuotasVencidasHoy: number;
-  montoCuotasVencidasHoy: number;
+  cuotasVencidasHistorico: number;
+  montoCuotasVencidasHistorico: number;
+  cuotasConAbonoHistorico: number;
+  montoCuotasConAbonoHistorico: number;
   cuotasProximas7Dias: number;
   montoCuotasProximas7Dias: number;
   tasaPromedioInteres: number;
@@ -275,11 +275,15 @@ export interface DashboardMetricas {
   distribucionEstados: DistribucionEstados;
   ingresosMensuales: IngresoMensual[];
   cuotasProximasDetalle: CuotaProximaDetalle[];
+  
+  // Congelados
+  capitalCongelado: number;
+  rentaCongelados: number;
+
   // Flujo de Capital
-  totalCobrado: number;
   dineroCirculando: number;
   reservaDisponible: number;
-  capitalInicial: number;  // Nuevo: suma préstamos - (pagos - intereses)
+  capitalInicial: number;  // Capital Circulante real
 }
 
 // Aportador Externo
