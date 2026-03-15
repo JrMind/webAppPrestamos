@@ -32,7 +32,9 @@ public class DashboardController : ControllerBase
             var en7Dias = hoy.AddDays(7);
 
             // KPIs básicos
-            var totalPrestado = await _context.Prestamos.SumAsync(p => p.MontoPrestado);
+            var totalPrestado = await _context.Prestamos
+                .Where(p => p.EstadoPrestamo == "Activo")
+                .SumAsync(p => p.MontoPrestado);
             
             // Total a cobrar = suma de saldos pendientes de cuotas de préstamos activos
             var totalACobrar = await _context.CuotasPrestamo
