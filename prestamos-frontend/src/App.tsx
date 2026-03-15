@@ -97,6 +97,7 @@ function App() {
   const [pagosDiaFechaFin, setPagosDiaFechaFin] = useState<string>(formatDateInput(new Date()));
   const [expandedDays, setExpandedDays] = useState<Set<string>>(new Set());
   const [prestamosDelDiaFecha, setPrestamosDelDiaFecha] = useState<string>(formatDateInput(new Date()));
+  const [filtroTipoPrestamo, setFiltroTipoPrestamo] = useState<string>('Todos');
 
 
   const handleStartEditGananciaAportador = (id: number, currentMonto: number) => {
@@ -1167,8 +1168,9 @@ function App() {
         <div className="filters-bar">
           <div className="filter-group"><label>Estado</label><select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}><option>Todos</option><option>Activo</option><option>Pagado</option><option>Vencido</option></select></div>
           <div className="filter-group"><label>Frecuencia</label><select value={filtroFrecuencia} onChange={e => setFiltroFrecuencia(e.target.value)}><option>Todos</option><option>Diario</option><option>Semanal</option><option>Quincenal</option><option>Mensual</option></select></div>
+          <div className="filter-group"><label>Tipo</label><select value={filtroTipoPrestamo} onChange={e => setFiltroTipoPrestamo(e.target.value)}><option>Todos</option><option>Normal</option><option>Congelado</option></select></div>
           <div className="filter-group" style={{ flex: 1 }}><label>Buscar</label><input type="text" placeholder="Nombre o cédula..." value={filtroBusqueda} onChange={e => setFiltroBusqueda(e.target.value)} /></div>
-          <button className="btn btn-secondary btn-sm" onClick={() => { setFiltroEstado('Todos'); setFiltroFrecuencia('Todos'); setFiltroBusqueda(''); }}>Limpiar</button>
+          <button className="btn btn-secondary btn-sm" onClick={() => { setFiltroEstado('Todos'); setFiltroFrecuencia('Todos'); setFiltroTipoPrestamo('Todos'); setFiltroBusqueda(''); }}>Limpiar</button>
         </div>
 
         {/* KPIs Principales e Históricos */}
@@ -1257,9 +1259,20 @@ function App() {
           {activeTab === 'prestamos' && (
             <div className="table-container">
               <table><thead><tr><th>ID</th><th>Cliente</th><th>Monto</th><th>Interés</th><th>Cobrador</th><th>Cuotas</th><th>Estado</th><th>Acciones</th></tr></thead>
-                <tbody>{prestamos.map(p => (
+                <tbody>{prestamos
+                  .filter(p => {
+                    const matchEstado = filtroEstado === 'Todos' || p.estadoPrestamo === filtroEstado;
+                    const matchFrecuencia = filtroFrecuencia === 'Todos' || p.frecuenciaPago === filtroFrecuencia;
+                    const matchBusqueda = filtroBusqueda === '' || p.clienteNombre.toLowerCase().includes(filtroBusqueda.toLowerCase()) || p.clienteCedula.toLowerCase().includes(filtroBusqueda.toLowerCase());
+                    const matchTipo = filtroTipoPrestamo === 'Todos' || (filtroTipoPrestamo === 'Congelado' ? p.esCongelado : !p.esCongelado);
+                    return matchEstado && matchFrecuencia && matchBusqueda && matchTipo;
+                  })
+                  .map(p => (
                   <tr key={p.id}>
-                    <td>#{p.id}</td>
+                    <td>
+                      #{p.id}
+                      {p.esCongelado && <span title="Préstamo Congelado" style={{ marginLeft: '4px' }}>❄️</span>}
+                    </td>
                     <td><strong>{p.clienteNombre}</strong><div style={{ color: '#666', fontSize: '0.75rem' }}>{p.clienteCedula}</div></td>
                     <td className="money">{formatMoney(p.montoPrestado)}</td>
                     <td>{p.tasaInteres}%</td>
