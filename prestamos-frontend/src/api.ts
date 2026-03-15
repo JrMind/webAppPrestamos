@@ -638,7 +638,7 @@ export const smsHistoryApi = {
 // Cobros del Mes (Tareas Diarias)
 export const cobrosDelMesApi = {
     getCobrosDelMes: async (cobradorId?: number): Promise<CobrosDelMes> => {
-        const url = cobradorId
+        const url = cobradorId !== undefined
             ? `${API_URL}/cobros/mes?cobradorId=${cobradorId}`
             : `${API_URL}/cobros/mes`;
         const response = await fetch(url, { headers: getHeaders() });
