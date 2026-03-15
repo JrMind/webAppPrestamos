@@ -163,10 +163,6 @@ public record DashboardMetricasDto(
     decimal TotalACobrar,
     int PrestamosActivos,
     decimal MontoPrestamosActivos,
-    int CuotasVencidasHistorico,
-    decimal MontoCuotasVencidasHistorico,
-    int CuotasConAbonoHistorico,
-    decimal MontoCuotasConAbonoHistorico,
     int CuotasProximas7Dias,
     decimal MontoCuotasProximas7Dias,
     decimal TasaPromedioInteres,
@@ -178,7 +174,7 @@ public record DashboardMetricasDto(
     List<CuotaProximaDetalleDto> CuotasProximasDetalle,
     // KPIs de Congelados
     decimal CapitalCongelado = 0,
-    decimal RentaCongelados = 0,
+    decimal RentaCongeladosMes = 0,
     // Flujo de Capital
     decimal DineroCirculando = 0,
     decimal ReservaDisponible = 0,
