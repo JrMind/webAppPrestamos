@@ -242,7 +242,7 @@ public class DashboardController : ControllerBase
                 command.CommandText = @"
                     SELECT COALESCE(SUM(
                         CASE 
-                            WHEN p.escongelado = true THEN p.""MontoPrestado""
+                            WHEN p.""EsCongelado"" = true THEN p.""MontoPrestado""
                             ELSE c.""MontoCapital""
                         END
                     ), 0)
