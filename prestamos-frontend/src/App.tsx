@@ -2557,6 +2557,10 @@ function App() {
                 <div className="detail-item"><label>Cuotas</label><span>{selectedPrestamo.cuotasPagadas} / {selectedPrestamo.numeroCuotas}</span></div>
                 <div className="detail-item"><label>Pagado</label><span style={{ color: '#10b981' }}>{formatMoney(selectedPrestamo.totalPagado)}</span></div>
                 <div className="detail-item"><label>Pendiente</label><span style={{ color: '#ef4444' }}>{formatMoney(selectedPrestamo.saldoPendiente)}</span></div>
+                <div className="detail-item tooltip-container">
+                  <label>Capital Quieto</label>
+                  <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>{formatMoney(selectedPrestamo.capitalQuieto || 0)}</span>
+                </div>
                 <div className="detail-item"><label>Estado</label><span className={`badge ${selectedPrestamo.estadoPrestamo === 'Activo' ? 'badge-green' : selectedPrestamo.estadoPrestamo === 'Pagado' ? 'badge-blue' : 'badge-red'}`}>{selectedPrestamo.estadoPrestamo}</span></div>
                 <div className="detail-item">
                   <label>Cobrador</label>

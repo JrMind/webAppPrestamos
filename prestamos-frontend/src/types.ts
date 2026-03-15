@@ -168,6 +168,7 @@ export interface Prestamo {
   valorRenovacion: number;
   renovacionCobrada: boolean;
   fechaRenovacionCobrada?: string;
+  capitalQuieto: number; // KPI
 }
 
 export interface CreatePrestamoDto {
