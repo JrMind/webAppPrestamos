@@ -240,7 +240,12 @@ public class DashboardController : ControllerBase
                 
                 using var command = connection.CreateCommand();
                 command.CommandText = @"
-                    SELECT COALESCE(SUM(c.""MontoCapital""), 0)
+                    SELECT COALESCE(SUM(
+                        CASE 
+                            WHEN p.escongelado = true THEN p.""MontoPrestado""
+                            ELSE c.""MontoCapital""
+                        END
+                    ), 0)
                     FROM cuotasprestamo c
                     INNER JOIN prestamos p ON c.prestamoid = p.id
                     WHERE p.estadoprestamo = 'Activo' 
