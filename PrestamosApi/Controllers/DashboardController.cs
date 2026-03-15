@@ -228,36 +228,26 @@ public class DashboardController : ControllerBase
                 .ToListAsync();
 
             // NUEVO CÁLCULO DE CAPITAL EN LA CALLE / CIRCULANTE (EXACTO Y DIRECTO A BD)
-            // Aplica para préstamos "Activo". Suma exactamente el MontoCapital (originado del préstamo o abonado).
-            // Si es congelado y le han hecho abonos a capital, el MontoCapital de su única cuota pendiente ya reflejará la resta exacta.
+            // Congelados: Sumamos 1 sola vez el MontoPrestado de los créditos activos.
+            // Normales: Sumamos el MontoCapital de todas las cuotas pendientes de créditos activos.
             decimal capitalInicial = 0;
             try 
             {
-                using var connection = _context.Database.GetDbConnection();
-                // Validamos si la conexión está cerrada antes de abrirla
-                if (connection.State != System.Data.ConnectionState.Open)
-                    await connection.OpenAsync();
-                
-                using var command = connection.CreateCommand();
-                command.CommandText = @"
-                    SELECT COALESCE(SUM(
-                        CASE 
-                            WHEN p.""EsCongelado"" = true THEN p.""MontoPrestado""
-                            ELSE c.""MontoCapital""
-                        END
-                    ), 0)
-                    FROM cuotasprestamo c
-                    INNER JOIN prestamos p ON c.prestamoid = p.id
-                    WHERE p.estadoprestamo = 'Activo' 
-                      AND c.estadocuota IN ('Pendiente', 'Parcial', 'Vencida', 'Mora');";
-                      
-                var result = await command.ExecuteScalarAsync();
-                capitalInicial = result != DBNull.Value ? Convert.ToDecimal(result) : 0m;
+                var capitalCongelados = await _context.Prestamos
+                    .Where(p => p.EstadoPrestamo == "Activo" && p.EsCongelado == true)
+                    .SumAsync(p => p.MontoPrestado);
+
+                var capitalNormales = await _context.CuotasPrestamo
+                    .Where(c => c.Prestamo!.EstadoPrestamo == "Activo" 
+                             && c.Prestamo.EsCongelado == false
+                             && (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora"))
+                    .SumAsync(c => c.MontoCapital);
+
+                capitalInicial = capitalCongelados + capitalNormales;
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Error calculando capital exacto: {ex.Message}");
-                // Fallback (malo pero seguro para que no caiga el endpoint)
                 capitalInicial = 0;
             }
 
