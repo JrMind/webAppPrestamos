@@ -262,10 +262,6 @@ export interface DashboardMetricas {
   totalACobrar: number;
   prestamosActivos: number;
   montoPrestamosActivos: number;
-  cuotasVencidasHistorico: number;
-  montoCuotasVencidasHistorico: number;
-  cuotasConAbonoHistorico: number;
-  montoCuotasConAbonoHistorico: number;
   cuotasProximas7Dias: number;
   montoCuotasProximas7Dias: number;
   tasaPromedioInteres: number;
@@ -278,7 +274,7 @@ export interface DashboardMetricas {
   
   // Congelados
   capitalCongelado: number;
-  rentaCongelados: number;
+  rentaCongeladosMes: number;
 
   // Flujo de Capital
   dineroCirculando: number;
