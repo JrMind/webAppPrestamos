@@ -252,30 +252,28 @@ public class DashboardController : ControllerBase
             }
 
             return Ok(new DashboardMetricasDto(
-                totalPrestado,
-                totalACobrar,
-                prestamosActivos,
-                montoPrestamosActivos,
-                cantidadCuotasVencidasHistorico,
-                montoCuotasVencidasHistorico,
-                cantidadCuotasConAbonoHistorico,
-                montoCuotasConAbonoHistorico,
-                cantidadCuotasProximas,
-                montoCuotasProximas,
-                Math.Round(tasaPromedioInteres, 2),
-                Math.Round(porcentajeMorosidad, 2),
-                evolucionPrestamos,
-                topClientes,
-                distribucion,
-                ingresosMensuales,
-                cuotasProximasDetalle,
-                // Congelados
-                capitalCongelado,
-                rentaCongelados,
-                // Flujo
-                dineroCirculando,
-                reservaDisponible,
-                Math.Round(capitalInicial, 2)
+                TotalPrestado: totalPrestado,
+                TotalACobrar: totalACobrar,
+                PrestamosActivos: prestamosActivos,
+                MontoPrestamosActivos: montoPrestamosActivos,
+                CuotasVencidasHistorico: cantidadCuotasVencidasHistorico,
+                MontoCuotasVencidasHistorico: montoCuotasVencidasHistorico,
+                CuotasConAbonoHistorico: cantidadCuotasConAbonoHistorico,
+                MontoCuotasConAbonoHistorico: montoCuotasConAbonoHistorico,
+                CuotasProximas7Dias: cantidadCuotasProximas,
+                MontoCuotasProximas7Dias: montoCuotasProximas,
+                TasaPromedioInteres: (decimal)Math.Round(tasaPromedioInteres, 2),
+                PorcentajeMorosidad: (decimal)Math.Round(porcentajeMorosidad, 2),
+                EvolucionPrestamos: evolucionPrestamos,
+                TopClientes: topClientes,
+                DistribucionEstados: distribucion,
+                IngresosMensuales: ingresosMensuales,
+                CuotasProximasDetalle: cuotasProximasDetalle,
+                CapitalCongelado: capitalCongelado,
+                RentaCongelados: rentaCongelados,
+                DineroCirculando: dineroCirculando,
+                ReservaDisponible: reservaDisponible,
+                CapitalInicial: (decimal)Math.Round(capitalInicial, 2)
             ));
         }
         catch (Exception ex)
