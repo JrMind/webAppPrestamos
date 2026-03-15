@@ -1383,6 +1383,7 @@ function App() {
                       style={{ minWidth: '200px' }}
                     >
                       <option value="">Todos</option>
+                      <option value="0">Sin Cobrador</option>
                       {cobradoresList.map(c => (
                         <option key={c.id} value={c.id}>{c.nombre}</option>
                       ))}
