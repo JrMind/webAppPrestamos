@@ -158,7 +158,8 @@ public class DashboardController : ControllerBase
             var distribucion = new DistribucionEstadosDto(
                 await _context.Prestamos.CountAsync(p => p.EstadoPrestamo == "Activo"),
                 await _context.Prestamos.CountAsync(p => p.EstadoPrestamo == "Pagado"),
-                await _context.Prestamos.CountAsync(p => p.EstadoPrestamo == "Vencido")
+                await _context.Prestamos.CountAsync(p => p.EstadoPrestamo == "Vencido"),
+                await _context.Prestamos.CountAsync(p => p.EstadoPrestamo == "Terminado")
             );
 
             // Ingresos mensuales

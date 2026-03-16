@@ -777,6 +777,46 @@ public class PrestamosController : BaseApiController
         return NoContent();
     }
 
+    /// <summary>
+    /// Termina un préstamo manteniendo todas las cuotas exactamente como están.
+    /// El préstamo deja de figurar en métricas activas sin borrar ningún dato histórico.
+    /// </summary>
+    [HttpPost("{id}/terminar")]
+    public async Task<IActionResult> TerminarPrestamo(int id, [FromBody] TerminarPrestamoDto? dto = null)
+    {
+        if (!IsSocio())
+            return Forbid();
+
+        var prestamo = await _context.Prestamos
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (prestamo == null)
+            return NotFound(new { message = "Préstamo no encontrado" });
+
+        if (prestamo.EstadoPrestamo == "Terminado")
+            return BadRequest(new { message = "El préstamo ya está terminado" });
+
+        if (prestamo.EstadoPrestamo == "Pagado")
+            return BadRequest(new { message = "El préstamo ya está pagado completamente" });
+
+        prestamo.EstadoPrestamo = "Terminado";
+
+        if (!string.IsNullOrWhiteSpace(dto?.Motivo))
+            prestamo.Descripcion = string.IsNullOrWhiteSpace(prestamo.Descripcion)
+                ? $"[Terminado] {dto.Motivo}"
+                : $"{prestamo.Descripcion} | [Terminado] {dto.Motivo}";
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = "Préstamo terminado exitosamente",
+            prestamoId = prestamo.Id,
+            estadoAnterior = "Activo/Vencido",
+            estadoNuevo = "Terminado"
+        });
+    }
+
     [HttpDelete("{id}")]
     public async Task<IActionResult> DeletePrestamo(int id)
     {
@@ -977,3 +1017,5 @@ public class PrestamosController : BaseApiController
         });
     }
 }
+
+public record TerminarPrestamoDto(string? Motivo = null);

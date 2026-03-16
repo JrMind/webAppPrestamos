@@ -1116,6 +1116,15 @@ function App() {
     catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
+  const handleTerminarPrestamo = async (id: number) => {
+    if (!confirm('¿Terminar este préstamo? Las cuotas quedarán exactamente como están y saldrá de las métricas activas. Esta acción no borra datos.')) return;
+    try {
+      await prestamosApi.terminar(id);
+      showToast('Préstamo terminado correctamente', 'success');
+      loadData();
+    } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
+  };
+
   const COLORS = ['#10b981', '#3b82f6', '#ef4444'];
 
   // Login Screen
@@ -1166,7 +1175,7 @@ function App() {
       <main className="main-content">
         {/* Filters */}
         <div className="filters-bar">
-          <div className="filter-group"><label>Estado</label><select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}><option>Todos</option><option>Activo</option><option>Pagado</option><option>Vencido</option></select></div>
+          <div className="filter-group"><label>Estado</label><select value={filtroEstado} onChange={e => setFiltroEstado(e.target.value)}><option>Todos</option><option>Activo</option><option>Pagado</option><option>Vencido</option><option>Terminado</option></select></div>
           <div className="filter-group"><label>Frecuencia</label><select value={filtroFrecuencia} onChange={e => setFiltroFrecuencia(e.target.value)}><option>Todos</option><option>Diario</option><option>Semanal</option><option>Quincenal</option><option>Mensual</option></select></div>
           <div className="filter-group"><label>Tipo</label><select value={filtroTipoPrestamo} onChange={e => setFiltroTipoPrestamo(e.target.value)}><option>Todos</option><option>Normal</option><option>Congelado</option></select></div>
           <div className="filter-group" style={{ flex: 1 }}><label>Buscar</label><input type="text" placeholder="Nombre o cédula..." value={filtroBusqueda} onChange={e => setFiltroBusqueda(e.target.value)} /></div>
@@ -1282,11 +1291,11 @@ function App() {
                     </td>
                     <td>{p.cuotasPagadas}/{p.numeroCuotas}</td>
                     <td>
-                      <span className={`badge ${(p.cuotasPagadas >= p.numeroCuotas || p.estadoPrestamo === 'Pagado') ? 'badge-blue' : p.estadoPrestamo === 'Activo' ? 'badge-green' : 'badge-red'}`}>
+                      <span className={`badge ${(p.cuotasPagadas >= p.numeroCuotas || p.estadoPrestamo === 'Pagado') ? 'badge-blue' : p.estadoPrestamo === 'Activo' ? 'badge-green' : p.estadoPrestamo === 'Terminado' ? 'badge-gray' : 'badge-red'}`}>
                         {(p.cuotasPagadas >= p.numeroCuotas) ? 'Pagado' : p.estadoPrestamo}
                       </span>
                     </td>
-                    <td><div className="actions"><button className="btn btn-secondary btn-sm" onClick={() => openDetalle(p)}>Ver</button><button className="btn btn-primary btn-sm" onClick={() => openEditPrestamo(p)}>✏️</button><button className="btn btn-danger btn-sm" onClick={() => handleDeletePrestamo(p.id)}>✕</button></div></td>
+                    <td><div className="actions"><button className="btn btn-secondary btn-sm" onClick={() => openDetalle(p)}>Ver</button><button className="btn btn-primary btn-sm" onClick={() => openEditPrestamo(p)}>✏️</button>{(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && (p.estadoPrestamo === 'Activo' || p.estadoPrestamo === 'Vencido') && (<button className="btn btn-sm" style={{ background: '#6b7280', color: '#fff' }} title="Terminar préstamo" onClick={() => handleTerminarPrestamo(p.id)}>🔒</button>)}<button className="btn btn-danger btn-sm" onClick={() => handleDeletePrestamo(p.id)}>✕</button></div></td>
                   </tr>
                 ))}{prestamos.length === 0 && <tr><td colSpan={8} className="empty-state">No hay préstamos</td></tr>}</tbody>
               </table>
@@ -2577,7 +2586,7 @@ function App() {
                   <label>Capital Quieto</label>
                   <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>{formatMoney(selectedPrestamo.capitalQuieto || 0)}</span>
                 </div>
-                <div className="detail-item"><label>Estado</label><span className={`badge ${selectedPrestamo.estadoPrestamo === 'Activo' ? 'badge-green' : selectedPrestamo.estadoPrestamo === 'Pagado' ? 'badge-blue' : 'badge-red'}`}>{selectedPrestamo.estadoPrestamo}</span></div>
+                <div className="detail-item"><label>Estado</label><span className={`badge ${selectedPrestamo.estadoPrestamo === 'Activo' ? 'badge-green' : selectedPrestamo.estadoPrestamo === 'Pagado' ? 'badge-blue' : selectedPrestamo.estadoPrestamo === 'Terminado' ? 'badge-gray' : 'badge-red'}`}>{selectedPrestamo.estadoPrestamo}</span></div>
                 <div className="detail-item">
                   <label>Cobrador</label>
                   <span>

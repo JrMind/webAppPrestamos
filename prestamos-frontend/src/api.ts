@@ -344,6 +344,18 @@ export const prestamosApi = {
             throw new Error(error.message);
         }
     },
+
+    terminar: async (id: number, motivo?: string): Promise<void> => {
+        const response = await fetch(`${API_URL}/prestamos/${id}/terminar`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ motivo: motivo ?? null }),
+        });
+        if (!response.ok) {
+            const error = await response.json().catch(() => ({ message: 'Error al terminar préstamo' }));
+            throw new Error(error.message);
+        }
+    },
 };
 
 // Cuotas

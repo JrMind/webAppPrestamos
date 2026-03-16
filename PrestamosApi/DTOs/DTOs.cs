@@ -195,7 +195,8 @@ public record TopClienteDto(
 public record DistribucionEstadosDto(
     int Activos,
     int Pagados,
-    int Vencidos
+    int Vencidos,
+    int Terminados = 0
 );
 
 public record IngresoMensualDto(
