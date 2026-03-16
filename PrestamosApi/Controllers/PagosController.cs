@@ -150,8 +150,8 @@ public class PagosController : BaseApiController
     [HttpPost]
     public async Task<ActionResult<PagoDto>> CreatePago(CreatePagoDto dto)
     {
-        // Solo socios pueden registrar pagos
-        if (!IsSocio() && GetCurrentUserRole() != RolUsuario.Admin)
+        // Socios y Cobradores pueden registrar pagos
+        if (!IsSocio() && !IsCobrador())
         {
             return Forbid();
         }
@@ -161,6 +161,14 @@ public class PagosController : BaseApiController
             .Include(p => p.Cliente)  // <-- CRÍTICO: para enviar SMS al cliente correcto
             .Include(p => p.Cuotas)
             .FirstOrDefaultAsync(p => p.Id == dto.PrestamoId);
+
+        // Un Cobrador solo puede registrar pagos de préstamos asignados a él
+        if (IsCobrador())
+        {
+            var cobradorId = GetCurrentUserId();
+            if (prestamo != null && prestamo.CobradorId != cobradorId)
+                return Forbid();
+        }
             
         if (prestamo == null)
             return BadRequest(new { message = "Préstamo no encontrado" });
