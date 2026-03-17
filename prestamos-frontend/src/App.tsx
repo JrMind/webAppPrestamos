@@ -1084,6 +1084,80 @@ function App() {
     } catch { showToast('Error al marcar cuota', 'error'); }
   };
 
+  const generarReporteCobros = () => {
+    if (!cobrosDelMes) return;
+
+    const hoy = new Date().toLocaleDateString('es-CO', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+
+    // Agrupar cuotas de hoy por cobrador
+    const grupHoy = new Map<string, typeof cobrosDelMes.cuotasHoy>();
+    for (const c of cobrosDelMes.cuotasHoy) {
+      const nombre = c.cobradorNombre || 'Sin Cobrador';
+      if (!grupHoy.has(nombre)) grupHoy.set(nombre, []);
+      grupHoy.get(nombre)!.push(c);
+    }
+
+    // Agrupar cuotas vencidas por cobrador
+    const grupVencidas = new Map<string, typeof cobrosDelMes.cuotasVencidas>();
+    for (const c of cobrosDelMes.cuotasVencidas) {
+      const nombre = c.cobradorNombre || 'Sin Cobrador';
+      if (!grupVencidas.has(nombre)) grupVencidas.set(nombre, []);
+      grupVencidas.get(nombre)!.push(c);
+    }
+
+    // Todos los cobradores que aparecen en cualquiera de las dos listas
+    const todosCobradores = new Set([...grupHoy.keys(), ...grupVencidas.keys()]);
+
+    const lineas: string[] = [];
+    lineas.push(`REPORTE DE COBROS - ${hoy.toUpperCase()}`);
+    lineas.push('='.repeat(60));
+    lineas.push('');
+
+    for (const cobrador of todosCobradores) {
+      lineas.push(`"${cobrador}" y sus clientes:`);
+
+      const hoyList = grupHoy.get(cobrador) || [];
+      lineas.push('  hoy:');
+      if (hoyList.length === 0) {
+        lineas.push('    (ninguna cuota hoy)');
+      } else {
+        for (const c of hoyList) {
+          const tel = c.clienteTelefono ? ` - Tel: ${c.clienteTelefono}` : '';
+          lineas.push(`    "${c.clienteNombre}" - Cuota #${c.numeroCuota} - ${formatMoney(c.saldoPendiente)}${tel}`);
+        }
+      }
+
+      const vencidasList = grupVencidas.get(cobrador) || [];
+      lineas.push('  vencidas:');
+      if (vencidasList.length === 0) {
+        lineas.push('    (ninguna cuota vencida)');
+      } else {
+        for (const c of vencidasList) {
+          const dias = Math.abs(c.diasParaVencer);
+          const tel = c.clienteTelefono ? ` - Tel: ${c.clienteTelefono}` : '';
+          lineas.push(`    "${c.clienteNombre}" - Cuota #${c.numeroCuota} - ${formatMoney(c.saldoPendiente)} (hace ${dias} día${dias !== 1 ? 's' : ''})${tel}`);
+        }
+      }
+
+      lineas.push('');
+    }
+
+    if (todosCobradores.size === 0) {
+      lineas.push('No hay cuotas para hoy ni vencidas.');
+    }
+
+    const contenido = lineas.join('\n');
+    const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reporte-cobros-${new Date().toISOString().split('T')[0]}.txt`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handleCreateUsuario = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
@@ -1404,10 +1478,13 @@ function App() {
                 <div className="loading"><div className="spinner"></div></div>
               ) : cobrosDelMes ? (
                 <>
-                  <div className="kpi-grid" style={{ marginBottom: '1rem' }}>
-                    <div className="kpi-card"><span className="kpi-title">📅 Hoy ({cobrosDelMes.resumen.totalCuotasHoy})</span><span className="kpi-value">{formatMoney(cobrosDelMes.resumen.montoTotalHoy)}</span></div>
-                    <div className="kpi-card" style={{ borderColor: '#ef4444' }}><span className="kpi-title">⚠️ Vencidas ({cobrosDelMes.resumen.totalCuotasVencidas})</span><span className="kpi-value" style={{ color: '#ef4444' }}>{formatMoney(cobrosDelMes.resumen.montoTotalVencido)}</span></div>
-                    <div className="kpi-card" style={{ borderColor: '#3b82f6' }}><span className="kpi-title">📆 Próximas ({cobrosDelMes.resumen.totalCuotasProximas})</span><span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(cobrosDelMes.resumen.montoTotalProximas)}</span></div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+                    <div className="kpi-grid" style={{ flex: 1, marginBottom: 0 }}>
+                      <div className="kpi-card"><span className="kpi-title">📅 Hoy ({cobrosDelMes.resumen.totalCuotasHoy})</span><span className="kpi-value">{formatMoney(cobrosDelMes.resumen.montoTotalHoy)}</span></div>
+                      <div className="kpi-card" style={{ borderColor: '#ef4444' }}><span className="kpi-title">⚠️ Vencidas ({cobrosDelMes.resumen.totalCuotasVencidas})</span><span className="kpi-value" style={{ color: '#ef4444' }}>{formatMoney(cobrosDelMes.resumen.montoTotalVencido)}</span></div>
+                      <div className="kpi-card" style={{ borderColor: '#3b82f6' }}><span className="kpi-title">📆 Próximas ({cobrosDelMes.resumen.totalCuotasProximas})</span><span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(cobrosDelMes.resumen.montoTotalProximas)}</span></div>
+                    </div>
+                    <button className="btn btn-secondary" style={{ marginLeft: '1rem', whiteSpace: 'nowrap' }} onClick={generarReporteCobros}>📄 Generar reporte</button>
                   </div>
                   <h4 style={{ color: '#10b981', margin: '1rem 0 0.5rem' }}>📅 Cobros de Hoy</h4>
                   <div className="table-container">

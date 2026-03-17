@@ -82,10 +82,12 @@ public class DashboardController : ControllerBase
             var reservaDisponible = await _gananciasService.CalcularReservaDisponibleAsync();
 
 
-            // Cuotas próximos 7 días
+            // Cuotas próximos 7 días (solo de préstamos activos o vencidos)
             var cuotasProximas = await _context.CuotasPrestamo
+                .Include(c => c.Prestamo)
                 .Where(c => c.FechaCobro.Date > hoy && c.FechaCobro.Date <= en7Dias &&
-                        (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial"))
+                        (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial") &&
+                        (c.Prestamo!.EstadoPrestamo == "Activo" || c.Prestamo.EstadoPrestamo == "Vencido"))
                 .ToListAsync();
             var cantidadCuotasProximas = cuotasProximas.Count;
             var montoCuotasProximas = cuotasProximas.Sum(c => c.SaldoPendiente);
@@ -95,10 +97,13 @@ public class DashboardController : ControllerBase
                 .Where(p => p.EstadoPrestamo == "Activo")
                 .AverageAsync(p => (decimal?)p.TasaInteres) ?? 0;
 
-            // Morosidad
-            var totalCuotas = await _context.CuotasPrestamo.CountAsync();
+            // Morosidad (solo cuotas de préstamos activos o vencidos)
+            var totalCuotas = await _context.CuotasPrestamo
+                .Where(c => c.Prestamo!.EstadoPrestamo == "Activo" || c.Prestamo.EstadoPrestamo == "Vencido")
+                .CountAsync();
             var cuotasVencidas = await _context.CuotasPrestamo
-                .Where(c => c.EstadoCuota == "Vencida")
+                .Where(c => c.EstadoCuota == "Vencida" &&
+                           (c.Prestamo!.EstadoPrestamo == "Activo" || c.Prestamo.EstadoPrestamo == "Vencido"))
                 .CountAsync();
             var porcentajeMorosidad = totalCuotas > 0 ? (decimal)cuotasVencidas / totalCuotas * 100 : 0;
 
@@ -195,12 +200,13 @@ public class DashboardController : ControllerBase
                 ));
             }
 
-            // Cuotas próximas detalle
+            // Cuotas próximas detalle (solo de préstamos activos o vencidos)
             var cuotasProximasDetalle = await _context.CuotasPrestamo
                 .Include(c => c.Prestamo)
                 .ThenInclude(p => p!.Cliente)
                 .Where(c => c.FechaCobro.Date >= hoy && c.FechaCobro.Date <= hoy.AddDays(15) &&
-                        (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida"))
+                        (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida") &&
+                        (c.Prestamo!.EstadoPrestamo == "Activo" || c.Prestamo.EstadoPrestamo == "Vencido"))
                 .OrderBy(c => c.FechaCobro)
                 .Take(20)
                 .Select(c => new CuotaProximaDetalleDto(

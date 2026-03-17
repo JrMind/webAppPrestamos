@@ -78,8 +78,9 @@ public class CuotasController : ControllerBase
         var cuotas = await _context.CuotasPrestamo
             .Include(c => c.Prestamo)
             .ThenInclude(p => p!.Cliente)
-            .Where(c => c.FechaCobro <= fechaLimite && 
-                       (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida"))
+            .Where(c => c.FechaCobro <= fechaLimite &&
+                       (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida") &&
+                       (c.Prestamo!.EstadoPrestamo == "Activo" || c.Prestamo.EstadoPrestamo == "Vencido"))
             .OrderBy(c => c.FechaCobro)
             .Select(c => new CuotaProximaDetalleDto(
                 c.Id,
@@ -99,9 +100,11 @@ public class CuotasController : ControllerBase
     public async Task<IActionResult> ActualizarCuotasVencidas()
     {
         var cuotasVencidas = await _context.CuotasPrestamo
-            .Where(c => c.FechaCobro.Date < DateTime.Today && 
-                       c.SaldoPendiente > 0 && 
-                       c.EstadoCuota != "Vencida")
+            .Include(c => c.Prestamo)
+            .Where(c => c.FechaCobro.Date < DateTime.Today &&
+                       c.SaldoPendiente > 0 &&
+                       c.EstadoCuota != "Vencida" &&
+                       (c.Prestamo!.EstadoPrestamo == "Activo" || c.Prestamo.EstadoPrestamo == "Vencido"))
             .ToListAsync();
 
         foreach (var cuota in cuotasVencidas)
