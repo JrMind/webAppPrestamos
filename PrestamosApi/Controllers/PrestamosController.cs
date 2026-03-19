@@ -55,6 +55,16 @@ public class PrestamosController : BaseApiController
         {
             query = query.Where(p => p.CobradorId == userId.Value);
         }
+        else if (IsAdministrador())
+        {
+            // Scope fijo: fecha de inicio y cobradores permitidos
+            var fechaScope = GetFechaInicioAcceso();
+            var cobsScope  = GetCobradorIdsPermitidos();
+            if (fechaScope.HasValue)
+                query = query.Where(p => p.FechaPrestamo >= fechaScope.Value);
+            if (cobsScope != null)
+                query = query.Where(p => p.CobradorId.HasValue && cobsScope.Contains(p.CobradorId.Value));
+        }
         else if (cobradorId.HasValue)
         {
             query = query.Where(p => p.CobradorId == cobradorId.Value);
@@ -163,6 +173,15 @@ public class PrestamosController : BaseApiController
         if (isCobrador && userId.HasValue)
         {
             baseQuery = baseQuery.Where(p => p.CobradorId == userId.Value);
+        }
+        else if (IsAdministrador())
+        {
+            var fechaScope = GetFechaInicioAcceso();
+            var cobsScope  = GetCobradorIdsPermitidos();
+            if (fechaScope.HasValue)
+                baseQuery = baseQuery.Where(p => p.FechaPrestamo >= fechaScope.Value);
+            if (cobsScope != null)
+                baseQuery = baseQuery.Where(p => p.CobradorId.HasValue && cobsScope.Contains(p.CobradorId.Value));
         }
 
         // Filtrar por año, mes y día para evitar problemas de zona horaria

@@ -11,7 +11,7 @@ namespace PrestamosApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class DashboardController : ControllerBase
+public class DashboardController : BaseApiController
 {
     private readonly PrestamosDbContext _context;
     private readonly IGananciasService _gananciasService;
@@ -22,53 +22,86 @@ public class DashboardController : ControllerBase
         _gananciasService = gananciasService;
     }
 
+    // Aplica filtros de scope (fecha y cobradores) a queries de Prestamos
+    private IQueryable<Prestamo> ScopePrestamos(IQueryable<Prestamo> q, DateTime? fechaScope, List<int>? cobsScope)
+    {
+        if (fechaScope.HasValue)
+            q = q.Where(p => p.FechaPrestamo >= fechaScope.Value);
+        if (cobsScope != null)
+            q = q.Where(p => p.CobradorId.HasValue && cobsScope.Contains(p.CobradorId.Value));
+        return q;
+    }
+
+    // Aplica filtros de scope a queries de CuotasPrestamo
+    private IQueryable<CuotaPrestamo> ScopeCuotas(IQueryable<CuotaPrestamo> q, DateTime? fechaScope, List<int>? cobsScope)
+    {
+        if (fechaScope.HasValue)
+            q = q.Where(c => c.Prestamo!.FechaPrestamo >= fechaScope.Value);
+        if (cobsScope != null)
+            q = q.Where(c => c.Prestamo!.CobradorId.HasValue && cobsScope.Contains(c.Prestamo!.CobradorId.Value));
+        return q;
+    }
+
+    // Aplica filtros de scope a queries de Pagos
+    private IQueryable<Pago> ScopePagos(IQueryable<Pago> q, DateTime? fechaScope, List<int>? cobsScope)
+    {
+        if (fechaScope.HasValue)
+            q = q.Where(p => p.Prestamo!.FechaPrestamo >= fechaScope.Value);
+        if (cobsScope != null)
+            q = q.Where(p => p.Prestamo!.CobradorId.HasValue && cobsScope.Contains(p.Prestamo!.CobradorId.Value));
+        return q;
+    }
+
     [HttpGet("metricas")]
     public async Task<ActionResult<DashboardMetricasDto>> GetMetricas()
     {
-        try 
+        try
         {
+            // Scope para rol Administrador
+            var fechaScope = IsAdministrador() ? GetFechaInicioAcceso() : null;
+            var cobsScope  = IsAdministrador() ? GetCobradorIdsPermitidos() : null;
+
             // Usar UTC para PostgreSQL
             var hoy = DateTime.UtcNow.Date;
             var en7Dias = hoy.AddDays(7);
 
             // KPIs básicos
-            var totalPrestado = await _context.Prestamos
+            var totalPrestado = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
                 .Where(p => p.EstadoPrestamo == "Activo")
                 .SumAsync(p => p.MontoPrestado);
             
             // Total a cobrar = suma de saldos pendientes de cuotas de préstamos NORMALES activos
-            var totalACobrar = await _context.CuotasPrestamo
-                .Include(c => c.Prestamo)
+            var totalACobrar = await ScopeCuotas(_context.CuotasPrestamo.Include(c => c.Prestamo), fechaScope, cobsScope)
                 .Where(c => c.Prestamo!.EstadoPrestamo == "Activo" && c.Prestamo.EsCongelado == false)
                 .SumAsync(c => c.SaldoPendiente);
 
             // Nuevos KPIs de Congelados
-            var capitalCongelado = await _context.Prestamos
-                .Where(p => p.EsCongelado == true) // Monto de préstamos congelados histórico (incluye activos o pagados si aplica)
+            var capitalCongelado = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
+                .Where(p => p.EsCongelado == true)
                 .SumAsync(p => p.MontoPrestado);
 
             // Renta de Congelados Mes (Sumatoria del valor cuota de cada préstamo congelado activo)
-            var rentaCongeladosMes = await _context.Prestamos
+            var rentaCongeladosMes = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
                 .Where(p => p.EsCongelado == true && p.EstadoPrestamo == "Activo")
                 .SumAsync(p => p.MontoCuota);
 
-            var prestamosActivos = await _context.Prestamos
+            var prestamosActivos = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
                 .Where(p => p.EstadoPrestamo == "Activo")
                 .CountAsync();
 
-            var montoPrestamosActivos = await _context.Prestamos
+            var montoPrestamosActivos = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
                 .Where(p => p.EstadoPrestamo == "Activo")
                 .SumAsync(p => p.MontoPrestado);
-            
+
             // Flujo de Capital
-            var totalCobrado = await _context.Pagos.SumAsync(p => p.MontoPago);
-            
+            var totalCobrado = await ScopePagos(_context.Pagos.Include(p => p.Prestamo), fechaScope, cobsScope)
+                .SumAsync(p => p.MontoPago);
+
             // Capital de préstamos activos que aún no se ha recuperado
-            // Dinero Circulando = Capital prestado activo - proporción de capital cobrado
-            var capitalPrestamosActivos = await _context.Prestamos
+            var capitalPrestamosActivos = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
                 .Where(p => p.EstadoPrestamo == "Activo")
                 .SumAsync(p => p.MontoPrestado);
-            var totalAPagarActivos = await _context.Prestamos
+            var totalAPagarActivos = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
                 .Where(p => p.EstadoPrestamo == "Activo")
                 .SumAsync(p => p.MontoTotal);
             
@@ -83,8 +116,7 @@ public class DashboardController : ControllerBase
 
 
             // Cuotas próximos 7 días (solo de préstamos activos o vencidos)
-            var cuotasProximas = await _context.CuotasPrestamo
-                .Include(c => c.Prestamo)
+            var cuotasProximas = await ScopeCuotas(_context.CuotasPrestamo.Include(c => c.Prestamo), fechaScope, cobsScope)
                 .Where(c => c.FechaCobro.Date > hoy && c.FechaCobro.Date <= en7Dias &&
                         (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial") &&
                         (c.Prestamo!.EstadoPrestamo == "Activo" || c.Prestamo.EstadoPrestamo == "Vencido"))
@@ -93,15 +125,15 @@ public class DashboardController : ControllerBase
             var montoCuotasProximas = cuotasProximas.Sum(c => c.SaldoPendiente);
 
             // Tasa promedio
-            var tasaPromedioInteres = await _context.Prestamos
+            var tasaPromedioInteres = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
                 .Where(p => p.EstadoPrestamo == "Activo")
                 .AverageAsync(p => (decimal?)p.TasaInteres) ?? 0;
 
             // Morosidad (solo cuotas de préstamos activos o vencidos)
-            var totalCuotas = await _context.CuotasPrestamo
+            var totalCuotas = await ScopeCuotas(_context.CuotasPrestamo, fechaScope, cobsScope)
                 .Where(c => c.Prestamo!.EstadoPrestamo == "Activo" || c.Prestamo.EstadoPrestamo == "Vencido")
                 .CountAsync();
-            var cuotasVencidas = await _context.CuotasPrestamo
+            var cuotasVencidas = await ScopeCuotas(_context.CuotasPrestamo, fechaScope, cobsScope)
                 .Where(c => c.EstadoCuota == "Vencida" &&
                            (c.Prestamo!.EstadoPrestamo == "Activo" || c.Prestamo.EstadoPrestamo == "Vencido"))
                 .CountAsync();
@@ -109,10 +141,10 @@ public class DashboardController : ControllerBase
 
             // Evolución préstamos (últimos 12 meses)
             var hace12Meses = hoy.AddMonths(-12);
-            var evolucion = await _context.Prestamos
+            var evolucion = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
                 .Where(p => p.FechaPrestamo >= hace12Meses)
                 .GroupBy(p => new { p.FechaPrestamo.Year, p.FechaPrestamo.Month })
-                .Select(g => new 
+                .Select(g => new
                 {
                     Year = g.Key.Year,
                     Month = g.Key.Month,
@@ -121,10 +153,10 @@ public class DashboardController : ControllerBase
                 .OrderBy(e => e.Year).ThenBy(e => e.Month)
                 .ToListAsync();
 
-            var pagosEvolucion = await _context.Pagos
+            var pagosEvolucion = await ScopePagos(_context.Pagos.Include(p => p.Prestamo), fechaScope, cobsScope)
                 .Where(p => p.FechaPago >= hace12Meses)
                 .GroupBy(p => new { p.FechaPago.Year, p.FechaPago.Month })
-                .Select(g => new 
+                .Select(g => new
                 {
                     Year = g.Key.Year,
                     Month = g.Key.Month,
@@ -151,20 +183,23 @@ public class DashboardController : ControllerBase
                     acumuladoCobrado));
             }
 
-            // Top 10 clientes
-            var topClientes = await _context.Clientes
-                .Include(c => c.Prestamos)
-                .OrderByDescending(c => c.Prestamos.Sum(p => p.MontoPrestado))
-                .Take(10)
-                .Select(c => new TopClienteDto(c.Nombre, c.Prestamos.Sum(p => p.MontoPrestado)))
+            // Top 10 clientes (dentro del scope)
+            var prestamosParaTop = await ScopePrestamos(_context.Prestamos.Include(p => p.Cliente), fechaScope, cobsScope)
+                .Select(p => new { p.ClienteId, ClienteNombre = p.Cliente!.Nombre, p.MontoPrestado })
                 .ToListAsync();
+            var topClientes = prestamosParaTop
+                .GroupBy(p => new { p.ClienteId, p.ClienteNombre })
+                .OrderByDescending(g => g.Sum(p => p.MontoPrestado))
+                .Take(10)
+                .Select(g => new TopClienteDto(g.Key.ClienteNombre, g.Sum(p => p.MontoPrestado)))
+                .ToList();
 
-            // Distribución por estado
+            // Distribución por estado (dentro del scope)
             var distribucion = new DistribucionEstadosDto(
-                await _context.Prestamos.CountAsync(p => p.EstadoPrestamo == "Activo"),
-                await _context.Prestamos.CountAsync(p => p.EstadoPrestamo == "Pagado"),
-                await _context.Prestamos.CountAsync(p => p.EstadoPrestamo == "Vencido"),
-                await _context.Prestamos.CountAsync(p => p.EstadoPrestamo == "Terminado")
+                await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope).CountAsync(p => p.EstadoPrestamo == "Activo"),
+                await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope).CountAsync(p => p.EstadoPrestamo == "Pagado"),
+                await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope).CountAsync(p => p.EstadoPrestamo == "Vencido"),
+                await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope).CountAsync(p => p.EstadoPrestamo == "Terminado")
             );
 
             // Ingresos mensuales
@@ -174,15 +209,14 @@ public class DashboardController : ControllerBase
                 var mesInicio = DateTime.SpecifyKind(new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-i), DateTimeKind.Utc);
                 var mesFin = mesInicio.AddMonths(1);
                 
-                var pagosDelMes = await _context.Pagos
-                    .Include(p => p.Cuota)
+                var pagosDelMes = await ScopePagos(_context.Pagos.Include(p => p.Cuota).Include(p => p.Prestamo), fechaScope, cobsScope)
                     .Where(p => p.FechaPago >= mesInicio && p.FechaPago < mesFin)
                     .ToListAsync();
 
                 // Simplificación: dividir proporcionalmente entre capital e intereses
                 var totalPagado = pagosDelMes.Sum(p => p.MontoPago);
-                
-                var prestamosDelMes = await _context.Prestamos
+
+                var prestamosDelMes = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
                     .Where(p => p.FechaPrestamo >= mesInicio && p.FechaPrestamo < mesFin)
                     .ToListAsync();
                 
@@ -201,9 +235,9 @@ public class DashboardController : ControllerBase
             }
 
             // Cuotas próximas detalle (solo de préstamos activos o vencidos)
-            var cuotasProximasDetalle = await _context.CuotasPrestamo
-                .Include(c => c.Prestamo)
-                .ThenInclude(p => p!.Cliente)
+            var cuotasProximasDetalle = await ScopeCuotas(
+                    _context.CuotasPrestamo.Include(c => c.Prestamo).ThenInclude(p => p!.Cliente),
+                    fechaScope, cobsScope)
                 .Where(c => c.FechaCobro.Date >= hoy && c.FechaCobro.Date <= hoy.AddDays(15) &&
                         (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida") &&
                         (c.Prestamo!.EstadoPrestamo == "Activo" || c.Prestamo.EstadoPrestamo == "Vencido"))
@@ -221,17 +255,15 @@ public class DashboardController : ControllerBase
                 .ToListAsync();
 
             // NUEVO CÁLCULO DE CAPITAL EN LA CALLE / CIRCULANTE (EXACTO Y DIRECTO A BD)
-            // Congelados: Sumamos 1 sola vez el MontoPrestado de los créditos activos.
-            // Normales: Sumamos el MontoCapital de todas las cuotas pendientes de créditos activos.
             decimal capitalInicial = 0;
-            try 
+            try
             {
-                var capitalCongelados = await _context.Prestamos
+                var capitalCongelados = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
                     .Where(p => p.EstadoPrestamo == "Activo" && p.EsCongelado == true)
                     .SumAsync(p => p.MontoPrestado);
 
-                var capitalNormales = await _context.CuotasPrestamo
-                    .Where(c => c.Prestamo!.EstadoPrestamo == "Activo" 
+                var capitalNormales = await ScopeCuotas(_context.CuotasPrestamo, fechaScope, cobsScope)
+                    .Where(c => c.Prestamo!.EstadoPrestamo == "Activo"
                              && c.Prestamo.EsCongelado == false
                              && (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora"))
                     .SumAsync(c => c.MontoCapital);
@@ -272,13 +304,15 @@ public class DashboardController : ControllerBase
     }
 
     [HttpGet("metricas-cobradores")]
-    [AuthorizeRoles(RolUsuario.Socio, RolUsuario.Admin)]
+    [AuthorizeRoles(RolUsuario.Socio, RolUsuario.Admin, RolUsuario.Administrador)]
     public async Task<ActionResult<MetricasGeneralesDto>> GetMetricasCobradores()
     {
         try
         {
-            var prestamosActivos = await _context.Prestamos
-                .Include(p => p.Cobrador)
+            var fechaScope = IsAdministrador() ? GetFechaInicioAcceso() : null;
+            var cobsScope  = IsAdministrador() ? GetCobradorIdsPermitidos() : null;
+
+            var prestamosActivos = await ScopePrestamos(_context.Prestamos.Include(p => p.Cobrador), fechaScope, cobsScope)
                 .Where(p => p.EstadoPrestamo == "Activo")
                 .ToListAsync();
 

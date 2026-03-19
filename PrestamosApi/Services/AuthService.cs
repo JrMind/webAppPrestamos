@@ -86,7 +86,7 @@ public class AuthService : IAuthService
         var securityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_configuration["Jwt:Key"]!));
         var credentials = new SigningCredentials(securityKey, SecurityAlgorithms.HmacSha256);
 
-        var claims = new[]
+        var claims = new List<Claim>
         {
             new Claim(ClaimTypes.NameIdentifier, usuario.Id.ToString()),
             new Claim(ClaimTypes.Email, usuario.Email),
@@ -94,10 +94,19 @@ public class AuthService : IAuthService
             new Claim(ClaimTypes.Role, usuario.Rol?.ToString() ?? "Pendiente")
         };
 
+        // Claims de scope para rol Administrador
+        if (usuario.Rol == RolUsuario.Administrador)
+        {
+            if (usuario.FechaInicioAcceso.HasValue)
+                claims.Add(new Claim("fecha_inicio_acceso", usuario.FechaInicioAcceso.Value.ToString("yyyy-MM-dd")));
+            if (!string.IsNullOrEmpty(usuario.CobradorIdsPermitidos))
+                claims.Add(new Claim("cobradores_ids", usuario.CobradorIdsPermitidos));
+        }
+
         var token = new JwtSecurityToken(
             issuer: _configuration["Jwt:Issuer"],
             audience: _configuration["Jwt:Audience"],
-            claims: claims,
+            claims: claims.ToArray(),
             expires: DateTime.UtcNow.AddMinutes(double.Parse(_configuration["Jwt:ExpireMinutes"]!)),
             signingCredentials: credentials
         );

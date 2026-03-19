@@ -38,25 +38,50 @@ public class CobrosController : BaseApiController
         // Determine cobrador filter - this will be applied to all queries
         int? effectiveCobradorId = null;
         bool hasCobradorFilter = false;
-        
+        DateTime? fechaScopeMin = null;
+
         if (isCobrador && userId.HasValue)
         {
             // Cobradores solo ven sus propios cobros
             effectiveCobradorId = userId.Value;
             hasCobradorFilter = true;
         }
+        else if (IsAdministrador())
+        {
+            // Administrador: scope fijo de cobradores y fecha
+            var cobsScope = GetCobradorIdsPermitidos();
+            fechaScopeMin = GetFechaInicioAcceso();
+            // Si tiene cobradores permitidos, usar el primero como filtro base y manejar el resto con IN
+            // Para simplificar: aplicaremos el filtro por lista en la query directamente
+            hasCobradorFilter = cobsScope != null;
+            // Guardamos en effectiveCobradorId = -1 como señal de usar lista
+            effectiveCobradorId = cobsScope != null ? -1 : null;
+        }
         else if (cobradorId.HasValue)
         {
             // Permitir filtrar por cobrador a cualquier usuario no-cobrador (Admins, Socios, etc)
-            // Ya que por defecto ven TODO, filtrar es una restricción, no una elevación de privilegios.
             effectiveCobradorId = cobradorId.Value;
             hasCobradorFilter = true;
         }
 
         // Build query based on filter
         IQueryable<CuotaPrestamo> baseQuery;
-        
-        if (hasCobradorFilter && effectiveCobradorId.HasValue)
+        var cobsScopeList = IsAdministrador() ? GetCobradorIdsPermitidos() : null;
+
+        if (IsAdministrador() && cobsScopeList != null)
+        {
+            // Administrador: filtrar por lista de cobradores permitidos y fecha mínima
+            baseQuery = _context.CuotasPrestamo
+                .Include(c => c.Prestamo)
+                    .ThenInclude(p => p!.Cliente)
+                .Include(c => c.Prestamo)
+                    .ThenInclude(p => p!.Cobrador)
+                .Where(c => c.Prestamo!.CobradorId.HasValue && cobsScopeList.Contains(c.Prestamo.CobradorId.Value));
+
+            if (fechaScopeMin.HasValue)
+                baseQuery = baseQuery.Where(c => c.Prestamo!.FechaPrestamo >= fechaScopeMin.Value);
+        }
+        else if (hasCobradorFilter && effectiveCobradorId.HasValue)
         {
             var targetCobradorId = effectiveCobradorId.Value;
             baseQuery = _context.CuotasPrestamo
@@ -64,8 +89,8 @@ public class CobrosController : BaseApiController
                     .ThenInclude(p => p!.Cliente)
                 .Include(c => c.Prestamo)
                     .ThenInclude(p => p!.Cobrador)
-                .Where(c => targetCobradorId == 0 
-                            ? c.Prestamo!.CobradorId == null 
+                .Where(c => targetCobradorId == 0
+                            ? c.Prestamo!.CobradorId == null
                             : c.Prestamo!.CobradorId == targetCobradorId);
         }
         else

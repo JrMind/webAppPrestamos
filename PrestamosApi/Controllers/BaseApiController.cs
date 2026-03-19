@@ -41,4 +41,32 @@ public abstract class BaseApiController : ControllerBase
     /// Checks if the current user is an Admin
     /// </summary>
     protected bool IsAdmin() => GetCurrentUserRole() == RolUsuario.Admin;
+
+    /// <summary>
+    /// Checks if the current user is an Administrador (vista acotada con permisos totales)
+    /// </summary>
+    protected bool IsAdministrador() => GetCurrentUserRole() == RolUsuario.Administrador;
+
+    /// <summary>
+    /// Returns the data start date for Administrador scope, or null if no scope applies
+    /// </summary>
+    protected DateTime? GetFechaInicioAcceso()
+    {
+        var claim = User.FindFirst("fecha_inicio_acceso")?.Value;
+        return !string.IsNullOrEmpty(claim) && DateTime.TryParse(claim, out var date)
+            ? DateTime.SpecifyKind(date, DateTimeKind.Utc)
+            : null;
+    }
+
+    /// <summary>
+    /// Returns the list of allowed cobrador IDs for Administrador scope, or null if no scope applies
+    /// </summary>
+    protected List<int>? GetCobradorIdsPermitidos()
+    {
+        var claim = User.FindFirst("cobradores_ids")?.Value;
+        if (string.IsNullOrEmpty(claim)) return null;
+        return claim.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(int.Parse)
+                    .ToList();
+    }
 }

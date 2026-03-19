@@ -61,6 +61,10 @@ public class AuthorizeRolesAttribute : Attribute, IAsyncAuthorizationFilter
             return;
         }
 
+        // Administrador tiene acceso total — bypassa cualquier restricción de rol
+        if (usuario.Rol == RolUsuario.Administrador)
+            return;
+
         // Verificar si el rol del usuario está en los roles permitidos
         if (!_rolesPermitidos.Contains(usuario.Rol.Value))
         {
