@@ -158,6 +158,8 @@ public class PrestamosDbContext : DbContext
             entity.Property(e => e.CapitalActual).HasColumnName("capitalactual").HasColumnType("decimal(18,2)").HasDefaultValue(0);
             entity.Property(e => e.GananciasAcumuladas).HasColumnName("gananciasacumuladas").HasColumnType("decimal(18,2)").HasDefaultValue(0);
             entity.Property(e => e.UltimoCalculoInteres).HasColumnName("ultimocalculointeres");
+            entity.Property(e => e.FechaInicioAcceso).HasColumnName("fechainicioacceso");
+            entity.Property(e => e.CobradorIdsPermitidos).HasColumnName("cobradoridspermitidos");
             entity.HasIndex(e => e.Email).IsUnique();
         });
 
