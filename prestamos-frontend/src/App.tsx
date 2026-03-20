@@ -9,6 +9,24 @@ const formatMoney = (amount: number): string => new Intl.NumberFormat('es-CO', {
 const formatDate = (dateStr: string): string => new Date(dateStr).toLocaleDateString('es-CO');
 const formatDateInput = (date: Date): string => date.toISOString().split('T')[0];
 
+// Calcula el estado real del préstamo considerando la fecha de vencimiento
+const getEstadoVirtual = (p: { cuotasPagadas: number; numeroCuotas: number; estadoPrestamo: string; fechaVencimiento?: string }): string => {
+  if (p.cuotasPagadas >= p.numeroCuotas || p.estadoPrestamo === 'Pagado') return 'Pagado';
+  if (p.estadoPrestamo === 'Terminado') return 'Terminado';
+  if (p.estadoPrestamo === 'Activo' && p.fechaVencimiento) {
+    const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+    const venc = new Date(p.fechaVencimiento); venc.setHours(0, 0, 0, 0);
+    if (hoy > venc) return 'Vencido';
+  }
+  return p.estadoPrestamo;
+};
+const getBadgeClass = (estado: string): string => {
+  if (estado === 'Pagado') return 'badge-blue';
+  if (estado === 'Activo') return 'badge-green';
+  if (estado === 'Terminado') return 'badge-gray';
+  return 'badge-red'; // Vencido y otros
+};
+
 interface Toast { id: number; message: string; type: 'success' | 'error' | 'warning'; }
 
 
@@ -320,7 +338,7 @@ function App() {
     try {
       const [metricasData, prestamosData] = await Promise.all([
         dashboardApi.getMetricas(),
-        prestamosApi.getAll({ estado: filtroEstado !== 'Todos' ? filtroEstado : undefined, frecuencia: filtroFrecuencia !== 'Todos' ? filtroFrecuencia : undefined, busqueda: filtroBusqueda || undefined, clienteId: filtroClienteId })
+        prestamosApi.getAll({ estado: filtroEstado !== 'Todos' && filtroEstado !== 'Vencido' ? filtroEstado : undefined, frecuencia: filtroFrecuencia !== 'Todos' ? filtroFrecuencia : undefined, busqueda: filtroBusqueda || undefined, clienteId: filtroClienteId })
       ]);
       setMetricas(metricasData);
       setPrestamos(prestamosData);
@@ -1332,8 +1350,8 @@ function App() {
             <button className={`tab ${activeTab === 'sms' ? 'active' : ''}`} onClick={() => setActiveTab('sms')}>📱 SMS</button>
             <button className={`tab ${activeTab === 'smshistory' ? 'active' : ''}`} onClick={() => setActiveTab('smshistory')}>📨 Historial</button>
             {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'usuarios' ? 'active' : ''}`} onClick={() => setActiveTab('usuarios')}>👤 Usuarios</button>}
-            <button className={`tab ${activeTab === 'aportadores' ? 'active' : ''}`} onClick={() => setActiveTab('aportadores')}>Aportadores</button>
-            <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); loadCostos(); }}>📊 Ganancias</button>
+            {currentUser?.rol !== 'Administrador' && <button className={`tab ${activeTab === 'aportadores' ? 'active' : ''}`} onClick={() => setActiveTab('aportadores')}>Aportadores</button>}
+            {currentUser?.rol !== 'Administrador' && <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); loadCostos(); }}>📊 Ganancias</button>}
             {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'comisiones' ? 'active' : ''}`} onClick={() => setActiveTab('comisiones')}>💳 Comisiones</button>}
             {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'metricas' ? 'active' : ''}`} onClick={() => setActiveTab('metricas')}>📈 Métricas</button>}
           </div>
@@ -1344,7 +1362,7 @@ function App() {
               <table><thead><tr><th>ID</th><th>Cliente</th><th>Monto</th><th>Interés</th><th>Cobrador</th><th>Cuotas</th><th>Estado</th><th>Acciones</th></tr></thead>
                 <tbody>{prestamos
                   .filter(p => {
-                    const matchEstado = filtroEstado === 'Todos' || p.estadoPrestamo === filtroEstado;
+                    const matchEstado = filtroEstado === 'Todos' || getEstadoVirtual(p) === filtroEstado;
                     const matchFrecuencia = filtroFrecuencia === 'Todos' || p.frecuenciaPago === filtroFrecuencia;
                     const matchBusqueda = filtroBusqueda === '' || p.clienteNombre.toLowerCase().includes(filtroBusqueda.toLowerCase()) || p.clienteCedula.toLowerCase().includes(filtroBusqueda.toLowerCase());
                     const matchTipo = filtroTipoPrestamo === 'Todos' || (filtroTipoPrestamo === 'Congelado' ? p.esCongelado : !p.esCongelado);
@@ -1365,11 +1383,11 @@ function App() {
                     </td>
                     <td>{p.cuotasPagadas}/{p.numeroCuotas}</td>
                     <td>
-                      <span className={`badge ${(p.cuotasPagadas >= p.numeroCuotas || p.estadoPrestamo === 'Pagado') ? 'badge-blue' : p.estadoPrestamo === 'Activo' ? 'badge-green' : p.estadoPrestamo === 'Terminado' ? 'badge-gray' : 'badge-red'}`}>
-                        {(p.cuotasPagadas >= p.numeroCuotas) ? 'Pagado' : p.estadoPrestamo}
+                      <span className={`badge ${getBadgeClass(getEstadoVirtual(p))}`}>
+                        {getEstadoVirtual(p)}
                       </span>
                     </td>
-                    <td><div className="actions"><button className="btn btn-secondary btn-sm" onClick={() => openDetalle(p)}>Ver</button><button className="btn btn-primary btn-sm" onClick={() => openEditPrestamo(p)}>✏️</button>{(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && (p.estadoPrestamo === 'Activo' || p.estadoPrestamo === 'Vencido') && (<button className="btn btn-sm" style={{ background: '#6b7280', color: '#fff' }} title="Terminar préstamo" onClick={() => handleTerminarPrestamo(p.id)}>🔒</button>)}<button className="btn btn-danger btn-sm" onClick={() => handleDeletePrestamo(p.id)}>✕</button></div></td>
+                    <td><div className="actions"><button className="btn btn-secondary btn-sm" onClick={() => openDetalle(p)}>Ver</button><button className="btn btn-primary btn-sm" onClick={() => openEditPrestamo(p)}>✏️</button>{(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && (getEstadoVirtual(p) === 'Activo' || getEstadoVirtual(p) === 'Vencido') && (<button className="btn btn-sm" style={{ background: '#6b7280', color: '#fff' }} title="Terminar préstamo" onClick={() => handleTerminarPrestamo(p.id)}>🔒</button>)}<button className="btn btn-danger btn-sm" onClick={() => handleDeletePrestamo(p.id)}>✕</button></div></td>
                   </tr>
                 ))}{prestamos.length === 0 && <tr><td colSpan={8} className="empty-state">No hay préstamos</td></tr>}</tbody>
               </table>
@@ -2663,7 +2681,7 @@ function App() {
                   <label>Capital Quieto</label>
                   <span style={{ color: '#f59e0b', fontWeight: 'bold' }}>{formatMoney(selectedPrestamo.capitalQuieto || 0)}</span>
                 </div>
-                <div className="detail-item"><label>Estado</label><span className={`badge ${selectedPrestamo.estadoPrestamo === 'Activo' ? 'badge-green' : selectedPrestamo.estadoPrestamo === 'Pagado' ? 'badge-blue' : selectedPrestamo.estadoPrestamo === 'Terminado' ? 'badge-gray' : 'badge-red'}`}>{selectedPrestamo.estadoPrestamo}</span></div>
+                <div className="detail-item"><label>Estado</label><span className={`badge ${getBadgeClass(getEstadoVirtual(selectedPrestamo))}`}>{getEstadoVirtual(selectedPrestamo)}</span></div>
                 <div className="detail-item">
                   <label>Cobrador</label>
                   <span>

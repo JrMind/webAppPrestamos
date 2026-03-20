@@ -56,8 +56,23 @@ public class ClientesController : BaseApiController
     [HttpGet]
     public async Task<ActionResult<IEnumerable<ClienteDto>>> GetClientes()
     {
-        var clientes = await _context.Clientes
-            .Include(c => c.Prestamos)
+        IQueryable<Cliente> query = _context.Clientes.Include(c => c.Prestamos);
+
+        if (IsAdministrador())
+        {
+            var fechaScope = GetFechaInicioAcceso();
+            var cobsScope  = GetCobradorIdsPermitidos();
+
+            if (fechaScope.HasValue || cobsScope != null)
+            {
+                query = query.Where(c => c.Prestamos.Any(p =>
+                    (!fechaScope.HasValue || p.FechaPrestamo >= fechaScope.Value) &&
+                    (cobsScope == null || (p.CobradorId.HasValue && cobsScope.Contains(p.CobradorId.Value)))
+                ));
+            }
+        }
+
+        var clientes = await query
             .Select(c => new ClienteDto(
                 c.Id,
                 c.Nombre,

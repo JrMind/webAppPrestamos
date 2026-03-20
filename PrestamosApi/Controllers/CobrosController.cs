@@ -106,7 +106,7 @@ public class CobrosController : BaseApiController
 
         // Cuotas de hoy
         var cuotasHoy = await baseQuery
-            .Where(c => c.FechaCobro.Date == today && c.EstadoCuota != "Pagada")
+            .Where(c => c.FechaCobro.Date == today && c.EstadoCuota != "Pagada" && c.Prestamo!.EstadoPrestamo != "Terminado")
             .OrderBy(c => c.Cobrado)
             .ThenBy(c => c.Prestamo!.Cliente!.Nombre)
             .Select(c => new
@@ -129,7 +129,7 @@ public class CobrosController : BaseApiController
 
         // Cuotas vencidas (días anteriores no pagadas)
         var cuotasVencidas = await baseQuery
-            .Where(c => c.FechaCobro.Date < today && c.EstadoCuota != "Pagada" && !c.Cobrado)
+            .Where(c => c.FechaCobro.Date < today && c.EstadoCuota != "Pagada" && !c.Cobrado && c.Prestamo!.EstadoPrestamo != "Terminado")
             .OrderBy(c => c.FechaCobro)
             .ThenBy(c => c.Prestamo!.Cliente!.Nombre)
             .Select(c => new
