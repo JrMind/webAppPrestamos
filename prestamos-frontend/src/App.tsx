@@ -1421,7 +1421,7 @@ function App() {
                       <th>Cédula</th>
                       <th>Teléfono</th>
                       <th>Préstamos</th>
-                      <th>Total</th>
+                      {currentUser?.rol !== 'Administrador' && <th>Total</th>}
                       <th>Estado</th>
                       <th>Acciones</th>
                     </tr>
@@ -1440,7 +1440,7 @@ function App() {
                           <td>{c.cedula}</td>
                           <td>{c.telefono || '-'}</td>
                           <td>{c.prestamosActivos}</td>
-                          <td className="money">{formatMoney(c.totalPrestado)}</td>
+                          {currentUser?.rol !== 'Administrador' && <td className="money">{formatMoney(c.totalPrestado)}</td>}
                           <td>
                             <span className={`badge ${c.estado === 'Activo' ? 'badge-green' : 'badge-gray'}`}>
                               {c.estado}
