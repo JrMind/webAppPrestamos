@@ -357,8 +357,9 @@ public class CobrosController : BaseApiController
                 .Include(c => c.Prestamo)
                     .ThenInclude(p => p!.Cobrador)
                 .Where(c => c.EstadoCuota != "Pagada")
-                .Where(c => targetCobradorId == 0 
-                            ? c.Prestamo!.CobradorId == null 
+                .Where(c => c.Prestamo!.EstadoPrestamo != "Terminado")
+                .Where(c => targetCobradorId == 0
+                            ? c.Prestamo!.CobradorId == null
                             : c.Prestamo!.CobradorId == targetCobradorId);
         }
         else
@@ -369,7 +370,8 @@ public class CobrosController : BaseApiController
                     .ThenInclude(p => p!.Cliente)
                 .Include(c => c.Prestamo)
                     .ThenInclude(p => p!.Cobrador)
-                .Where(c => c.EstadoCuota != "Pagada");
+                .Where(c => c.EstadoCuota != "Pagada")
+                .Where(c => c.Prestamo!.EstadoPrestamo != "Terminado");
         }
 
         // Cuotas de hoy
