@@ -2837,10 +2837,11 @@ function App() {
                     {cuotasDetalle.map((c, idx) => {
                       // Resaltar la próxima cuota a pagar (primera no pagada)
                       const esSiguiente = c.estadoCuota !== 'Pagada' && !cuotasDetalle.slice(0, idx).some(prev => prev.estadoCuota !== 'Pagada');
+                      const esTerminado = selectedPrestamo?.estadoPrestamo === 'Terminado';
                       return (
                         <tr key={c.id} style={{
                           opacity: c.estadoCuota === 'Pagada' ? 0.6 : 1,
-                          background: esSiguiente ? 'rgba(59,130,246,0.15)' : c.estadoCuota === 'Vencida' ? 'rgba(239,68,68,0.1)' : undefined,
+                          background: esSiguiente ? 'rgba(59,130,246,0.15)' : (!esTerminado && c.estadoCuota === 'Vencida') ? 'rgba(239,68,68,0.1)' : undefined,
                           borderLeft: esSiguiente ? '3px solid #3b82f6' : undefined
                         }}>
                           <td>
@@ -2865,10 +2866,10 @@ function App() {
                           <td style={{ color: c.fechaPago ? '#10b981' : '#666' }}>{c.fechaPago ? formatDate(c.fechaPago) : '-'}</td>
                           <td className="money">{formatMoney(c.montoCuota)}</td>
                           <td className="money" style={{ color: '#10b981' }}>{formatMoney(c.montoPagado)}</td>
-                          <td className="money" style={{ color: c.saldoPendiente > 0 ? '#ef4444' : '#10b981' }}>{formatMoney(c.saldoPendiente)}</td>
+                          <td className="money" style={{ color: c.saldoPendiente > 0 && !esTerminado ? '#ef4444' : '#10b981' }}>{formatMoney(c.saldoPendiente)}</td>
                           <td>
-                            <span className={`badge ${c.estadoCuota === 'Pagada' ? 'badge-green' : c.estadoCuota === 'Vencida' ? 'badge-red' : c.estadoCuota === 'Parcial' ? 'badge-orange' : 'badge-gray'}`}>
-                              {c.estadoCuota === 'Pagada' ? '✅ Pagada' : c.estadoCuota === 'Vencida' ? '⚠️ Vencida' : c.estadoCuota === 'Parcial' ? '🔄 Parcial' : '⏳ Pendiente'}
+                            <span className={`badge ${c.estadoCuota === 'Pagada' ? 'badge-green' : (c.estadoCuota === 'Vencida' && !esTerminado) ? 'badge-red' : c.estadoCuota === 'Parcial' ? 'badge-orange' : 'badge-gray'}`}>
+                              {c.estadoCuota === 'Pagada' ? '✅ Pagada' : (c.estadoCuota === 'Vencida' && !esTerminado) ? '⚠️ Vencida' : c.estadoCuota === 'Parcial' ? '🔄 Parcial' : '⏳ Pendiente'}
                             </span>
                           </td>
                           <td>
