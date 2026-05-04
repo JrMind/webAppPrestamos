@@ -190,7 +190,7 @@ export const MetricasCobradores = () => {
                   cursor={{ fill: 'rgba(59,130,246,0.05)' }}
                   contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}
                   itemStyle={{ color: 'var(--accent-blue)', fontWeight: 600 }}
-                  formatter={(val: number) => [formatMoney(val), 'Interés Cobrado']}
+                  formatter={(val: any) => [formatMoney(Number(val) || 0), 'Interés Cobrado']}
                   labelStyle={{ color: 'var(--text-secondary)', marginBottom: '0.25rem' }}
                 />
                 <Bar 
