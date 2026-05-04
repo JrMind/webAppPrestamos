@@ -604,4 +604,5 @@ export interface MetricasGenerales {
   capitalFantasma: number;
   totalPrestamosActivos: number;
   estadisticasCobradores: EstadisticasCobrador[];
+  interesesMensuales: { mes: string; interesCobrado: number }[];
 }

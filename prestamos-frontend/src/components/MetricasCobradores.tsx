@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { dashboardApi } from '../api';
 import { MetricasGenerales } from '../types';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const formatMoney = (amount: number): string =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount);
@@ -166,6 +167,43 @@ export const MetricasCobradores = () => {
           </table>
         </div>
       </div>
+
+      {/* Gráfico de Intereses Mensuales */}
+      {metricas.interesesMensuales && metricas.interesesMensuales.length > 0 && (
+        <div style={s.tableWrap}>
+          <div style={s.tableHeader}>
+            <span style={s.tableHeaderTitle}>📈 Intereses Cobrados por Mes (Últimos 12 meses)</span>
+          </div>
+          <div style={{ padding: '1.5rem', height: 350 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={metricas.interesesMensuales.slice().reverse()}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                <XAxis dataKey="mes" axisLine={false} tickLine={false} tick={{ fill: 'var(--text-muted)', fontSize: 12 }} dy={10} />
+                <YAxis 
+                  axisLine={false} 
+                  tickLine={false} 
+                  tick={{ fill: 'var(--text-muted)', fontSize: 12 }}
+                  tickFormatter={(val) => `$${(val / 1000).toFixed(0)}k`}
+                  width={60}
+                />
+                <Tooltip 
+                  cursor={{ fill: 'rgba(59,130,246,0.05)' }}
+                  contentStyle={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}
+                  itemStyle={{ color: 'var(--accent-blue)', fontWeight: 600 }}
+                  formatter={(val: number) => [formatMoney(val), 'Interés Cobrado']}
+                  labelStyle={{ color: 'var(--text-secondary)', marginBottom: '0.25rem' }}
+                />
+                <Bar 
+                  dataKey="interesCobrado" 
+                  fill="var(--accent-blue)" 
+                  radius={[4, 4, 0, 0]} 
+                  barSize={40}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+      )}
 
       {/* Info */}
       <div style={s.infoBox}>

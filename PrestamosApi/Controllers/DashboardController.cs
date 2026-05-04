@@ -350,12 +350,57 @@ public class DashboardController : BaseApiController
                 })
                 .ToList();
 
+            // 4. Intereses Exactos por Mes (Últimos 12 meses)
+            var hoy = DateTime.UtcNow.Date;
+            var hace12Meses = hoy.AddMonths(-11);
+            var mesInicioBusqueda = DateTime.SpecifyKind(new DateTime(hace12Meses.Year, hace12Meses.Month, 1), DateTimeKind.Utc);
+
+            var pagosUltimosMeses = await ScopePagos(_context.Pagos.Include(p => p.Cuota).ThenInclude(c => c!.Prestamo), fechaScope, cobsScope)
+                .Where(p => p.FechaPago >= mesInicioBusqueda)
+                .ToListAsync();
+
+            var interesesMensuales = new List<InteresMensualDto>();
+            for (int i = 11; i >= 0; i--)
+            {
+                var mesFoco = DateTime.SpecifyKind(new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-i), DateTimeKind.Utc);
+                var mesFocoFin = mesFoco.AddMonths(1);
+                
+                var pagosMes = pagosUltimosMeses.Where(p => p.FechaPago >= mesFoco && p.FechaPago < mesFocoFin);
+                
+                decimal interesMesExacto = 0;
+                foreach(var pago in pagosMes)
+                {
+                    if (pago.Cuota != null && pago.Cuota.MontoCuota > 0)
+                    {
+                        var esCongelado = pago.Cuota.Prestamo?.EsCongelado ?? false;
+                        if (esCongelado)
+                        {
+                            // En congelados, la cuota es 100% interés
+                            interesMesExacto += pago.MontoPago;
+                        }
+                        else
+                        {
+                            // Porción de interés exacta basada en el pago
+                            var proporcionInteres = pago.Cuota.MontoInteres / pago.Cuota.MontoCuota;
+                            interesMesExacto += pago.MontoPago * proporcionInteres;
+                        }
+                    }
+                }
+                
+                interesesMensuales.Add(new InteresMensualDto
+                {
+                    Mes = mesFoco.ToString("MMM yyyy"),
+                    InteresCobrado = Math.Round(interesMesExacto, 2)
+                });
+            }
+
             var resultado = new MetricasGeneralesDto
             {
                 PromedioTasasActivos = Math.Round(promedioTasasActivos, 2),
                 CapitalFantasma = Math.Round(capitalFantasma, 2),
                 TotalPrestamosActivos = prestamosActivos.Count,
-                EstadisticasCobradores = cobradores
+                EstadisticasCobradores = cobradores,
+                InteresesMensuales = interesesMensuales
             };
 
             return Ok(resultado);

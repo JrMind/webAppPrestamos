@@ -11,10 +11,17 @@ public class EstadisticasCobradorDto
     public int TotalCreditosActivos { get; set; }
 }
 
+public class InteresMensualDto
+{
+    public string Mes { get; set; } = string.Empty;
+    public decimal InteresCobrado { get; set; }
+}
+
 public class MetricasGeneralesDto
 {
     public decimal PromedioTasasActivos { get; set; }
     public decimal CapitalFantasma { get; set; } // Capital total en préstamos activos
     public int TotalPrestamosActivos { get; set; }
     public List<EstadisticasCobradorDto> EstadisticasCobradores { get; set; } = new();
+    public List<InteresMensualDto> InteresesMensuales { get; set; } = new();
 }
