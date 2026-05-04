@@ -444,6 +444,10 @@ public class PagosController : BaseApiController
         if (pago == null)
             return NotFound(new { message = "Pago no encontrado" });
 
+        var prestamo = await _context.Prestamos
+            .Include(p => p.Cuotas)
+            .FirstOrDefaultAsync(p => p.Id == pago.PrestamoId);
+
         // Revertir el pago en la cuota si aplica
         if (pago.CuotaId.HasValue && pago.Cuota != null)
         {
@@ -462,9 +466,37 @@ public class PagosController : BaseApiController
                 pago.Cuota.EstadoCuota = "Parcial";
             }
         }
+        else if (!pago.CuotaId.HasValue && prestamo != null && prestamo.EsCongelado)
+        {
+            // Es un abono al capital en un préstamo congelado, revertimos el capital
+            prestamo.MontoPrestado += pago.MontoPago;
+
+            // Recalcular la cuota base
+            decimal factorFrecuencia = prestamo.FrecuenciaPago switch
+            {
+                "Diario" => 1m / 30m,
+                "Semanal" => 7m / 30m,
+                "Quincenal" => 15m / 30m,
+                "Mensual" => 1m,
+                _ => 1m
+            };
+            prestamo.MontoCuota = Math.Round(prestamo.MontoPrestado * (prestamo.TasaInteres / 100m) * factorFrecuencia, 0);
+
+            // Mantener sincronizado el capital quieto con la cuota actual
+            var cuotaActiva = prestamo.Cuotas.FirstOrDefault(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Pagada");
+            // Nota: Si estaba 'Pagada' porque el capital llegó a 0, la volveremos a su estado anterior lógicamente, pero requiere manejo:
+            if (cuotaActiva != null && prestamo.EstadoPrestamo == "Pagado")
+            {
+                cuotaActiva.EstadoCuota = cuotaActiva.FechaCobro.Date < DateTime.UtcNow.Date ? "Vencida" : "Pendiente";
+            }
+
+            if (cuotaActiva != null)
+            {
+                cuotaActiva.MontoCapital = prestamo.MontoPrestado;
+            }
+        }
 
         // Actualizar estado del préstamo si estaba pagado
-        var prestamo = await _context.Prestamos.FindAsync(pago.PrestamoId);
         if (prestamo != null && prestamo.EstadoPrestamo == "Pagado")
         {
             prestamo.EstadoPrestamo = "Activo";

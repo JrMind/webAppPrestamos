@@ -964,9 +964,17 @@ function App() {
       tasaInteres: prestamo.tasaInteres,
       tipoInteres: prestamo.tipoInteres,
       frecuenciaPago: prestamo.frecuenciaPago,
-      // Usamos las cuotas como duración. Unidad dependerá de frecuencia para simplificar.
-      duracion: prestamo.numeroCuotas,
-      unidadDuracion: prestamo.frecuenciaPago === 'Semanal' ? 'Semanas' : prestamo.frecuenciaPago === 'Mensual' ? 'Meses' : prestamo.frecuenciaPago === 'Quincenal' ? 'Quincenas' : 'Dias',
+      // Inferir si originalmente se creó por 'Meses'
+      duracion: prestamo.frecuenciaPago === 'Semanal' && prestamo.numeroCuotas % 4 === 0 ? prestamo.numeroCuotas / 4 :
+                prestamo.frecuenciaPago === 'Quincenal' && prestamo.numeroCuotas % 2 === 0 ? prestamo.numeroCuotas / 2 :
+                prestamo.frecuenciaPago === 'Diario' && prestamo.numeroCuotas % 30 === 0 ? prestamo.numeroCuotas / 30 :
+                prestamo.numeroCuotas,
+      unidadDuracion: prestamo.frecuenciaPago === 'Semanal' && prestamo.numeroCuotas % 4 === 0 ? 'Meses' :
+                      prestamo.frecuenciaPago === 'Semanal' ? 'Semanas' :
+                      prestamo.frecuenciaPago === 'Quincenal' && prestamo.numeroCuotas % 2 === 0 ? 'Meses' :
+                      prestamo.frecuenciaPago === 'Quincenal' ? 'Quincenas' :
+                      prestamo.frecuenciaPago === 'Diario' && prestamo.numeroCuotas % 30 === 0 ? 'Meses' :
+                      prestamo.frecuenciaPago === 'Diario' ? 'Dias' : 'Meses',
       fechaPrestamo: prestamo.fechaPrestamo.split('T')[0],
       descripcion: prestamo.descripcion || '',
       porcentajeCobrador: prestamo.porcentajeCobrador,
@@ -1087,6 +1095,25 @@ function App() {
       setShowPagoModal(false);
       if (selectedPrestamo) {
         const [cuotas, pagos] = await Promise.all([cuotasApi.getByPrestamo(selectedPrestamo.id), pagosApi.getByPrestamo(selectedPrestamo.id)]);
+        setCuotasDetalle(cuotas);
+        setPagosDetalle(pagos);
+      }
+      loadData();
+    } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
+  };
+
+  const handleDeshacerPago = async (pagoId: number) => {
+    if (!confirm('¿Estás seguro de deshacer este pago o abono? Esta acción modificará los saldos.')) return;
+    try {
+      await pagosApi.delete(pagoId);
+      showToast('Pago deshecho correctamente', 'success');
+      if (selectedPrestamo) {
+        const [pActualizado, cuotas, pagos] = await Promise.all([
+          prestamosApi.getById(selectedPrestamo.id),
+          cuotasApi.getByPrestamo(selectedPrestamo.id),
+          pagosApi.getByPrestamo(selectedPrestamo.id)
+        ]);
+        setSelectedPrestamo(pActualizado);
         setCuotasDetalle(cuotas);
         setPagosDetalle(pagos);
       }
@@ -2891,13 +2918,25 @@ function App() {
                   <h4 style={{ marginTop: '1.5rem', marginBottom: '0.5rem' }}>💵 Historial de Pagos</h4>
                   <div className="table-container" style={{ maxHeight: '150px', overflow: 'auto' }}>
                     <table>
-                      <thead><tr><th>Fecha</th><th>Monto</th><th>Método</th><th>Cuota</th></tr></thead>
+                      <thead><tr><th>Fecha</th><th>Tipo</th><th>Monto</th><th>Método</th><th>Cuota</th><th>Acciones</th></tr></thead>
                       <tbody>{pagosDetalle.map(p => (
                         <tr key={p.id}>
                           <td>{formatDate(p.fechaPago)}</td>
+                          <td>
+                            <span className={`badge ${p.numeroCuota ? 'badge-blue' : 'badge-orange'}`}>
+                              {p.numeroCuota ? 'Pago de Cuota' : 'Abono a Capital'}
+                            </span>
+                          </td>
                           <td className="money" style={{ color: '#10b981' }}>{formatMoney(p.montoPago)}</td>
                           <td>{p.metodoPago || 'Efectivo'}</td>
                           <td>{p.numeroCuota ? `#${p.numeroCuota}` : '-'}</td>
+                          <td>
+                            {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Administrador' || currentUser?.rol === 'Admin') && (
+                              <button className="btn btn-danger btn-sm" onClick={() => handleDeshacerPago(p.id)}>
+                                ❌ Deshacer
+                              </button>
+                            )}
+                          </td>
                         </tr>
                       ))}</tbody>
                     </table>

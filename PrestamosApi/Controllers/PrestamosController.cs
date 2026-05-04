@@ -675,13 +675,12 @@ public class PrestamosController : BaseApiController
         prestamo.ValorSistema = dto.ValorSistema;
         prestamo.ValorRenovacion = dto.ValorRenovacion;
 
-        // Verificar si hay cambios estructurales (Monto, Tasa, Fechas, Frecuencia)
         bool cambiosEstructurales = 
             prestamo.MontoPrestado != dto.MontoPrestado ||
             prestamo.TasaInteres != dto.TasaInteres ||
             prestamo.FrecuenciaPago != dto.FrecuenciaPago ||
             prestamo.NumeroCuotas != dto.NumeroCuotas || // Nota: NumeroCuotas viene del DTO, pero se recalcula
-            prestamo.FechaPrestamo != DateTime.SpecifyKind(dto.FechaPrestamo, DateTimeKind.Utc) ||
+            prestamo.FechaPrestamo.Date != dto.FechaPrestamo.Date ||
             prestamo.DiaSemana != dto.DiaSemana;
 
         if (cambiosEstructurales)
@@ -702,13 +701,21 @@ public class PrestamosController : BaseApiController
             // Esto asegura que se manejen correctamente intereses Simples, Compuestos y Congelados
             string unidadInferida = dto.FrecuenciaPago switch
             {
-                "Diario" => "Dias",
-                "Semanal" => "Semanas",
-                "Quincenal" => "Quincenas",
+                "Diario" => dto.NumeroCuotas % 30 == 0 ? "Meses" : "Dias",
+                "Semanal" => dto.NumeroCuotas % 4 == 0 ? "Meses" : "Semanas",
+                "Quincenal" => dto.NumeroCuotas % 2 == 0 ? "Meses" : "Quincenas",
                 "Mensual" => "Meses",
                 _ => "Meses"
             };
-            int duracionInferida = dto.NumeroCuotas;
+            
+            int duracionInferida = dto.FrecuenciaPago switch
+            {
+                "Diario" => dto.NumeroCuotas % 30 == 0 ? dto.NumeroCuotas / 30 : dto.NumeroCuotas,
+                "Semanal" => dto.NumeroCuotas % 4 == 0 ? dto.NumeroCuotas / 4 : dto.NumeroCuotas,
+                "Quincenal" => dto.NumeroCuotas % 2 == 0 ? dto.NumeroCuotas / 2 : dto.NumeroCuotas,
+                "Mensual" => dto.NumeroCuotas,
+                _ => dto.NumeroCuotas
+            };
 
             // Usar el servicio para obtener los nuevos cálculos totales
             var (nuevoMontoTotal, nuevoMontoIntereses, nuevoMontoCuota, _, _) = 
