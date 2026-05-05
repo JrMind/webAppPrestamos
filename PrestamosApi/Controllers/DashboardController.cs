@@ -355,45 +355,46 @@ public class DashboardController : BaseApiController
             var hace12Meses = hoy.AddMonths(-11);
             var mesInicioBusqueda = DateTime.SpecifyKind(new DateTime(hace12Meses.Year, hace12Meses.Month, 1), DateTimeKind.Utc);
 
-            var pagosUltimosMeses = await ScopePagos(_context.Pagos.Include(p => p.Cuota).ThenInclude(c => c!.Prestamo), fechaScope, cobsScope)
-                .Where(p => p.FechaPago >= mesInicioBusqueda)
+            var cuotasPagadasUltimosMeses = await ScopeCuotas(
+                _context.CuotasPrestamo.Include(c => c.Prestamo),
+                fechaScope, cobsScope)
+                .Where(c => c.FechaPago.HasValue
+                        && c.FechaPago.Value >= mesInicioBusqueda
+                        && (c.EstadoCuota == "Pagada" || c.EstadoCuota == "Parcial"))
                 .ToListAsync();
 
             var interesesMensuales = new List<InteresMensualDto>();
             for (int i = 11; i >= 0; i--)
             {
-                var mesFoco = DateTime.SpecifyKind(new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-i), DateTimeKind.Utc);
+                var mesFoco    = DateTime.SpecifyKind(new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-i), DateTimeKind.Utc);
                 var mesFocoFin = mesFoco.AddMonths(1);
-                
-                var pagosMes = pagosUltimosMeses.Where(p => p.FechaPago >= mesFoco && p.FechaPago < mesFocoFin);
-                
-                decimal interesMesExacto = 0;
-                foreach(var pago in pagosMes)
-                {
-                    if (pago.Cuota != null && pago.Cuota.MontoCuota > 0)
-                    {
-                        var esCongelado = pago.Cuota.Prestamo?.EsCongelado ?? false;
-                        if (esCongelado)
-                        {
-                            // En congelados, la cuota es 100% interés
-                            interesMesExacto += pago.MontoPago;
-                        }
-                        else
-                        {
-                            // Porción de interés exacta basada en el pago
-                            var proporcionInteres = pago.Cuota.MontoInteres / pago.Cuota.MontoCuota;
-                            interesMesExacto += pago.MontoPago * proporcionInteres;
-                        }
-                    }
-                }
-                
-                interesesMensuales.Add(new InteresMensualDto
-                {
-                    Mes = mesFoco.ToString("MMM yyyy"),
-                    InteresCobrado = Math.Round(interesMesExacto, 2)
-                });
-            }
 
+        var cuotasMes = cuotasPagadasUltimosMeses
+            .Where(c => c.FechaPago!.Value >= mesFoco && c.FechaPago.Value < mesFocoFin);
+
+        decimal interesMes = 0;
+        foreach (var c in cuotasMes)
+        {
+            if (c.Prestamo?.EsCongelado == true)
+            {
+                // Congelado: la cuota completa es interés; proporcional a lo pagado
+                var proporcion = c.MontoCuota > 0 ? c.MontoPagado / c.MontoCuota : 1m;
+                interesMes += c.MontoInteres * proporcion;
+            }
+            else
+            {
+                // Normal: usar MontoInteres exacto de la cuota (ya calculado al crear el préstamo)
+                var proporcion = c.MontoCuota > 0 ? c.MontoPagado / c.MontoCuota : 1m;
+                interesMes += c.MontoInteres * proporcion;
+            }
+        }
+
+        interesesMensuales.Add(new InteresMensualDto
+        {
+            Mes            = mesFoco.ToString("MMM yyyy"),
+            InteresCobrado = Math.Round(interesMes, 2)
+        });
+    }
             var resultado = new MetricasGeneralesDto
             {
                 PromedioTasasActivos = Math.Round(promedioTasasActivos, 2),
