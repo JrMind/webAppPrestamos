@@ -121,4 +121,21 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
+// Corregir estados de préstamos al iniciar (fix datos históricos mal marcados)
+using (var startupScope = app.Services.CreateScope())
+{
+    var worker = new PrestamosApi.Workers.AutomatedCierreWorker(
+        startupScope.ServiceProvider,
+        startupScope.ServiceProvider.GetRequiredService<ILogger<PrestamosApi.Workers.AutomatedCierreWorker>>());
+    try
+    {
+        await worker.ActualizarEstadosPrestamosAsync();
+        Console.WriteLine("✅ Estados de préstamos corregidos al iniciar");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"⚠️ Error corrigiendo estados al iniciar: {ex.Message}");
+    }
+}
+
 app.Run();
