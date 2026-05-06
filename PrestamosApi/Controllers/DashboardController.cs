@@ -254,25 +254,19 @@ public class DashboardController : BaseApiController
                 ))
                 .ToListAsync();
 
-            // NUEVO CÁLCULO DE CAPITAL EN LA CALLE / CIRCULANTE (EXACTO Y DIRECTO A BD)
+            // CAPITAL CIRCULANTE: suma de SaldoPendiente de todas las cuotas por cobrar
+            // en ambas tablas de pagos (préstamos normales y congelados, activos y vencidos)
             decimal capitalInicial = 0;
             try
             {
-                var capitalCongelados = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
-                    .Where(p => p.EstadoPrestamo == "Activo" && p.EsCongelado == true)
-                    .SumAsync(p => p.MontoPrestado);
-
-                var capitalNormales = await ScopeCuotas(_context.CuotasPrestamo, fechaScope, cobsScope)
-                    .Where(c => c.Prestamo!.EstadoPrestamo == "Activo"
-                             && c.Prestamo.EsCongelado == false
+                capitalInicial = await ScopeCuotas(_context.CuotasPrestamo, fechaScope, cobsScope)
+                    .Where(c => (c.Prestamo!.EstadoPrestamo == "Activo" || c.Prestamo.EstadoPrestamo == "Vencido")
                              && (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora"))
-                    .SumAsync(c => c.MontoCapital);
-
-                capitalInicial = capitalCongelados + capitalNormales;
+                    .SumAsync(c => c.SaldoPendiente);
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Error calculando capital exacto: {ex.Message}");
+                Console.WriteLine($"Error calculando capital circulante: {ex.Message}");
                 capitalInicial = 0;
             }
 
