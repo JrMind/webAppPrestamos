@@ -360,7 +360,8 @@ public class DashboardController : BaseApiController
                 fechaScope, cobsScope)
                 .Where(c => c.FechaPago.HasValue
                         && c.FechaPago.Value >= mesInicioBusqueda
-                        && (c.EstadoCuota == "Pagada" || c.EstadoCuota == "Parcial"))
+                        && c.MontoPagado > 0
+                        && (c.EstadoCuota == "Pagada" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida"))
                 .ToListAsync();
 
             var interesesMensuales = new List<InteresMensualDto>();

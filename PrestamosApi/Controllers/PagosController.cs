@@ -273,27 +273,28 @@ public class PagosController : BaseApiController
                     else if (cuota.MontoPagado > 0)
                     {
                         cuota.EstadoCuota = "Parcial";
+                        cuota.FechaPago = fechaPagoUtc;
                     }
-                    
+
                     montoRestante -= abonoActual;
-                    
+
                     // Si queda dinero, distribuir a cuotas futuras
                     if (montoRestante > 0)
                     {
                         var cuotasPendientes = prestamo.Cuotas
-                            .Where(c => c.Id != cuota.Id && 
+                            .Where(c => c.Id != cuota.Id &&
                                        (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida"))
                             .OrderBy(c => c.FechaCobro)
                             .ToList();
-                        
+
                         foreach (var cuotaFutura in cuotasPendientes)
                         {
                             if (montoRestante <= 0) break;
-                            
+
                             decimal abonoFuturo = Math.Min(montoRestante, cuotaFutura.SaldoPendiente);
                             cuotaFutura.MontoPagado += abonoFuturo;
                             cuotaFutura.SaldoPendiente = cuotaFutura.MontoCuota - cuotaFutura.MontoPagado;
-                            
+
                             if (cuotaFutura.SaldoPendiente <= 0)
                             {
                                 cuotaFutura.SaldoPendiente = 0;
@@ -303,6 +304,7 @@ public class PagosController : BaseApiController
                             else if (cuotaFutura.MontoPagado > 0)
                             {
                                 cuotaFutura.EstadoCuota = "Parcial";
+                                cuotaFutura.FechaPago = fechaPagoUtc;
                             }
                             
                             montoRestante -= abonoFuturo;
@@ -318,9 +320,9 @@ public class PagosController : BaseApiController
         // Verificar si todas las cuotas están pagadas (solo para préstamos no congelados)
         if (!prestamo.EsCongelado)
         {
-            var todasPagadas = prestamo.Cuotas.All(c => 
-                c.Id == dto.CuotaId ? (c.MontoCuota - c.MontoPagado - dto.MontoPago <= 0) : c.EstadoCuota == "Pagada");
-            
+            // Usamos EstadoCuota que ya fue actualizado correctamente arriba
+            var todasPagadas = prestamo.Cuotas.All(c => c.EstadoCuota == "Pagada");
+
             if (todasPagadas)
             {
                 prestamo.EstadoPrestamo = "Pagado";

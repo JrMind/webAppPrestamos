@@ -112,21 +112,31 @@ public class CuotasController : ControllerBase
             cuota.EstadoCuota = "Vencida";
         }
 
-        // Actualizar estado de préstamos con cuotas vencidas
-        var prestamosConVencidas = await _context.Prestamos
-            .Include(p => p.Cuotas)
-            .Where(p => p.EstadoPrestamo == "Activo" && 
-                       p.Cuotas.Any(c => c.EstadoCuota == "Vencida"))
+        // Un préstamo es "Vencido" solo cuando su fecha de última cuota ya pasó
+        var hoyUtc = DateTime.UtcNow.Date;
+
+        var prestamosAVencer = await _context.Prestamos
+            .Where(p => p.EstadoPrestamo == "Activo" && p.FechaVencimiento < hoyUtc)
             .ToListAsync();
 
-        foreach (var prestamo in prestamosConVencidas)
+        foreach (var prestamo in prestamosAVencer)
         {
             prestamo.EstadoPrestamo = "Vencido";
         }
 
+        // Corregir préstamos marcados "Vencido" cuya fecha de última cuota aún no ha pasado
+        var prestamosAReactivar = await _context.Prestamos
+            .Where(p => p.EstadoPrestamo == "Vencido" && p.FechaVencimiento >= hoyUtc)
+            .ToListAsync();
+
+        foreach (var prestamo in prestamosAReactivar)
+        {
+            prestamo.EstadoPrestamo = "Activo";
+        }
+
         await _context.SaveChangesAsync();
 
-        return Ok(new { message = $"Se actualizaron {cuotasVencidas.Count} cuotas vencidas" });
+        return Ok(new { message = $"Se actualizaron {cuotasVencidas.Count} cuotas vencidas, {prestamosAVencer.Count} préstamos marcados como Vencido, {prestamosAReactivar.Count} préstamos reactivados" });
     }
 
     /// <summary>
