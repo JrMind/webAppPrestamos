@@ -254,15 +254,25 @@ public class DashboardController : BaseApiController
                 ))
                 .ToListAsync();
 
-            // CAPITAL CIRCULANTE: suma de SaldoPendiente de todas las cuotas por cobrar
-            // en ambas tablas de pagos (préstamos normales y congelados, activos y vencidos)
+            // CAPITAL CIRCULANTE:
+            // - Préstamos normales (Activo/Vencido): suma SaldoPendiente de cada cuota por cobrar
+            // - Préstamos congelados (Activo/Vencido): usa MontoPrestado porque MontoCapital
+            //   en sus cuotas es 0 (el capital nunca se reduce en préstamos congelados)
             decimal capitalInicial = 0;
             try
             {
-                capitalInicial = await ScopeCuotas(_context.CuotasPrestamo, fechaScope, cobsScope)
+                var capitalNormales = await ScopeCuotas(_context.CuotasPrestamo, fechaScope, cobsScope)
                     .Where(c => (c.Prestamo!.EstadoPrestamo == "Activo" || c.Prestamo.EstadoPrestamo == "Vencido")
+                             && c.Prestamo.EsCongelado == false
                              && (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora"))
                     .SumAsync(c => c.SaldoPendiente);
+
+                var capitalCongelados = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
+                    .Where(p => (p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido")
+                             && p.EsCongelado == true)
+                    .SumAsync(p => p.MontoPrestado);
+
+                capitalInicial = capitalNormales + capitalCongelados;
             }
             catch (Exception ex)
             {
