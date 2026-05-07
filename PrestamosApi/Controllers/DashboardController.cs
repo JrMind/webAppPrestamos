@@ -114,6 +114,10 @@ public class DashboardController : BaseApiController
             // Usar el método completo de GananciasService para calcular la reserva correctamente
             var reservaDisponible = await _gananciasService.CalcularReservaDisponibleAsync();
 
+            // Balances por medio de pago
+            var balanceNequi = await _gananciasService.CalcularBalanceMedioAsync("Nequi");
+            var balanceEfectivo = await _gananciasService.CalcularBalanceMedioAsync("Efectivo");
+
 
             // Cuotas próximos 7 días (solo de préstamos activos o vencidos)
             var cuotasProximas = await ScopeCuotas(_context.CuotasPrestamo.Include(c => c.Prestamo), fechaScope, cobsScope)
@@ -298,7 +302,9 @@ public class DashboardController : BaseApiController
                 RentaCongeladosMes: rentaCongeladosMes,
                 DineroCirculando: dineroCirculando,
                 ReservaDisponible: reservaDisponible,
-                CapitalInicial: (decimal)Math.Round(capitalInicial, 2)
+                CapitalInicial: (decimal)Math.Round(capitalInicial, 2),
+                BalanceNequi: balanceNequi,
+                BalanceEfectivo: balanceEfectivo
             ));
         }
         catch (Exception ex)

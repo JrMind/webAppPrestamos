@@ -184,11 +184,11 @@ export const cobrosApi = {
         return handleResponse<CobrosHoy>(response);
     },
 
-    marcarCobrado: async (cuotaId: number, cobrado: boolean): Promise<void> => {
+    marcarCobrado: async (cuotaId: number, cobrado: boolean, medioPago?: string): Promise<void> => {
         const response = await fetch(`${API_URL}/cobros/${cuotaId}/marcar`, {
             method: 'PUT',
             headers: getHeaders(),
-            body: JSON.stringify({ cobrado }),
+            body: JSON.stringify({ cobrado, medioPago }),
         });
         if (!response.ok) throw new Error('Error al marcar cuota');
     },
@@ -743,7 +743,7 @@ export const gananciasApi = {
 };
 
 // Costos Operativos
-import type { Costo, CreateCostoDto, UpdateCostoDto, PrestamoConGanancias } from './types';
+import type { Costo, CreateCostoDto, UpdateCostoDto, PrestamoConGanancias, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto } from './types';
 
 export const costosApi = {
     getAll: async (): Promise<Costo[]> => {
@@ -793,5 +793,55 @@ export const prestamoGananciasApi = {
     getGananciasSocios: async (prestamoId: number): Promise<PrestamoConGanancias> => {
         const response = await fetch(`${API_URL}/prestamos/${prestamoId}/ganancias-socios`, { headers: getHeaders() });
         return handleResponse<PrestamoConGanancias>(response);
+    },
+};
+
+// Gastos
+export const gastosApi = {
+    getAll: async (): Promise<GastoDto[]> => {
+        const response = await fetch(`${API_URL}/gastos`, { headers: getHeaders() });
+        return handleResponse<GastoDto[]>(response);
+    },
+
+    create: async (data: CreateGastoDto): Promise<GastoDto> => {
+        const response = await fetch(`${API_URL}/gastos`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return handleResponse<GastoDto>(response);
+    },
+
+    delete: async (id: number): Promise<void> => {
+        const response = await fetch(`${API_URL}/gastos/${id}`, {
+            method: 'DELETE',
+            headers: getHeaders(),
+        });
+        if (!response.ok) throw new Error('Error al eliminar gasto');
+    },
+};
+
+// Transferencias
+export const transferenciasApi = {
+    getAll: async (): Promise<TransferenciaDto[]> => {
+        const response = await fetch(`${API_URL}/transferencias`, { headers: getHeaders() });
+        return handleResponse<TransferenciaDto[]>(response);
+    },
+
+    create: async (data: CreateTransferenciaDto): Promise<TransferenciaDto> => {
+        const response = await fetch(`${API_URL}/transferencias`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return handleResponse<TransferenciaDto>(response);
+    },
+
+    delete: async (id: number): Promise<void> => {
+        const response = await fetch(`${API_URL}/transferencias/${id}`, {
+            method: 'DELETE',
+            headers: getHeaders(),
+        });
+        if (!response.ok) throw new Error('Error al eliminar transferencia');
     },
 };

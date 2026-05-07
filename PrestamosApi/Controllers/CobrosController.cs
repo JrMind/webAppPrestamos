@@ -188,7 +188,7 @@ public class CobrosController : BaseApiController
         }
 
         cuota.Cobrado = dto.Cobrado;
-        
+
         // Si se marca como cobrado y no tiene fecha de pago, actualizar
         if (dto.Cobrado && !cuota.FechaPago.HasValue)
         {
@@ -196,6 +196,7 @@ public class CobrosController : BaseApiController
             cuota.MontoPagado = cuota.MontoCuota; // Asumir pago completo por defecto al marcar
             cuota.SaldoPendiente = 0; // CRÍTICO: Poner en 0 para que la reserva se actualice
             cuota.EstadoCuota = "Pagada";
+            cuota.CobradoMedioPago = dto.MedioPago ?? "Efectivo";
             
             // Distribuir ganancias automáticamente
             if (cuota.Prestamo != null)
@@ -226,6 +227,7 @@ public class CobrosController : BaseApiController
             cuota.MontoPagado = 0;
             cuota.SaldoPendiente = cuota.MontoCuota; // Restaurar saldo pendiente
             cuota.Cobrado = false;
+            cuota.CobradoMedioPago = null;
             // Verificar si la cuota está vencida
             cuota.EstadoCuota = cuota.FechaCobro.Date < DateTime.UtcNow.Date ? "Vencida" : "Pendiente";
         }
@@ -896,5 +898,6 @@ public class CobrosController : BaseApiController
 public class MarcarCobradoDto
 {
     public bool Cobrado { get; set; }
+    public string? MedioPago { get; set; } // "Nequi" | "Efectivo"
 }
 

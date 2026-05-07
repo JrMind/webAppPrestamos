@@ -15,6 +15,7 @@ public class CuotaPrestamo
     public DateTime? FechaPago { get; set; }
     public string? Observaciones { get; set; }
     public bool Cobrado { get; set; } = false; // Checklist de cobro diario
+    public string? CobradoMedioPago { get; set; } // Nequi | Efectivo (cuando se marca via cobros)
 
     // Navegación
     public Prestamo? Prestamo { get; set; }

@@ -29,6 +29,8 @@ public class PrestamosDbContext : DbContext
     public DbSet<ConfiguracionSistema> ConfiguracionesSistema => Set<ConfiguracionSistema>();
     public DbSet<NotaPrestamo> NotasPrestamo => Set<NotaPrestamo>();
     public DbSet<LiquidacionCobrador> LiquidacionesCobrador => Set<LiquidacionCobrador>();
+    public DbSet<Gasto> Gastos => Set<Gasto>();
+    public DbSet<Transferencia> Transferencias => Set<Transferencia>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -103,6 +105,7 @@ public class PrestamosDbContext : DbContext
             entity.Property(e => e.FechaPago).HasColumnName("fechapago");
             entity.Property(e => e.Observaciones).HasColumnName("observaciones");
             entity.Property(e => e.Cobrado).HasColumnName("cobrado").HasDefaultValue(false);
+            entity.Property(e => e.CobradoMedioPago).HasColumnName("cobradomediopago").HasMaxLength(20);
 
             entity.HasOne(e => e.Prestamo)
                 .WithMany(p => p.Cuotas)
@@ -441,6 +444,30 @@ public class PrestamosDbContext : DbContext
 
             entity.HasIndex(e => e.CobradorId).HasDatabaseName("idx_liquidaciones_cobrador");
             entity.HasIndex(e => e.FechaLiquidacion).HasDatabaseName("idx_liquidaciones_fecha");
+        });
+
+        // Transferencia
+        modelBuilder.Entity<Transferencia>(entity =>
+        {
+            entity.ToTable("transferencias");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Origen).HasColumnName("origen").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Destino).HasColumnName("destino").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Monto).HasColumnName("monto").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Fecha).HasColumnName("fecha").HasDefaultValueSql("NOW()");
+            entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(500);
+        });
+
+        // Gasto
+        modelBuilder.Entity<Gasto>(entity =>
+        {
+            entity.ToTable("gastos");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(500).IsRequired();
+            entity.Property(e => e.Monto).HasColumnName("monto").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.MedioPago).HasColumnName("mediopago").HasMaxLength(20).HasDefaultValue("Efectivo");
+            entity.Property(e => e.Fecha).HasColumnName("fecha").HasDefaultValueSql("NOW()");
+            entity.Property(e => e.Categoria).HasColumnName("categoria").HasMaxLength(100);
         });
     }
 }

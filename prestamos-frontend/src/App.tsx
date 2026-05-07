@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi } from './api';
-import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador } from './types';
+import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi } from './api';
+import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto } from './types';
 import { MetricasCobradores } from './components/MetricasCobradores';
 import './App.css';
 
@@ -79,6 +79,32 @@ function App() {
   // Estados para Costos Operativos
   const [costos, setCostos] = useState<Costo[]>([]);
   const [showCostoModal, setShowCostoModal] = useState(false);
+
+  // Estados para Gastos
+  const [gastos, setGastos] = useState<GastoDto[]>([]);
+  const [showGastoModal, setShowGastoModal] = useState(false);
+  const [gastoForm, setGastoForm] = useState<CreateGastoDto>({
+    descripcion: '',
+    monto: 0,
+    medioPago: 'Efectivo',
+    fecha: formatDateInput(new Date()),
+    categoria: ''
+  });
+
+  // Estado para modal de medio de pago al marcar cuota
+  const [showMedioPagoModal, setShowMedioPagoModal] = useState(false);
+  const [pendingCuotaMarcado, setPendingCuotaMarcado] = useState<{ cuotaId: number; cobrado: boolean } | null>(null);
+
+  // Estado para transferencias
+  const [transferencias, setTransferencias] = useState<TransferenciaDto[]>([]);
+  const [showTransferenciaModal, setShowTransferenciaModal] = useState(false);
+  const [transferenciaForm, setTransferenciaForm] = useState<CreateTransferenciaDto>({
+    origen: 'Nequi',
+    destino: 'Efectivo',
+    monto: 0,
+    fecha: formatDateInput(new Date()),
+    descripcion: ''
+  });
   const [editingCostoId, setEditingCostoId] = useState<number | null>(null);
   const [costoForm, setCostoForm] = useState<CreateCostoDto>({
     nombre: '',
@@ -181,6 +207,67 @@ function App() {
     } catch (error) {
       console.error('Error cargando costos:', error);
     }
+  };
+
+  const loadGastos = async () => {
+    try {
+      const data = await gastosApi.getAll();
+      setGastos(data);
+    } catch (error) {
+      console.error('Error cargando gastos:', error);
+    }
+  };
+
+  const handleSaveGasto = async () => {
+    try {
+      if (gastoForm.monto <= 0) { showToast('El monto debe ser mayor a 0', 'warning'); return; }
+      await gastosApi.create({ ...gastoForm, monto: Number(gastoForm.monto) });
+      showToast('Gasto registrado', 'success');
+      setShowGastoModal(false);
+      setGastoForm({ descripcion: '', monto: 0, medioPago: 'Efectivo', fecha: formatDateInput(new Date()), categoria: '' });
+      loadGastos();
+      loadData();
+    } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
+  };
+
+  const handleDeleteGasto = async (id: number) => {
+    if (!confirm('¿Eliminar este gasto? Esta acción afectará los balances.')) return;
+    try {
+      await gastosApi.delete(id);
+      showToast('Gasto eliminado', 'success');
+      loadGastos();
+      loadData();
+    } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
+  };
+
+  const loadTransferencias = async () => {
+    try {
+      const data = await transferenciasApi.getAll();
+      setTransferencias(data);
+    } catch (error) { console.error('Error cargando transferencias:', error); }
+  };
+
+  const handleSaveTransferencia = async () => {
+    try {
+      if (transferenciaForm.monto <= 0) { showToast('El monto debe ser mayor a 0', 'warning'); return; }
+      if (transferenciaForm.origen === transferenciaForm.destino) { showToast('Origen y destino deben ser diferentes', 'warning'); return; }
+      await transferenciasApi.create({ ...transferenciaForm, monto: Number(transferenciaForm.monto) });
+      showToast(`Transferencia de ${transferenciaForm.origen} → ${transferenciaForm.destino} registrada`, 'success');
+      setShowTransferenciaModal(false);
+      setTransferenciaForm({ origen: 'Nequi', destino: 'Efectivo', monto: 0, fecha: formatDateInput(new Date()), descripcion: '' });
+      loadTransferencias();
+      loadData();
+    } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
+  };
+
+  const handleDeleteTransferencia = async (id: number) => {
+    if (!confirm('¿Revertir esta transferencia? Los balances se actualizarán.')) return;
+    try {
+      await transferenciasApi.delete(id);
+      showToast('Transferencia revertida', 'success');
+      loadTransferencias();
+      loadData();
+    } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
   const handleOpenCostoModal = (costo?: Costo) => {
@@ -1121,12 +1208,31 @@ function App() {
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
-  const handleMarcarCobrado = async (cuotaId: number, cobrado: boolean) => {
+  const handleMarcarCobrado = (cuotaId: number, cobrado: boolean) => {
+    if (cobrado) {
+      // Abrir modal para seleccionar medio de pago
+      setPendingCuotaMarcado({ cuotaId, cobrado });
+      setShowMedioPagoModal(true);
+    } else {
+      // Desmarcar directamente sin preguntar medio de pago
+      cobrosApi.marcarCobrado(cuotaId, false)
+        .then(() => { showToast('Marca removida', 'success'); loadCobrosDelMes(); })
+        .catch(() => showToast('Error al desmarcar cuota', 'error'));
+    }
+  };
+
+  const handleConfirmarMedioPago = async (medioPago: string) => {
+    if (!pendingCuotaMarcado) return;
     try {
-      await cobrosApi.marcarCobrado(cuotaId, cobrado);
-      showToast(cobrado ? 'Cuota marcada como cobrada' : 'Marca removida', 'success');
+      await cobrosApi.marcarCobrado(pendingCuotaMarcado.cuotaId, pendingCuotaMarcado.cobrado, medioPago);
+      showToast('Cuota marcada como cobrada', 'success');
       loadCobrosDelMes();
+      loadData();
     } catch { showToast('Error al marcar cuota', 'error'); }
+    finally {
+      setShowMedioPagoModal(false);
+      setPendingCuotaMarcado(null);
+    }
   };
 
   const generarReporteCobros = () => {
@@ -1316,9 +1422,20 @@ function App() {
             <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Total de cuotas pendientes de cobro (activos y vencidos)</span>
           </div>
           <div className="kpi-card" style={{ borderLeft: '4px solid #10b981', background: 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, transparent 100%)' }}>
-            <div className="kpi-header"><span className="kpi-title">🏦 Reserva Disponible</span></div>
-            <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(metricas?.reservaDisponible || 0)}</span>
-            <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Dinero listo para prestar</span>
+            <div className="kpi-header"><span className="kpi-title">📱 Nequi</span></div>
+            <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(metricas?.balanceNequi || 0)}</span>
+            <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Balance disponible en Nequi</span>
+          </div>
+          <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b', background: 'linear-gradient(135deg, rgba(245,158,11,0.1) 0%, transparent 100%)' }}>
+            <div className="kpi-header"><span className="kpi-title">💵 Efectivo</span></div>
+            <span className="kpi-value" style={{ color: '#f59e0b' }}>{formatMoney(metricas?.balanceEfectivo || 0)}</span>
+            <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Balance disponible en efectivo</span>
+          </div>
+          <div className="kpi-card" style={{ borderLeft: '4px solid #6366f1', background: 'linear-gradient(135deg, rgba(99,102,241,0.1) 0%, transparent 100%)', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}
+            onClick={() => { setTransferenciaForm({ origen: 'Nequi', destino: 'Efectivo', monto: 0, fecha: formatDateInput(new Date()), descripcion: '' }); setShowTransferenciaModal(true); }}>
+            <span style={{ fontSize: '2rem' }}>🔄</span>
+            <span style={{ fontWeight: 600, color: '#6366f1', marginTop: '0.4rem' }}>Transferir</span>
+            <span style={{ fontSize: '0.8rem', color: '#999', marginTop: '0.2rem' }}>Nequi ↔ Efectivo</span>
           </div>
           <div className="kpi-card" style={{ borderLeft: '4px solid #3b82f6' }}>
             <div className="kpi-header"><span className="kpi-title">📊 Total a Cobrar</span></div>
@@ -1378,7 +1495,7 @@ function App() {
             <button className={`tab ${activeTab === 'smshistory' ? 'active' : ''}`} onClick={() => setActiveTab('smshistory')}>📨 Historial</button>
             {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'usuarios' ? 'active' : ''}`} onClick={() => setActiveTab('usuarios')}>👤 Usuarios</button>}
             {currentUser?.rol !== 'Administrador' && <button className={`tab ${activeTab === 'aportadores' ? 'active' : ''}`} onClick={() => setActiveTab('aportadores')}>Aportadores</button>}
-            {currentUser?.rol !== 'Administrador' && <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); loadCostos(); }}>📊 Ganancias</button>}
+            {currentUser?.rol !== 'Administrador' && <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); loadCostos(); loadGastos(); loadTransferencias(); }}>📊 Ganancias</button>}
             {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'comisiones' ? 'active' : ''}`} onClick={() => setActiveTab('comisiones')}>💳 Comisiones</button>}
             {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'metricas' ? 'active' : ''}`} onClick={() => setActiveTab('metricas')}>📈 Métricas</button>}
           </div>
@@ -2204,6 +2321,85 @@ function App() {
                   </tbody>
                 </table>
               </div>
+
+              {/* Transferencias */}
+              <h4 style={{ margin: '1.5rem 0 0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>🔄 Transferencias ({transferencias.length})</span>
+                <button onClick={() => { loadTransferencias(); setTransferenciaForm({ origen: 'Nequi', destino: 'Efectivo', monto: 0, fecha: formatDateInput(new Date()), descripcion: '' }); setShowTransferenciaModal(true); }} className="btn btn-primary" style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}>
+                  + Nueva Transferencia
+                </button>
+              </h4>
+              <div className="table-container" style={{ marginBottom: '1.5rem' }}>
+                <table>
+                  <thead>
+                    <tr><th>Fecha</th><th>Desde</th><th>Hacia</th><th>Monto</th><th>Descripción</th><th>Acciones</th></tr>
+                  </thead>
+                  <tbody>
+                    {transferencias.map(t => (
+                      <tr key={t.id}>
+                        <td>{formatDate(t.fecha)}</td>
+                        <td>
+                          <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: t.origen === 'Nequi' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: t.origen === 'Nequi' ? '#10b981' : '#f59e0b' }}>
+                            {t.origen === 'Nequi' ? '📱 Nequi' : '💵 Efectivo'}
+                          </span>
+                        </td>
+                        <td>
+                          <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: t.destino === 'Nequi' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: t.destino === 'Nequi' ? '#10b981' : '#f59e0b' }}>
+                            {t.destino === 'Nequi' ? '📱 Nequi' : '💵 Efectivo'}
+                          </span>
+                        </td>
+                        <td className="money">{formatMoney(t.monto)}</td>
+                        <td>{t.descripcion || '-'}</td>
+                        <td>
+                          <button onClick={() => handleDeleteTransferencia(t.id)} className="btn btn-sm btn-delete" style={{ fontSize: '0.75rem' }}>↩️ Revertir</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {transferencias.length === 0 && <tr><td colSpan={6} className="empty-state">No hay transferencias registradas.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Gastos */}
+              <h4 style={{ margin: '1.5rem 0 0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span>💸 Gastos ({gastos.length})</span>
+                <button onClick={() => { loadGastos(); setShowGastoModal(true); }} className="btn btn-primary" style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}>
+                  + Nuevo Gasto
+                </button>
+              </h4>
+              <div className="table-container" style={{ marginBottom: '1.5rem' }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Fecha</th>
+                      <th>Descripción</th>
+                      <th>Categoría</th>
+                      <th>Medio</th>
+                      <th>Monto</th>
+                      <th>Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {gastos.map(g => (
+                      <tr key={g.id}>
+                        <td>{formatDate(g.fecha)}</td>
+                        <td>{g.descripcion}</td>
+                        <td>{g.categoria || '-'}</td>
+                        <td>
+                          <span style={{ padding: '0.2rem 0.5rem', borderRadius: '4px', fontSize: '0.8rem', background: g.medioPago === 'Nequi' ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)', color: g.medioPago === 'Nequi' ? '#10b981' : '#f59e0b' }}>
+                            {g.medioPago === 'Nequi' ? '📱 Nequi' : '💵 Efectivo'}
+                          </span>
+                        </td>
+                        <td className="money" style={{ color: '#ef4444' }}>-{formatMoney(g.monto)}</td>
+                        <td>
+                          <button onClick={() => handleDeleteGasto(g.id)} className="btn btn-sm btn-delete" style={{ fontSize: '0.75rem' }}>🗑️</button>
+                        </td>
+                      </tr>
+                    ))}
+                    {gastos.length === 0 && <tr><td colSpan={6} className="empty-state">No hay gastos registrados. Haz clic en "+ Nuevo Gasto" para agregar uno.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
             </div>
           )}
 
@@ -2813,17 +3009,22 @@ function App() {
                         id="abonoCapitalInput"
                         style={{ flex: 1, padding: '0.5rem' }}
                       />
+                      <select id="abonoMedioInput" style={{ padding: '0.5rem', background: '#1e1e2e', color: '#fff', border: '1px solid #444', borderRadius: '4px' }}>
+                        <option value="Efectivo">💵 Efectivo</option>
+                        <option value="Nequi">📱 Nequi</option>
+                      </select>
                       <button
                         className="btn btn-primary btn-sm"
                         onClick={async () => {
                           const input = document.getElementById('abonoCapitalInput') as HTMLInputElement;
+                          const medioSelect = document.getElementById('abonoMedioInput') as HTMLSelectElement;
                           const monto = Number(input?.value || 0);
+                          const medioPago = medioSelect?.value || 'Efectivo';
                           if (monto <= 0) { showToast('Ingrese un monto válido', 'warning'); return; }
                           if (monto > selectedPrestamo.montoPrestado) { showToast('El abono no puede ser mayor al capital', 'warning'); return; }
                           try {
-                            const result = await pagosApi.abonoCapital(selectedPrestamo.id, monto);
+                            const result = await pagosApi.abonoCapital(selectedPrestamo.id, monto, medioPago);
                             showToast(`Abono aplicado. Nuevo capital: ${formatMoney(result.nuevoCapital)}`, 'success');
-                            // Refresh data
                             loadData();
                             setShowDetalleModal(false);
                           } catch (e: any) { showToast(e.message || 'Error', 'error'); }
@@ -2961,7 +3162,7 @@ function App() {
                 <div className="form-grid">
                   <div className="form-group"><label>Monto a Pagar *</label><input type="number" min="0.01" step="0.01" required value={pagoForm.montoPago} onChange={e => setPagoForm({ ...pagoForm, montoPago: Number(e.target.value) })} /></div>
                   <div className="form-group"><label>Fecha *</label><input type="date" required value={pagoForm.fechaPago} onChange={e => setPagoForm({ ...pagoForm, fechaPago: e.target.value })} /></div>
-                  <div className="form-group"><label>Método</label><select value={pagoForm.metodoPago || ''} onChange={e => setPagoForm({ ...pagoForm, metodoPago: e.target.value })}><option>Efectivo</option><option>Transferencia</option><option>Nequi</option><option>Daviplata</option></select></div>
+                  <div className="form-group"><label>Medio de Pago *</label><select value={pagoForm.metodoPago || 'Efectivo'} onChange={e => setPagoForm({ ...pagoForm, metodoPago: e.target.value })}><option value="Efectivo">💵 Efectivo</option><option value="Nequi">📱 Nequi</option></select></div>
                 </div>
                 <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(16,185,129,0.1)', borderRadius: '6px', marginTop: '0.5rem', fontSize: '0.85rem', color: '#059669', border: '1px solid rgba(16,185,129,0.2)' }}>
                   💡 <strong>Nota:</strong> Puede pagar más del saldo pendiente. El excedente se aplicará automáticamente a las siguientes cuotas.
@@ -3162,6 +3363,186 @@ function App() {
       {activeTab === 'metricas' && (
         <div className="section">
           <MetricasCobradores />
+        </div>
+      )}
+
+      {/* Modal: Seleccionar Medio de Pago al Marcar Cuota */}
+      {showMedioPagoModal && (
+        <div className="modal-overlay" onClick={() => { setShowMedioPagoModal(false); setPendingCuotaMarcado(null); }}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '380px' }}>
+            <div className="modal-header">
+              <h2>¿Cómo se recibió el pago?</h2>
+              <button className="modal-close" onClick={() => { setShowMedioPagoModal(false); setPendingCuotaMarcado(null); }}>×</button>
+            </div>
+            <div className="modal-body" style={{ display: 'flex', gap: '1rem', justifyContent: 'center', padding: '1.5rem' }}>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1, padding: '1.2rem', fontSize: '1.1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem' }}
+                onClick={() => handleConfirmarMedioPago('Efectivo')}
+              >
+                <span style={{ fontSize: '2rem' }}>💵</span>
+                Efectivo
+              </button>
+              <button
+                className="btn btn-primary"
+                style={{ flex: 1, padding: '1.2rem', fontSize: '1.1rem', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.5rem', background: 'linear-gradient(135deg, #10b981, #059669)' }}
+                onClick={() => handleConfirmarMedioPago('Nequi')}
+              >
+                <span style={{ fontSize: '2rem' }}>📱</span>
+                Nequi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Transferencia entre medios */}
+      {showTransferenciaModal && (
+        <div className="modal-overlay" onClick={() => setShowTransferenciaModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '420px' }}>
+            <div className="modal-header">
+              <h2>🔄 Transferir Fondos</h2>
+              <button className="modal-close" onClick={() => setShowTransferenciaModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              {/* Selector visual origen → destino */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1.25rem' }}>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.3rem' }}>Desde</label>
+                  <select
+                    value={transferenciaForm.origen}
+                    onChange={e => {
+                      const nuevoOrigen = e.target.value;
+                      setTransferenciaForm(f => ({ ...f, origen: nuevoOrigen, destino: nuevoOrigen === 'Nequi' ? 'Efectivo' : 'Nequi' }));
+                    }}
+                    style={{ width: '100%', padding: '0.6rem', background: '#1e1e2e', color: '#fff', border: '1px solid #444', borderRadius: '6px', fontSize: '1rem' }}
+                  >
+                    <option value="Nequi">📱 Nequi</option>
+                    <option value="Efectivo">💵 Efectivo</option>
+                  </select>
+                </div>
+                <span style={{ fontSize: '1.5rem', marginTop: '1.2rem', color: '#6366f1' }}>→</span>
+                <div style={{ flex: 1 }}>
+                  <label style={{ fontSize: '0.8rem', color: '#888', display: 'block', marginBottom: '0.3rem' }}>Hacia</label>
+                  <div style={{ padding: '0.6rem', background: '#252535', border: '1px solid #555', borderRadius: '6px', fontSize: '1rem', color: '#ccc' }}>
+                    {transferenciaForm.destino === 'Nequi' ? '📱 Nequi' : '💵 Efectivo'}
+                  </div>
+                </div>
+              </div>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Monto *</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={transferenciaForm.monto || ''}
+                    onChange={e => setTransferenciaForm(f => ({ ...f, monto: Number(e.target.value) }))}
+                    placeholder="100000"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Fecha *</label>
+                  <input
+                    type="date"
+                    required
+                    value={transferenciaForm.fecha}
+                    onChange={e => setTransferenciaForm(f => ({ ...f, fecha: e.target.value }))}
+                  />
+                </div>
+              </div>
+              <div className="form-group">
+                <label>Descripción</label>
+                <input
+                  type="text"
+                  value={transferenciaForm.descripcion || ''}
+                  onChange={e => setTransferenciaForm(f => ({ ...f, descripcion: e.target.value }))}
+                  placeholder="Opcional..."
+                />
+              </div>
+              {transferenciaForm.monto > 0 && (
+                <div style={{ padding: '0.6rem 0.75rem', background: 'rgba(99,102,241,0.1)', borderRadius: '6px', fontSize: '0.85rem', color: '#a5b4fc', border: '1px solid rgba(99,102,241,0.3)' }}>
+                  🔄 Se moverán <strong>{formatMoney(transferenciaForm.monto)}</strong> de <strong>{transferenciaForm.origen}</strong> a <strong>{transferenciaForm.destino}</strong>
+                </div>
+              )}
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowTransferenciaModal(false)}>Cancelar</button>
+              <button type="button" className="btn btn-primary" onClick={handleSaveTransferencia}>Confirmar Transferencia</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: Nuevo Gasto */}
+      {showGastoModal && (
+        <div className="modal-overlay" onClick={() => setShowGastoModal(false)}>
+          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '460px' }}>
+            <div className="modal-header">
+              <h2>💸 Registrar Gasto</h2>
+              <button className="modal-close" onClick={() => setShowGastoModal(false)}>×</button>
+            </div>
+            <div className="modal-body">
+              <div className="form-group">
+                <label>Descripción *</label>
+                <input
+                  type="text"
+                  required
+                  value={gastoForm.descripcion}
+                  onChange={e => setGastoForm({ ...gastoForm, descripcion: e.target.value })}
+                  placeholder="Ej: Gasolina cobrador, papelería..."
+                />
+              </div>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Monto *</label>
+                  <input
+                    type="number"
+                    required
+                    min="1"
+                    value={gastoForm.monto || ''}
+                    onChange={e => setGastoForm({ ...gastoForm, monto: Number(e.target.value) })}
+                    placeholder="50000"
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Fecha *</label>
+                  <input
+                    type="date"
+                    required
+                    value={gastoForm.fecha}
+                    onChange={e => setGastoForm({ ...gastoForm, fecha: e.target.value })}
+                  />
+                </div>
+              </div>
+              <div className="form-grid">
+                <div className="form-group">
+                  <label>Sale de *</label>
+                  <select
+                    value={gastoForm.medioPago}
+                    onChange={e => setGastoForm({ ...gastoForm, medioPago: e.target.value })}
+                    style={{ fontSize: '1rem' }}
+                  >
+                    <option value="Efectivo">💵 Efectivo</option>
+                    <option value="Nequi">📱 Nequi</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Categoría</label>
+                  <input
+                    type="text"
+                    value={gastoForm.categoria || ''}
+                    onChange={e => setGastoForm({ ...gastoForm, categoria: e.target.value })}
+                    placeholder="Transporte, Papelería..."
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowGastoModal(false)}>Cancelar</button>
+              <button type="button" className="btn btn-primary" onClick={handleSaveGasto}>Registrar Gasto</button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -17,6 +17,9 @@ public interface IGananciasService
     // Métodos para gestión de reserva dinámica
     Task<decimal> ObtenerReservaActualAsync();
     Task ActualizarReservaAsync(decimal montoIncremento, string descripcion);
+
+    // Balances por medio de pago
+    Task<decimal> CalcularBalanceMedioAsync(string medioPago);
 }
 
 public class GananciasService : IGananciasService
@@ -336,5 +339,38 @@ public class GananciasService : IGananciasService
         }
         
         await _context.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// Calcula el balance de dinero disponible para un medio de pago específico.
+    /// Balance = Pagos recibidos con ese medio + Cuotas marcadas directamente con ese medio (sin Pago asociado) - Gastos pagados con ese medio
+    /// </summary>
+    public async Task<decimal> CalcularBalanceMedioAsync(string medioPago)
+    {
+        // 1. Pagos registrados con este medio
+        var totalPagos = await _context.Pagos
+            .Where(p => p.MetodoPago == medioPago)
+            .SumAsync(p => (decimal?)p.MontoPago) ?? 0;
+
+        // 2. Cuotas marcadas como cobrado con este medio que NO tienen un Pago asociado (para evitar doble conteo)
+        var cobradosDirectos = await _context.CuotasPrestamo
+            .Where(c => c.Cobrado && c.CobradoMedioPago == medioPago
+                     && !_context.Pagos.Any(p => p.CuotaId == c.Id))
+            .SumAsync(c => (decimal?)c.MontoPagado) ?? 0;
+
+        // 3. Gastos desembolsados con este medio
+        var totalGastos = await _context.Gastos
+            .Where(g => g.MedioPago == medioPago)
+            .SumAsync(g => (decimal?)g.Monto) ?? 0;
+
+        // 4. Transferencias: restar las enviadas desde este medio, sumar las recibidas
+        var transferenciasEnviadas = await _context.Transferencias
+            .Where(t => t.Origen == medioPago)
+            .SumAsync(t => (decimal?)t.Monto) ?? 0;
+        var transferenciasRecibidas = await _context.Transferencias
+            .Where(t => t.Destino == medioPago)
+            .SumAsync(t => (decimal?)t.Monto) ?? 0;
+
+        return totalPagos + cobradosDirectos - totalGastos - transferenciasEnviadas + transferenciasRecibidas;
     }
 }
