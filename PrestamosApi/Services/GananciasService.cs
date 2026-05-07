@@ -371,6 +371,11 @@ public class GananciasService : IGananciasService
             .Where(t => t.Destino == medioPago)
             .SumAsync(t => (decimal?)t.Monto) ?? 0;
 
-        return totalPagos + cobradosDirectos - totalGastos - transferenciasEnviadas + transferenciasRecibidas;
+        var claveAjuste = $"ajuste_saldo_{medioPago.ToLower()}";
+        var ajusteConfig = await _context.ConfiguracionesSistema
+            .FirstOrDefaultAsync(c => c.Clave == claveAjuste);
+        var ajuste = ajusteConfig != null && decimal.TryParse(ajusteConfig.Valor, out var a) ? a : 0m;
+
+        return totalPagos + cobradosDirectos - totalGastos - transferenciasEnviadas + transferenciasRecibidas + ajuste;
     }
 }
