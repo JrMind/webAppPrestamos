@@ -113,11 +113,13 @@ using (var scope = app.Services.CreateScope())
     var context = scope.ServiceProvider.GetRequiredService<PrestamosDbContext>();
     try
     {
-        context.Database.EnsureCreated();
+        context.Database.Migrate();
     }
     catch (Exception ex)
     {
-        Console.WriteLine($"Error creating database: {ex.Message}");
+        Console.WriteLine($"Error applying migrations: {ex.Message}");
+        // Fallback: ensure DB exists if migrations fail
+        try { context.Database.EnsureCreated(); } catch { }
     }
 }
 

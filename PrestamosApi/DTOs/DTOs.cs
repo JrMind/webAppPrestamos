@@ -177,8 +177,11 @@ public record DashboardMetricasDto(
     decimal RentaCongeladosMes = 0,
     // Flujo de Capital
     decimal DineroCirculando = 0,
-    decimal ReservaDisponible = 0,
-    decimal CapitalInicial = 0   // Capital Circulante real
+    decimal ReservaDisponible = 0,  // Mantenido por compatibilidad
+    decimal CapitalInicial = 0,     // Capital Circulante real
+    // Balances por medio de pago
+    decimal BalanceNequi = 0,
+    decimal BalanceEfectivo = 0
 );
 
 public record EvolucionPrestamosDto(
@@ -469,5 +472,26 @@ public record ResumenCargosAdicionalesDto(
 public record MarcarCargoDto(
     bool SistemaCobrado,
     bool RenovacionCobrada
+);
+
+// ──────────────────────────────────────────────────
+// Gastos
+// ──────────────────────────────────────────────────
+
+public record GastoDto(
+    int Id,
+    string Descripcion,
+    decimal Monto,
+    string MedioPago,
+    DateTime Fecha,
+    string? Categoria
+);
+
+public record CreateGastoDto(
+    string Descripcion,
+    decimal Monto,
+    string MedioPago,
+    DateTime Fecha,
+    string? Categoria
 );
 

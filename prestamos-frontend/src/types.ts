@@ -280,6 +280,10 @@ export interface DashboardMetricas {
   dineroCirculando: number;
   reservaDisponible: number;
   capitalInicial: number;  // Capital Circulante real
+
+  // Balances por medio de pago
+  balanceNequi: number;
+  balanceEfectivo: number;
 }
 
 // Aportador Externo
@@ -561,6 +565,24 @@ export interface UpdateCostoDto {
   descripcion?: string;
   activo: boolean;
   fechaFin?: string;
+}
+
+// Gasto Types
+export interface GastoDto {
+  id: number;
+  descripcion: string;
+  monto: number;
+  medioPago: string; // "Nequi" | "Efectivo"
+  fecha: string;
+  categoria?: string;
+}
+
+export interface CreateGastoDto {
+  descripcion: string;
+  monto: number;
+  medioPago: string;
+  fecha: string;
+  categoria?: string;
 }
 
 // Ganancia de socio por préstamo
