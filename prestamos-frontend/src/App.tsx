@@ -2082,67 +2082,6 @@ function App() {
           {/* Ganancias Tab */}
           {activeTab === 'ganancias' && resumenParticipacion && (
             <div>
-              {/* Resumen General */}
-              <div className="kpi-grid" style={{ marginBottom: '1.5rem' }}>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #6366f1' }}>
-                  <span className="kpi-title">🏦 Capital en Circulación</span>
-                  <span className="kpi-value" style={{ color: '#6366f1' }}>{formatMoney(resumenParticipacion.resumen.totalCapitalPrestado)}</span>
-                  <span className="kpi-sub">Total Prestado Activo</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #8b5cf6' }}>
-                  <span className="kpi-title">💎 Capital Base (Inversión)</span>
-                  <span className="kpi-value" style={{ color: '#8b5cf6' }}>{formatMoney(resumenParticipacion.resumen.totalCapitalBase || 0)}</span>
-                  <span className="kpi-sub">Socios + Aportadores</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #ec4899' }}>
-                  <span className="kpi-title">🔄 Capital Reinvertido</span>
-                  <span className="kpi-value" style={{ color: '#ec4899' }}>{formatMoney(resumenParticipacion.resumen.capitalReinvertido || 0)}</span>
-                  <span className="kpi-sub">Crecimiento Orgánico</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #f97316' }}>
-                  <span className="kpi-title">🛣️ Capital en Calle</span>
-                  <span className="kpi-value" style={{ color: '#f97316' }}>{formatMoney(resumenParticipacion.resumen.capitalEnCalle || 0)}</span>
-                  <span className="kpi-sub">Saldo Capital Pendiente</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
-                  <span className="kpi-title">💰 Interés Total (Proyectado)</span>
-                  <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(resumenParticipacion.resumen.totalInteresesProyectados)}</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #3b82f6' }}>
-                  <span className="kpi-title">📊 Ganancia Intereses Mes</span>
-                  <span className="kpi-value" style={{ color: '#3b82f6' }}>{formatMoney(resumenParticipacion.resumen.proyeccionInteresesMesActual || 0)}</span>
-                  <span className="kpi-sub">Solo intereses del mes</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #06b6d4' }}>
-                  <span className="kpi-title">💵 Flujo Total Mes</span>
-                  <span className="kpi-value" style={{ color: '#06b6d4' }}>{formatMoney(resumenParticipacion.resumen.flujoTotalMes || 0)}</span>
-                  <span className="kpi-sub">Capital + Intereses</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b' }}>
-                  <span className="kpi-title">🏃 Comisiones Cobradores</span>
-                  <span className="kpi-value" style={{ color: '#f59e0b' }}>{formatMoney(resumenParticipacion.resumen.totalGananciaCobradores)}</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #8b5cf6' }}>
-                  <span className="kpi-title">👥 Socios (Ganancia Bruta)</span>
-                  <span className="kpi-value" style={{ color: '#8b5cf6' }}>{formatMoney(resumenParticipacion.resumen.totalGananciaSociosBruta)}</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #ec4899' }}>
-                  <span className="kpi-title">💸 Gasto Mensual Aportadores</span>
-                  <span className="kpi-value" style={{ color: '#ec4899' }}>{formatMoney(resumenParticipacion.resumen.gastoMensualAportadores)}</span>
-                  <span className="kpi-sub">Obligación Mensual Fija</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #ef4444' }}>
-                  <span className="kpi-title">📋 Costos Operativos Mes</span>
-                  <span className="kpi-value" style={{ color: '#ef4444' }}>{formatMoney(resumenParticipacion.resumen.costosTotalesMes || 0)}</span>
-                  <span className="kpi-sub">Salarios, cuotas, etc.</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #22c55e', background: 'rgba(34, 197, 94, 0.1)' }}>
-                  <span className="kpi-title">✨ Ganancia Interés Neta</span>
-                  <span className="kpi-value" style={{ color: '#22c55e', fontSize: '1.5rem' }}>{formatMoney(resumenParticipacion.resumen.gananciaInteresNeta || 0)}</span>
-                  <span className="kpi-sub">Interés - Cobradores - Aportadores - Costos</span>
-                </div>
-              </div>
-
 
               {/* Aportadores Externos */}
               <h4 style={{ margin: '1.5rem 0 0.5rem' }}>💵 Aportadores Externos ({resumenParticipacion.aportadores.length})</h4>
