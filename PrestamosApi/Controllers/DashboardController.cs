@@ -114,9 +114,18 @@ public class DashboardController : BaseApiController
             // Usar el método completo de GananciasService para calcular la reserva correctamente
             var reservaDisponible = await _gananciasService.CalcularReservaDisponibleAsync();
 
-            // Balances por medio de pago
-            var balanceNequi = await _gananciasService.CalcularBalanceMedioAsync("Nequi");
-            var balanceEfectivo = await _gananciasService.CalcularBalanceMedioAsync("Efectivo");
+            // Balances por medio de pago (con fallback si la migración aún no se aplicó)
+            var balanceNequi = 0m;
+            var balanceEfectivo = 0m;
+            try
+            {
+                balanceNequi = await _gananciasService.CalcularBalanceMedioAsync("Nequi");
+                balanceEfectivo = await _gananciasService.CalcularBalanceMedioAsync("Efectivo");
+            }
+            catch (Exception)
+            {
+                // Columnas nuevas aún no migradas en producción — se muestran en 0 hasta aplicar la migración
+            }
 
 
             // Cuotas próximos 7 días (solo de préstamos activos o vencidos)
