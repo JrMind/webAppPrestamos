@@ -495,3 +495,24 @@ public record CreateGastoDto(
     string? Categoria
 );
 
+// ──────────────────────────────────────────────────
+// Transferencias entre medios
+// ──────────────────────────────────────────────────
+
+public record TransferenciaDto(
+    int Id,
+    string Origen,
+    string Destino,
+    decimal Monto,
+    DateTime Fecha,
+    string? Descripcion
+);
+
+public record CreateTransferenciaDto(
+    string Origen,
+    string Destino,
+    decimal Monto,
+    DateTime Fecha,
+    string? Descripcion
+);
+

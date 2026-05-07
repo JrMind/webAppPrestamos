@@ -363,6 +363,14 @@ public class GananciasService : IGananciasService
             .Where(g => g.MedioPago == medioPago)
             .SumAsync(g => (decimal?)g.Monto) ?? 0;
 
-        return totalPagos + cobradosDirectos - totalGastos;
+        // 4. Transferencias: restar las enviadas desde este medio, sumar las recibidas
+        var transferenciasEnviadas = await _context.Transferencias
+            .Where(t => t.Origen == medioPago)
+            .SumAsync(t => (decimal?)t.Monto) ?? 0;
+        var transferenciasRecibidas = await _context.Transferencias
+            .Where(t => t.Destino == medioPago)
+            .SumAsync(t => (decimal?)t.Monto) ?? 0;
+
+        return totalPagos + cobradosDirectos - totalGastos - transferenciasEnviadas + transferenciasRecibidas;
     }
 }

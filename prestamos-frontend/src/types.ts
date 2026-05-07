@@ -585,6 +585,24 @@ export interface CreateGastoDto {
   categoria?: string;
 }
 
+// Transferencia Types
+export interface TransferenciaDto {
+  id: number;
+  origen: string;
+  destino: string;
+  monto: number;
+  fecha: string;
+  descripcion?: string;
+}
+
+export interface CreateTransferenciaDto {
+  origen: string;
+  destino: string;
+  monto: number;
+  fecha: string;
+  descripcion?: string;
+}
+
 // Ganancia de socio por préstamo
 export interface GananciaSocioPrestamo {
   socioId: number;

@@ -14,3 +14,13 @@ CREATE TABLE IF NOT EXISTS gastos (
     fecha TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     categoria VARCHAR(100)
 );
+
+-- Tabla de transferencias entre medios de pago
+CREATE TABLE IF NOT EXISTS transferencias (
+    id SERIAL PRIMARY KEY,
+    origen VARCHAR(20) NOT NULL,
+    destino VARCHAR(20) NOT NULL,
+    monto NUMERIC(18,2) NOT NULL,
+    fecha TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    descripcion VARCHAR(500)
+);

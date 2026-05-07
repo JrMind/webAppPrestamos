@@ -30,6 +30,7 @@ public class PrestamosDbContext : DbContext
     public DbSet<NotaPrestamo> NotasPrestamo => Set<NotaPrestamo>();
     public DbSet<LiquidacionCobrador> LiquidacionesCobrador => Set<LiquidacionCobrador>();
     public DbSet<Gasto> Gastos => Set<Gasto>();
+    public DbSet<Transferencia> Transferencias => Set<Transferencia>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -443,6 +444,18 @@ public class PrestamosDbContext : DbContext
 
             entity.HasIndex(e => e.CobradorId).HasDatabaseName("idx_liquidaciones_cobrador");
             entity.HasIndex(e => e.FechaLiquidacion).HasDatabaseName("idx_liquidaciones_fecha");
+        });
+
+        // Transferencia
+        modelBuilder.Entity<Transferencia>(entity =>
+        {
+            entity.ToTable("transferencias");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Origen).HasColumnName("origen").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Destino).HasColumnName("destino").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Monto).HasColumnName("monto").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Fecha).HasColumnName("fecha").HasDefaultValueSql("NOW()");
+            entity.Property(e => e.Descripcion).HasColumnName("descripcion").HasMaxLength(500);
         });
 
         // Gasto

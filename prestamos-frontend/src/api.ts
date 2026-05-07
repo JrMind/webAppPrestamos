@@ -743,7 +743,7 @@ export const gananciasApi = {
 };
 
 // Costos Operativos
-import type { Costo, CreateCostoDto, UpdateCostoDto, PrestamoConGanancias, GastoDto, CreateGastoDto } from './types';
+import type { Costo, CreateCostoDto, UpdateCostoDto, PrestamoConGanancias, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto } from './types';
 
 export const costosApi = {
     getAll: async (): Promise<Costo[]> => {
@@ -818,5 +818,30 @@ export const gastosApi = {
             headers: getHeaders(),
         });
         if (!response.ok) throw new Error('Error al eliminar gasto');
+    },
+};
+
+// Transferencias
+export const transferenciasApi = {
+    getAll: async (): Promise<TransferenciaDto[]> => {
+        const response = await fetch(`${API_URL}/transferencias`, { headers: getHeaders() });
+        return handleResponse<TransferenciaDto[]>(response);
+    },
+
+    create: async (data: CreateTransferenciaDto): Promise<TransferenciaDto> => {
+        const response = await fetch(`${API_URL}/transferencias`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return handleResponse<TransferenciaDto>(response);
+    },
+
+    delete: async (id: number): Promise<void> => {
+        const response = await fetch(`${API_URL}/transferencias/${id}`, {
+            method: 'DELETE',
+            headers: getHeaders(),
+        });
+        if (!response.ok) throw new Error('Error al eliminar transferencia');
     },
 };
