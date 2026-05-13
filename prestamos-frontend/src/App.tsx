@@ -1440,7 +1440,7 @@ function App() {
           <div className="kpi-card" style={{ borderLeft: '4px solid #10b981', background: 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, transparent 100%)' }}>
             <div className="kpi-header">
               <span className="kpi-title">📱 Nequi</span>
-              {editingSaldoMedio !== 'nequi' && <button onClick={() => { setEditingSaldoMedio('nequi'); setSaldoEditValue(String(metricas?.balanceNequi ?? 0)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#888', padding: '0 0.25rem' }} title="Editar saldo">✏️</button>}
+              {editingSaldoMedio !== 'nequi' && currentUser?.email === 'admin@prestamos.com' && <button onClick={() => { setEditingSaldoMedio('nequi'); setSaldoEditValue(String(metricas?.balanceNequi ?? 0)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#888', padding: '0 0.25rem' }} title="Editar saldo">✏️</button>}
             </div>
             {editingSaldoMedio === 'nequi' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
@@ -1460,7 +1460,7 @@ function App() {
           <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b', background: 'linear-gradient(135deg, rgba(245,158,11,0.1) 0%, transparent 100%)' }}>
             <div className="kpi-header">
               <span className="kpi-title">💵 Efectivo</span>
-              {editingSaldoMedio !== 'efectivo' && <button onClick={() => { setEditingSaldoMedio('efectivo'); setSaldoEditValue(String(metricas?.balanceEfectivo ?? 0)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#888', padding: '0 0.25rem' }} title="Editar saldo">✏️</button>}
+              {editingSaldoMedio !== 'efectivo' && currentUser?.email === 'admin@prestamos.com' && <button onClick={() => { setEditingSaldoMedio('efectivo'); setSaldoEditValue(String(metricas?.balanceEfectivo ?? 0)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#888', padding: '0 0.25rem' }} title="Editar saldo">✏️</button>}
             </div>
             {editingSaldoMedio === 'efectivo' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
