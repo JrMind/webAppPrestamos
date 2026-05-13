@@ -1438,14 +1438,44 @@ function App() {
             <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Total de cuotas pendientes de cobro (activos y vencidos)</span>
           </div>
           <div className="kpi-card" style={{ borderLeft: '4px solid #10b981', background: 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, transparent 100%)' }}>
-            <div className="kpi-header"><span className="kpi-title">📱 Nequi</span></div>
-            <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(metricas?.balanceNequi || 0)}</span>
-            <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Balance disponible en Nequi</span>
+            <div className="kpi-header">
+              <span className="kpi-title">📱 Nequi</span>
+              {editingSaldoMedio !== 'nequi' && <button onClick={() => { setEditingSaldoMedio('nequi'); setSaldoEditValue(String(metricas?.balanceNequi ?? 0)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#888', padding: '0 0.25rem' }} title="Editar saldo">✏️</button>}
+            </div>
+            {editingSaldoMedio === 'nequi' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
+                <input type="number" value={saldoEditValue} onChange={e => setSaldoEditValue(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '1rem', width: '100%' }} autoFocus />
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                  <button onClick={handleSaveSaldo} className="btn btn-primary" style={{ fontSize: '0.8rem', flex: 1 }}>Guardar</button>
+                  <button onClick={() => setEditingSaldoMedio(null)} className="btn btn-secondary" style={{ fontSize: '0.8rem', flex: 1 }}>Cancelar</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <span className="kpi-value" style={{ color: '#10b981' }}>{formatMoney(metricas?.balanceNequi || 0)}</span>
+                <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Balance disponible en Nequi</span>
+              </>
+            )}
           </div>
           <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b', background: 'linear-gradient(135deg, rgba(245,158,11,0.1) 0%, transparent 100%)' }}>
-            <div className="kpi-header"><span className="kpi-title">💵 Efectivo</span></div>
-            <span className="kpi-value" style={{ color: '#f59e0b' }}>{formatMoney(metricas?.balanceEfectivo || 0)}</span>
-            <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Balance disponible en efectivo</span>
+            <div className="kpi-header">
+              <span className="kpi-title">💵 Efectivo</span>
+              {editingSaldoMedio !== 'efectivo' && <button onClick={() => { setEditingSaldoMedio('efectivo'); setSaldoEditValue(String(metricas?.balanceEfectivo ?? 0)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#888', padding: '0 0.25rem' }} title="Editar saldo">✏️</button>}
+            </div>
+            {editingSaldoMedio === 'efectivo' ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
+                <input type="number" value={saldoEditValue} onChange={e => setSaldoEditValue(e.target.value)} style={{ padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '1rem', width: '100%' }} autoFocus />
+                <div style={{ display: 'flex', gap: '0.4rem' }}>
+                  <button onClick={handleSaveSaldo} className="btn btn-primary" style={{ fontSize: '0.8rem', flex: 1 }}>Guardar</button>
+                  <button onClick={() => setEditingSaldoMedio(null)} className="btn btn-secondary" style={{ fontSize: '0.8rem', flex: 1 }}>Cancelar</button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <span className="kpi-value" style={{ color: '#f59e0b' }}>{formatMoney(metricas?.balanceEfectivo || 0)}</span>
+                <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Balance disponible en efectivo</span>
+              </>
+            )}
           </div>
           <div className="kpi-card" style={{ borderLeft: '4px solid #6366f1', background: 'linear-gradient(135deg, rgba(99,102,241,0.1) 0%, transparent 100%)', cursor: 'pointer', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center' }}
             onClick={() => { setTransferenciaForm({ origen: 'Nequi', destino: 'Efectivo', monto: 0, fecha: formatDateInput(new Date()), descripcion: '' }); setShowTransferenciaModal(true); }}>
@@ -2322,46 +2352,6 @@ function App() {
                   + Nuevo Gasto
                 </button>
               </h4>
-
-              {/* Disponible por fondo */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
-                {/* Nequi */}
-                <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '10px', padding: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                    <span style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 600 }}>📱 Nequi — Disponible</span>
-                    {editingSaldoMedio !== 'nequi' && (
-                      <button onClick={() => { setEditingSaldoMedio('nequi'); setSaldoEditValue(String(metricas?.balanceNequi ?? 0)); }} className="btn btn-sm" style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem' }}>✏️ Editar</button>
-                    )}
-                  </div>
-                  {editingSaldoMedio === 'nequi' ? (
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.25rem' }}>
-                      <input type="number" value={saldoEditValue} onChange={e => setSaldoEditValue(e.target.value)} style={{ flex: 1, padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.9rem' }} autoFocus />
-                      <button onClick={handleSaveSaldo} className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.35rem 0.7rem' }}>Guardar</button>
-                      <button onClick={() => setEditingSaldoMedio(null)} className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.35rem 0.7rem' }}>Cancelar</button>
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: '1.4rem', fontWeight: 700, color: (metricas?.balanceNequi ?? 0) >= 0 ? '#10b981' : '#ef4444' }}>{formatMoney(metricas?.balanceNequi ?? 0)}</div>
-                  )}
-                </div>
-                {/* Efectivo */}
-                <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '10px', padding: '1rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
-                    <span style={{ fontSize: '0.85rem', color: '#f59e0b', fontWeight: 600 }}>💵 Efectivo — Disponible</span>
-                    {editingSaldoMedio !== 'efectivo' && (
-                      <button onClick={() => { setEditingSaldoMedio('efectivo'); setSaldoEditValue(String(metricas?.balanceEfectivo ?? 0)); }} className="btn btn-sm" style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem' }}>✏️ Editar</button>
-                    )}
-                  </div>
-                  {editingSaldoMedio === 'efectivo' ? (
-                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.25rem' }}>
-                      <input type="number" value={saldoEditValue} onChange={e => setSaldoEditValue(e.target.value)} style={{ flex: 1, padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.9rem' }} autoFocus />
-                      <button onClick={handleSaveSaldo} className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.35rem 0.7rem' }}>Guardar</button>
-                      <button onClick={() => setEditingSaldoMedio(null)} className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.35rem 0.7rem' }}>Cancelar</button>
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: '1.4rem', fontWeight: 700, color: (metricas?.balanceEfectivo ?? 0) >= 0 ? '#f59e0b' : '#ef4444' }}>{formatMoney(metricas?.balanceEfectivo ?? 0)}</div>
-                  )}
-                </div>
-              </div>
 
               <div className="table-container" style={{ marginBottom: '1.5rem' }}>
                 <table>
