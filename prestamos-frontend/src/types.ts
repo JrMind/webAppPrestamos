@@ -575,6 +575,7 @@ export interface GastoDto {
   medioPago: string; // "Nequi" | "Efectivo"
   fecha: string;
   categoria?: string;
+  usuarioNombre?: string;
 }
 
 export interface CreateGastoDto {

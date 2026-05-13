@@ -8,4 +8,6 @@ public class Gasto
     public string MedioPago { get; set; } = "Efectivo"; // Nequi | Efectivo
     public DateTime Fecha { get; set; } = DateTime.UtcNow;
     public string? Categoria { get; set; }
+    public int? UsuarioId { get; set; }
+    public Usuario? Usuario { get; set; }
 }

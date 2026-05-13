@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi } from './api';
+import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi, saldosApi } from './api';
 import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto } from './types';
 import { MetricasCobradores } from './components/MetricasCobradores';
 import './App.css';
@@ -90,6 +90,10 @@ function App() {
     fecha: formatDateInput(new Date()),
     categoria: ''
   });
+
+  // Estados para edición de saldos Nequi/Efectivo
+  const [editingSaldoMedio, setEditingSaldoMedio] = useState<'nequi' | 'efectivo' | null>(null);
+  const [saldoEditValue, setSaldoEditValue] = useState<string>('');
 
   // Estado para modal de medio de pago al marcar cuota
   const [showMedioPagoModal, setShowMedioPagoModal] = useState(false);
@@ -236,6 +240,18 @@ function App() {
       await gastosApi.delete(id);
       showToast('Gasto eliminado', 'success');
       loadGastos();
+      loadData();
+    } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
+  };
+
+  const handleSaveSaldo = async () => {
+    if (!editingSaldoMedio) return;
+    const monto = parseFloat(saldoEditValue);
+    if (isNaN(monto)) { showToast('Ingresa un monto válido', 'warning'); return; }
+    try {
+      await saldosApi.setAjuste(editingSaldoMedio, monto);
+      showToast(`Saldo ${editingSaldoMedio === 'nequi' ? 'Nequi' : 'Efectivo'} actualizado`, 'success');
+      setEditingSaldoMedio(null);
       loadData();
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
@@ -2306,6 +2322,47 @@ function App() {
                   + Nuevo Gasto
                 </button>
               </h4>
+
+              {/* Disponible por fondo */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
+                {/* Nequi */}
+                <div style={{ background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '10px', padding: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#10b981', fontWeight: 600 }}>📱 Nequi — Disponible</span>
+                    {editingSaldoMedio !== 'nequi' && (
+                      <button onClick={() => { setEditingSaldoMedio('nequi'); setSaldoEditValue(String(metricas?.balanceNequi ?? 0)); }} className="btn btn-sm" style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem' }}>✏️ Editar</button>
+                    )}
+                  </div>
+                  {editingSaldoMedio === 'nequi' ? (
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.25rem' }}>
+                      <input type="number" value={saldoEditValue} onChange={e => setSaldoEditValue(e.target.value)} style={{ flex: 1, padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.9rem' }} autoFocus />
+                      <button onClick={handleSaveSaldo} className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.35rem 0.7rem' }}>Guardar</button>
+                      <button onClick={() => setEditingSaldoMedio(null)} className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.35rem 0.7rem' }}>Cancelar</button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '1.4rem', fontWeight: 700, color: (metricas?.balanceNequi ?? 0) >= 0 ? '#10b981' : '#ef4444' }}>{formatMoney(metricas?.balanceNequi ?? 0)}</div>
+                  )}
+                </div>
+                {/* Efectivo */}
+                <div style={{ background: 'rgba(245,158,11,0.08)', border: '1px solid rgba(245,158,11,0.3)', borderRadius: '10px', padding: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.25rem' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#f59e0b', fontWeight: 600 }}>💵 Efectivo — Disponible</span>
+                    {editingSaldoMedio !== 'efectivo' && (
+                      <button onClick={() => { setEditingSaldoMedio('efectivo'); setSaldoEditValue(String(metricas?.balanceEfectivo ?? 0)); }} className="btn btn-sm" style={{ fontSize: '0.75rem', padding: '0.2rem 0.6rem' }}>✏️ Editar</button>
+                    )}
+                  </div>
+                  {editingSaldoMedio === 'efectivo' ? (
+                    <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginTop: '0.25rem' }}>
+                      <input type="number" value={saldoEditValue} onChange={e => setSaldoEditValue(e.target.value)} style={{ flex: 1, padding: '0.35rem 0.5rem', borderRadius: '6px', border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', fontSize: '0.9rem' }} autoFocus />
+                      <button onClick={handleSaveSaldo} className="btn btn-primary" style={{ fontSize: '0.8rem', padding: '0.35rem 0.7rem' }}>Guardar</button>
+                      <button onClick={() => setEditingSaldoMedio(null)} className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.35rem 0.7rem' }}>Cancelar</button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '1.4rem', fontWeight: 700, color: (metricas?.balanceEfectivo ?? 0) >= 0 ? '#f59e0b' : '#ef4444' }}>{formatMoney(metricas?.balanceEfectivo ?? 0)}</div>
+                  )}
+                </div>
+              </div>
+
               <div className="table-container" style={{ marginBottom: '1.5rem' }}>
                 <table>
                   <thead>
@@ -2315,6 +2372,7 @@ function App() {
                       <th>Categoría</th>
                       <th>Medio</th>
                       <th>Monto</th>
+                      <th>Registrado por</th>
                       <th>Acciones</th>
                     </tr>
                   </thead>
@@ -2330,12 +2388,13 @@ function App() {
                           </span>
                         </td>
                         <td className="money" style={{ color: '#ef4444' }}>-{formatMoney(g.monto)}</td>
+                        <td style={{ fontSize: '0.85rem', color: '#888' }}>{g.usuarioNombre || '-'}</td>
                         <td>
                           <button onClick={() => handleDeleteGasto(g.id)} className="btn btn-sm btn-delete" style={{ fontSize: '0.75rem' }}>🗑️</button>
                         </td>
                       </tr>
                     ))}
-                    {gastos.length === 0 && <tr><td colSpan={6} className="empty-state">No hay gastos registrados. Haz clic en "+ Nuevo Gasto" para agregar uno.</td></tr>}
+                    {gastos.length === 0 && <tr><td colSpan={7} className="empty-state">No hay gastos registrados. Haz clic en "+ Nuevo Gasto" para agregar uno.</td></tr>}
                   </tbody>
                 </table>
               </div>

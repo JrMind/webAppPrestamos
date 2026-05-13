@@ -845,3 +845,21 @@ export const transferenciasApi = {
         if (!response.ok) throw new Error('Error al eliminar transferencia');
     },
 };
+
+// Saldos (balances Nequi / Efectivo)
+export const saldosApi = {
+    getAjustes: async (): Promise<{ nequi: number; efectivo: number }> => {
+        const response = await fetch(`${API_URL}/saldos`, { headers: getHeaders() });
+        const data = await handleResponse<{ nequi: { ajuste: number }; efectivo: { ajuste: number } }>(response);
+        return { nequi: data.nequi.ajuste, efectivo: data.efectivo.ajuste };
+    },
+
+    setAjuste: async (medio: 'nequi' | 'efectivo', monto: number): Promise<void> => {
+        const response = await fetch(`${API_URL}/saldos/${medio}`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({ monto }),
+        });
+        if (!response.ok) throw new Error('Error al actualizar el saldo');
+    },
+};

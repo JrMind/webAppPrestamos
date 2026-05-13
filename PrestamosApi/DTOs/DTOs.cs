@@ -484,7 +484,8 @@ public record GastoDto(
     decimal Monto,
     string MedioPago,
     DateTime Fecha,
-    string? Categoria
+    string? Categoria,
+    string? UsuarioNombre
 );
 
 public record CreateGastoDto(

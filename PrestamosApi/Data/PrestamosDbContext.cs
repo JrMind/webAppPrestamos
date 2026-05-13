@@ -468,6 +468,8 @@ public class PrestamosDbContext : DbContext
             entity.Property(e => e.MedioPago).HasColumnName("mediopago").HasMaxLength(20).HasDefaultValue("Efectivo");
             entity.Property(e => e.Fecha).HasColumnName("fecha").HasDefaultValueSql("NOW()");
             entity.Property(e => e.Categoria).HasColumnName("categoria").HasMaxLength(100);
+            entity.Property(e => e.UsuarioId).HasColumnName("usuarioid");
+            entity.HasOne(e => e.Usuario).WithMany().HasForeignKey(e => e.UsuarioId).OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

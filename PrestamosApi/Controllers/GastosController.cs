@@ -10,7 +10,7 @@ namespace PrestamosApi.Controllers;
 [ApiController]
 [Route("api/[controller]")]
 [Authorize]
-public class GastosController : ControllerBase
+public class GastosController : BaseApiController
 {
     private readonly PrestamosDbContext _context;
 
@@ -23,8 +23,9 @@ public class GastosController : ControllerBase
     public async Task<ActionResult<IEnumerable<GastoDto>>> GetAll()
     {
         var gastos = await _context.Gastos
+            .Include(g => g.Usuario)
             .OrderByDescending(g => g.Fecha)
-            .Select(g => new GastoDto(g.Id, g.Descripcion, g.Monto, g.MedioPago, g.Fecha, g.Categoria))
+            .Select(g => new GastoDto(g.Id, g.Descripcion, g.Monto, g.MedioPago, g.Fecha, g.Categoria, g.Usuario != null ? g.Usuario.Nombre : null))
             .ToListAsync();
         return Ok(gastos);
     }
@@ -37,6 +38,8 @@ public class GastosController : ControllerBase
         if (dto.MedioPago != "Nequi" && dto.MedioPago != "Efectivo")
             return BadRequest(new { message = "El medio de pago debe ser Nequi o Efectivo" });
 
+        var usuarioId = GetCurrentUserId();
+
         var gasto = new Gasto
         {
             Descripcion = dto.Descripcion,
@@ -45,13 +48,18 @@ public class GastosController : ControllerBase
             Fecha = dto.Fecha.Kind == DateTimeKind.Unspecified
                 ? DateTime.SpecifyKind(dto.Fecha, DateTimeKind.Utc)
                 : dto.Fecha.ToUniversalTime(),
-            Categoria = dto.Categoria
+            Categoria = dto.Categoria,
+            UsuarioId = usuarioId
         };
 
         _context.Gastos.Add(gasto);
         await _context.SaveChangesAsync();
 
-        return Ok(new GastoDto(gasto.Id, gasto.Descripcion, gasto.Monto, gasto.MedioPago, gasto.Fecha, gasto.Categoria));
+        var nombreUsuario = usuarioId.HasValue
+            ? (await _context.Usuarios.FindAsync(usuarioId.Value))?.Nombre
+            : null;
+
+        return Ok(new GastoDto(gasto.Id, gasto.Descripcion, gasto.Monto, gasto.MedioPago, gasto.Fecha, gasto.Categoria, nombreUsuario));
     }
 
     [HttpDelete("{id}")]
