@@ -2995,7 +2995,7 @@ function App() {
                         min="1"
                         max={selectedPrestamo.montoPrestado}
                         id="abonoCapitalInput"
-                        style={{ flex: 1, padding: '0.5rem' }}
+                        style={{ flex: 1, padding: '0.5rem', background: '#1e1e2e', color: '#fff', border: '1px solid #444', borderRadius: '4px', minWidth: '120px' }}
                       />
                       <select id="abonoMedioInput" style={{ padding: '0.5rem', background: '#1e1e2e', color: '#fff', border: '1px solid #444', borderRadius: '4px' }}>
                         <option value="Efectivo">💵 Efectivo</option>
