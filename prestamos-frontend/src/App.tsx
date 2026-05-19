@@ -94,7 +94,6 @@ function App() {
   // Estados para edición de saldos Nequi/Efectivo
   const [editingSaldoMedio, setEditingSaldoMedio] = useState<'nequi' | 'efectivo' | null>(null);
   const [saldoEditValue, setSaldoEditValue] = useState<string>('');
-  const [currentAjustes, setCurrentAjustes] = useState<{ nequi: number; efectivo: number } | null>(null);
 
   // Estado para modal de medio de pago al marcar cuota
   const [showMedioPagoModal, setShowMedioPagoModal] = useState(false);
@@ -250,20 +249,9 @@ function App() {
     const desiredTotal = parseFloat(saldoEditValue);
     if (isNaN(desiredTotal)) { showToast('Ingresa un monto válido', 'warning'); return; }
     try {
-      // El usuario ingresa el total que quiere ver. Calculamos el ajuste necesario:
-      // ajuste = desiredTotal - (balanceActual - ajusteActual)
-      const currentBalance = editingSaldoMedio === 'efectivo'
-        ? (metricas?.balanceEfectivo ?? 0)
-        : (metricas?.balanceNequi ?? 0);
-      const currentAjuste = editingSaldoMedio === 'efectivo'
-        ? (currentAjustes?.efectivo ?? 0)
-        : (currentAjustes?.nequi ?? 0);
-      const computedBase = currentBalance - currentAjuste;
-      const newAjuste = desiredTotal - computedBase;
-      await saldosApi.setAjuste(editingSaldoMedio, newAjuste);
+      await saldosApi.setAjuste(editingSaldoMedio, desiredTotal);
       showToast(`Saldo ${editingSaldoMedio === 'nequi' ? 'Nequi' : 'Efectivo'} actualizado`, 'success');
       setEditingSaldoMedio(null);
-      setCurrentAjustes(null);
       loadData();
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
@@ -1452,7 +1440,7 @@ function App() {
           <div className="kpi-card" style={{ borderLeft: '4px solid #10b981', background: 'linear-gradient(135deg, rgba(16,185,129,0.1) 0%, transparent 100%)' }}>
             <div className="kpi-header">
               <span className="kpi-title">📱 Nequi</span>
-              {editingSaldoMedio !== 'nequi' && currentUser?.email === 'admin@prestamos.com' && <button onClick={async () => { const aj = await saldosApi.getAjustes(); setCurrentAjustes(aj); setEditingSaldoMedio('nequi'); setSaldoEditValue(String(metricas?.balanceNequi ?? 0)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#888', padding: '0 0.25rem' }} title="Editar saldo">✏️</button>}
+              {editingSaldoMedio !== 'nequi' && currentUser?.email === 'admin@prestamos.com' && <button onClick={() => { setEditingSaldoMedio('nequi'); setSaldoEditValue(String(metricas?.balanceNequi ?? 0)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#888', padding: '0 0.25rem' }} title="Editar saldo">✏️</button>}
             </div>
             {editingSaldoMedio === 'nequi' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
@@ -1472,7 +1460,7 @@ function App() {
           <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b', background: 'linear-gradient(135deg, rgba(245,158,11,0.1) 0%, transparent 100%)' }}>
             <div className="kpi-header">
               <span className="kpi-title">💵 Efectivo</span>
-              {editingSaldoMedio !== 'efectivo' && currentUser?.email === 'admin@prestamos.com' && <button onClick={async () => { const aj = await saldosApi.getAjustes(); setCurrentAjustes(aj); setEditingSaldoMedio('efectivo'); setSaldoEditValue(String(metricas?.balanceEfectivo ?? 0)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#888', padding: '0 0.25rem' }} title="Editar saldo">✏️</button>}
+              {editingSaldoMedio !== 'efectivo' && currentUser?.email === 'admin@prestamos.com' && <button onClick={() => { setEditingSaldoMedio('efectivo'); setSaldoEditValue(String(metricas?.balanceEfectivo ?? 0)); }} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '0.85rem', color: '#888', padding: '0 0.25rem' }} title="Editar saldo">✏️</button>}
             </div>
             {editingSaldoMedio === 'efectivo' ? (
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem', marginTop: '0.25rem' }}>
