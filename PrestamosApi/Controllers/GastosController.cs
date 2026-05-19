@@ -52,8 +52,16 @@ public class GastosController : BaseApiController
             UsuarioId = usuarioId
         };
 
-        _context.Gastos.Add(gasto);
-        await _context.SaveChangesAsync();
+        try
+        {
+            _context.Gastos.Add(gasto);
+            await _context.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            var inner = ex.InnerException?.Message ?? "";
+            return StatusCode(500, new { message = $"{ex.Message} | {inner}" });
+        }
 
         var nombreUsuario = usuarioId.HasValue
             ? (await _context.Usuarios.FindAsync(usuarioId.Value))?.Nombre
