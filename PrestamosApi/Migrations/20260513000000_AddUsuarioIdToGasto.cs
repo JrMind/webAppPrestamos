@@ -4,37 +4,38 @@ using Microsoft.EntityFrameworkCore.Migrations;
 
 namespace PrestamosApi.Migrations
 {
-    /// <inheritdoc />
     public partial class AddUsuarioIdToGasto : Migration
     {
-        /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.AddColumn<int>(
-                name: "usuarioid",
-                table: "gastos",
-                type: "integer",
-                nullable: true);
+            migrationBuilder.Sql(@"
+                ALTER TABLE gastos ADD COLUMN IF NOT EXISTS usuarioid integer;
+            ");
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_gastos_usuarios_usuarioid",
-                table: "gastos",
-                column: "usuarioid",
-                principalTable: "usuarios",
-                principalColumn: "id",
-                onDelete: ReferentialAction.SetNull);
+            migrationBuilder.Sql(@"
+                DO $$
+                BEGIN
+                    IF NOT EXISTS (
+                        SELECT 1 FROM information_schema.table_constraints
+                        WHERE constraint_name = 'FK_gastos_usuarios_usuarioid'
+                          AND table_name = 'gastos'
+                    ) THEN
+                        ALTER TABLE gastos
+                            ADD CONSTRAINT FK_gastos_usuarios_usuarioid
+                            FOREIGN KEY (usuarioid) REFERENCES usuarios(id)
+                            ON DELETE SET NULL;
+                    END IF;
+                END
+                $$;
+            ");
         }
 
-        /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropForeignKey(
-                name: "FK_gastos_usuarios_usuarioid",
-                table: "gastos");
-
-            migrationBuilder.DropColumn(
-                name: "usuarioid",
-                table: "gastos");
+            migrationBuilder.Sql(@"
+                ALTER TABLE gastos DROP CONSTRAINT IF EXISTS FK_gastos_usuarios_usuarioid;
+                ALTER TABLE gastos DROP COLUMN IF EXISTS usuarioid;
+            ");
         }
     }
 }
