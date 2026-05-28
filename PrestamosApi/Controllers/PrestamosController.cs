@@ -1142,7 +1142,9 @@ public class PrestamosController : BaseApiController
         p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida")
     );
 
-    // Algoritmo greedy multi-criterio: balance simultáneo de capital, interés y mora
+    // Algoritmo LPT (Longest Processing Time) multi-criterio:
+    // Asigna cada préstamo al grupo con MENOR carga acumulada normalizada.
+    // Esto evita que grupos vacíos queden ignorados por tener alta desviación del objetivo.
     private static List<(Prestamo Prestamo, int Grupo)> DistribuirEquitativamente(List<Prestamo> prestamos)
     {
         if (prestamos.Count == 0)
@@ -1152,24 +1154,21 @@ public class PrestamosController : BaseApiController
         decimal totalInteres = prestamos.Sum(p => p.MontoIntereses);
         int     totalMora    = prestamos.Count(p => p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"));
 
-        decimal targetCapital = totalCapital / 3;
-        decimal targetInteres = totalInteres / 3;
-        double  targetMora    = totalMora / 3.0;
-
         decimal[] capitalAcum = new decimal[3];
         decimal[] interesAcum = new decimal[3];
         double[]  moraAcum    = new double[3];
 
         // LPT: ordenar de mayor a menor capital para mejor balance inicial
         var ordenados = prestamos
-            .Select((p, i) => (Prestamo: p, Idx: i))
+            .Select((p, i) => new { Prestamo = p, Idx = i })
             .OrderByDescending(x => x.Prestamo.MontoPrestado)
             .ToList();
 
         int[] asignaciones = new int[prestamos.Count];
 
-        foreach (var (prestamo, idx) in ordenados)
+        foreach (var item in ordenados)
         {
+            var prestamo = item.Prestamo;
             bool enMora = prestamo.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida");
 
             int    mejorGrupo = 0;
@@ -1177,15 +1176,12 @@ public class PrestamosController : BaseApiController
 
             for (int g = 0; g < 3; g++)
             {
-                double newCap  = (double)(capitalAcum[g] + prestamo.MontoPrestado);
-                double newInt  = (double)(interesAcum[g] + prestamo.MontoIntereses);
-                double newMora = moraAcum[g] + (enMora ? 1 : 0);
+                // Score = carga actual normalizada del grupo (menor = más disponible)
+                double loadCap  = totalCapital > 0 ? (double)capitalAcum[g] / (double)totalCapital : 0;
+                double loadInt  = totalInteres > 0 ? (double)interesAcum[g] / (double)totalInteres : 0;
+                double loadMora = totalMora    > 0 ? moraAcum[g]            / totalMora            : 0;
 
-                double devCap  = totalCapital > 0 ? Math.Abs(newCap  - (double)targetCapital) / (double)totalCapital : 0;
-                double devInt  = totalInteres > 0 ? Math.Abs(newInt  - (double)targetInteres) / (double)totalInteres : 0;
-                double devMora = totalMora    > 0 ? Math.Abs(newMora - targetMora)             / totalMora           : 0;
-
-                double score = devCap + devInt + devMora;
+                double score = loadCap + loadInt + loadMora;
 
                 if (score < mejorScore)
                 {
@@ -1197,7 +1193,7 @@ public class PrestamosController : BaseApiController
             capitalAcum[mejorGrupo] += prestamo.MontoPrestado;
             interesAcum[mejorGrupo] += prestamo.MontoIntereses;
             moraAcum[mejorGrupo]    += (enMora ? 1 : 0);
-            asignaciones[idx]        = mejorGrupo;
+            asignaciones[item.Idx]   = mejorGrupo;
         }
 
         return prestamos
