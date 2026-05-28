@@ -121,6 +121,28 @@ function App() {
   const [distribucionData, setDistribucionData] = useState<DistribucionPrestamos | null>(null);
   const [loadingDistribucion, setLoadingDistribucion] = useState(false);
 
+  const recalcularGrupoDistribucion = (numero: number, prestamos: DistribucionPrestamos['grupos'][0]['prestamos']): DistribucionPrestamos['grupos'][0] => {
+    const count = prestamos.length;
+    const totalCapital = prestamos.reduce((s, p) => s + p.capitalRestante, 0);
+    const totalIntereses = prestamos.reduce((s, p) => s + p.montoIntereses, 0);
+    const totalMontoCuota = prestamos.reduce((s, p) => s + p.montoCuota, 0);
+    const tasaPromedioInteres = count > 0 ? prestamos.reduce((s, p) => s + p.tasaInteres, 0) / count : 0;
+    const totalEnMora = prestamos.filter(p => p.enMora).length;
+    return { numero, prestamos, totalCapital, totalIntereses, totalMontoCuota, tasaPromedioInteres: Math.round(tasaPromedioInteres * 100) / 100, totalEnMora, porcentajeMorosidad: count > 0 ? Math.round(totalEnMora / count * 1000) / 10 : 0 };
+  };
+
+  const handleMoverPrestamo = (prestamoId: number, fromNumero: number, toNumero: number) => {
+    if (!distribucionData) return;
+    const fromGrupo = distribucionData.grupos.find(g => g.numero === fromNumero)!;
+    const prestamo = fromGrupo.prestamos.find(p => p.id === prestamoId)!;
+    const newGrupos = distribucionData.grupos.map(g => {
+      if (g.numero === fromNumero) return recalcularGrupoDistribucion(g.numero, g.prestamos.filter(p => p.id !== prestamoId));
+      if (g.numero === toNumero)   return recalcularGrupoDistribucion(g.numero, [...g.prestamos, prestamo]);
+      return g;
+    });
+    setDistribucionData({ ...distribucionData, grupos: newGrupos, totalCapitalDistribuido: newGrupos.reduce((s, g) => s + g.totalCapital, 0) });
+  };
+
   // Estados de Comisiones / Liquidación
   const [comisiones, setComisiones] = useState<LiquidacionCobrador[]>([]);
   const [loadingComisiones, setLoadingComisiones] = useState(false);
@@ -3438,6 +3460,7 @@ function App() {
                             <th style={{ padding: '0.4rem 0.5rem', textAlign: 'right', fontWeight: 600, color: '#374151' }}>Capital</th>
                             <th style={{ padding: '0.4rem 0.5rem', textAlign: 'right', fontWeight: 600, color: '#374151' }}>Cuota</th>
                             <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', fontWeight: 600, color: '#374151' }}>Estado</th>
+                            <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', fontWeight: 600, color: '#374151' }}>Mover</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -3454,6 +3477,16 @@ function App() {
                                   ? <span style={{ background: '#fee2e2', color: '#dc2626', borderRadius: '4px', padding: '1px 5px', fontSize: '0.7rem' }}>Mora</span>
                                   : <span style={{ background: '#d1fae5', color: '#065f46', borderRadius: '4px', padding: '1px 5px', fontSize: '0.7rem' }}>OK</span>
                                 }
+                              </td>
+                              <td style={{ padding: '0.35rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
+                                {([1, 2, 3] as const).filter(n => n !== grupo.numero).map(n => (
+                                  <button
+                                    key={n}
+                                    onClick={() => handleMoverPrestamo(p.id, grupo.numero, n)}
+                                    title={`Mover a Parte ${n}`}
+                                    style={{ fontSize: '0.65rem', padding: '2px 6px', margin: '1px', background: n === 1 ? '#3b82f6' : n === 2 ? '#10b981' : '#8b5cf6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 700 }}
+                                  >→P{n}</button>
+                                ))}
                               </td>
                             </tr>
                           ))}
