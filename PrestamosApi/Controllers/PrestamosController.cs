@@ -1058,7 +1058,8 @@ public class PrestamosController : BaseApiController
         var query = _context.Prestamos
             .Include(p => p.Cliente)
             .Include(p => p.Cuotas)
-            .Where(p => p.EstadoPrestamo == "Activo")
+            // Igual que el dashboard: Activo + Vencido
+            .Where(p => p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido")
             .AsQueryable();
 
         if (isCobrador && userId.HasValue)
@@ -1076,17 +1077,21 @@ public class PrestamosController : BaseApiController
         var todos = await query.ToListAsync();
 
         const decimal LIMITE = 4_000_000m;
-        var elegibles = todos.Where(p => p.MontoPrestado <= LIMITE).ToList();
-        var excluidos  = todos.Where(p => p.MontoPrestado >  LIMITE).ToList();
+        // Congelados: fuera de las 3 partes sin importar monto
+        var congelados = todos.Where(p => p.EsCongelado).ToList();
+        var normales   = todos.Where(p => !p.EsCongelado).ToList();
+        // De los normales: elegibles (<= 4M) y excluidos (> 4M)
+        var elegibles  = normales.Where(p => p.MontoPrestado <= LIMITE).ToList();
+        var excluidos  = normales.Where(p => p.MontoPrestado >  LIMITE).ToList();
 
         var asignaciones = DistribuirEquitativamente(elegibles);
 
         var grupos = Enumerable.Range(0, 3).Select(g =>
         {
-            var grupo = asignaciones.Where(a => a.Grupo == g).Select(a => a.Prestamo).ToList();
-            int count      = grupo.Count;
-            decimal totCap = grupo.Sum(p => GetCapitalRestante(p));
-            decimal totInt = grupo.Sum(p => p.MontoIntereses);
+            var grupo    = asignaciones.Where(a => a.Grupo == g).Select(a => a.Prestamo).ToList();
+            int count    = grupo.Count;
+            decimal totCap   = grupo.Sum(p => GetCapitalRestante(p));
+            decimal totInt   = grupo.Sum(p => p.MontoIntereses);
             decimal totCuota = grupo.Sum(p => p.MontoCuota);
             decimal avgTasa  = count > 0 ? grupo.Average(p => p.TasaInteres) : 0;
             int enMora = grupo.Count(p => p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"));
@@ -1103,29 +1108,35 @@ public class PrestamosController : BaseApiController
             );
         }).ToList();
 
-        var prestamosExcluidos = excluidos.Select(p => new PrestamoExcluidoDistribucionDto(
-            p.Id,
-            p.Cliente!.Nombre,
-            p.Cliente.Cedula,
-            p.MontoPrestado,
-            p.TasaInteres,
-            p.FrecuenciaPago,
-            p.NumeroCuotas,
-            p.MontoCuota,
-            p.MontoIntereses,
-            p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"),
-            Math.Round(p.MontoCuota / 3, 0)
-        )).ToList();
+        var prestamosExcluidos = excluidos.Select(p => MapToExcluido(p)).ToList();
+        var prestamosCongelados = congelados.Select(p => MapToExcluido(p)).ToList();
 
         return Ok(new DistribucionPrestamosDto(
             grupos,
             prestamosExcluidos,
+            prestamosCongelados,
             elegibles.Sum(p => GetCapitalRestante(p)),
             excluidos.Sum(p => GetCapitalRestante(p)),
+            congelados.Sum(p => p.MontoPrestado),   // capital congelado = MontoPrestado (nunca baja)
             elegibles.Count,
-            excluidos.Count
+            excluidos.Count,
+            congelados.Count
         ));
     }
+
+    private static PrestamoExcluidoDistribucionDto MapToExcluido(Prestamo p) => new(
+        p.Id,
+        p.Cliente!.Nombre,
+        p.Cliente.Cedula,
+        p.EsCongelado ? p.MontoPrestado : GetCapitalRestante(p),
+        p.TasaInteres,
+        p.FrecuenciaPago,
+        p.NumeroCuotas,
+        p.MontoCuota,
+        p.MontoIntereses,
+        p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"),
+        Math.Round(p.MontoCuota / 3, 0)
+    );
 
     private static decimal GetCapitalRestante(Prestamo p) =>
         p.EsCongelado

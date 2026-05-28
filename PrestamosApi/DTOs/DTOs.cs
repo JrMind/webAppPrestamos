@@ -563,10 +563,13 @@ public record PrestamoExcluidoDistribucionDto(
 
 public record DistribucionPrestamosDto(
     List<GrupoDistribucionDto> Grupos,
-    List<PrestamoExcluidoDistribucionDto> PrestamosExcluidos,
+    List<PrestamoExcluidoDistribucionDto> PrestamosExcluidos,   // capital > 4M, no congelados
+    List<PrestamoExcluidoDistribucionDto> PrestamosCongelados,  // EsCongelado = true
     decimal TotalCapitalDistribuido,
     decimal TotalCapitalExcluido,
+    decimal TotalCapitalCongelado,
     int TotalPrestamosDistribuidos,
-    int TotalPrestamosExcluidos
+    int TotalPrestamosExcluidos,
+    int TotalPrestamosCongelados
 );
 

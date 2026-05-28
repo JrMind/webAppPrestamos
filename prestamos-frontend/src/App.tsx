@@ -3405,14 +3405,26 @@ function App() {
               {/* Resumen general */}
               <div className="kpi-grid" style={{ marginBottom: '1.5rem' }}>
                 <div className="kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
-                  <span className="kpi-title">Préstamos distribuidos</span>
+                  <span className="kpi-title">Distribuidos (3 partes)</span>
                   <span className="kpi-value" style={{ color: '#10b981' }}>{distribucionData.totalPrestamosDistribuidos}</span>
-                  <span className="kpi-sub">{formatMoney(distribucionData.totalCapitalDistribuido)} en capital</span>
+                  <span className="kpi-sub">{formatMoney(distribucionData.totalCapitalDistribuido)} capital restante</span>
                 </div>
                 <div className="kpi-card" style={{ borderLeft: '4px solid #ef4444' }}>
-                  <span className="kpi-title">Préstamos excluidos (&gt;4M)</span>
+                  <span className="kpi-title">Excluidos (&gt;4M)</span>
                   <span className="kpi-value" style={{ color: '#ef4444' }}>{distribucionData.totalPrestamosExcluidos}</span>
-                  <span className="kpi-sub">{formatMoney(distribucionData.totalCapitalExcluido)} en capital</span>
+                  <span className="kpi-sub">{formatMoney(distribucionData.totalCapitalExcluido)} capital restante</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b' }}>
+                  <span className="kpi-title">Congelados</span>
+                  <span className="kpi-value" style={{ color: '#f59e0b' }}>{distribucionData.totalPrestamosCongelados}</span>
+                  <span className="kpi-sub">{formatMoney(distribucionData.totalCapitalCongelado)} capital fijo</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #6366f1' }}>
+                  <span className="kpi-title">Total en calle</span>
+                  <span className="kpi-value" style={{ color: '#6366f1' }}>
+                    {distribucionData.totalPrestamosDistribuidos + distribucionData.totalPrestamosExcluidos + distribucionData.totalPrestamosCongelados}
+                  </span>
+                  <span className="kpi-sub">{formatMoney(distribucionData.totalCapitalDistribuido + distribucionData.totalCapitalExcluido + distribucionData.totalCapitalCongelado)}</span>
                 </div>
               </div>
 
@@ -3568,6 +3580,55 @@ function App() {
 
               {distribucionData.prestamosExcluidos.length === 0 && (
                 <p style={{ color: '#10b981', fontSize: '0.9rem' }}>No hay préstamos con capital mayor a $4.000.000.</p>
+              )}
+
+              {/* Préstamos congelados */}
+              {distribucionData.prestamosCongelados.length > 0 && (
+                <div style={{ marginTop: '1.5rem' }}>
+                  <h4 style={{ marginBottom: '0.75rem', color: '#d97706' }}>
+                    🧊 Préstamos congelados (capital fijo) — {distribucionData.prestamosCongelados.length} préstamos · {formatMoney(distribucionData.totalCapitalCongelado)}
+                  </h4>
+                  <p style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '0.75rem' }}>
+                    Solo pagan intereses. El capital no se reduce. Si se distribuyeran, cada parte recibiría por cuota:
+                  </p>
+                  <div className="table-container">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Cliente</th>
+                          <th>Capital fijo</th>
+                          <th>Tasa</th>
+                          <th>Frecuencia</th>
+                          <th>Estado</th>
+                          <th style={{ color: '#3b82f6' }}>Parte 1 x cuota</th>
+                          <th style={{ color: '#10b981' }}>Parte 2 x cuota</th>
+                          <th style={{ color: '#8b5cf6' }}>Parte 3 x cuota</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {distribucionData.prestamosCongelados.map(p => (
+                          <tr key={p.id}>
+                            <td><strong>{p.clienteNombre}</strong><div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>{p.clienteCedula}</div></td>
+                            <td className="money" style={{ color: '#d97706', fontWeight: 700 }}>{formatMoney(p.montoPrestado)}</td>
+                            <td>{p.tasaInteres}%</td>
+                            <td>{p.frecuenciaPago}</td>
+                            <td>{p.enMora ? <span className="badge badge-red">Mora</span> : <span className="badge badge-green">Al día</span>}</td>
+                            <td className="money" style={{ color: '#3b82f6', fontWeight: 600 }}>{formatMoney(p.aportePorParteCuota)}</td>
+                            <td className="money" style={{ color: '#10b981', fontWeight: 600 }}>{formatMoney(p.aportePorParteCuota)}</td>
+                            <td className="money" style={{ color: '#8b5cf6', fontWeight: 600 }}>{formatMoney(p.aportePorParteCuota)}</td>
+                          </tr>
+                        ))}
+                        <tr style={{ fontWeight: 700, background: '#fef3c7', borderTop: '2px solid #fcd34d' }}>
+                          <td colSpan={4}><strong>Total cuota congelados (si se distribuyeran)</strong></td>
+                          <td></td>
+                          <td className="money" style={{ color: '#3b82f6' }}>{formatMoney(distribucionData.prestamosCongelados.reduce((s, p) => s + p.aportePorParteCuota, 0))}</td>
+                          <td className="money" style={{ color: '#10b981' }}>{formatMoney(distribucionData.prestamosCongelados.reduce((s, p) => s + p.aportePorParteCuota, 0))}</td>
+                          <td className="money" style={{ color: '#8b5cf6' }}>{formatMoney(distribucionData.prestamosCongelados.reduce((s, p) => s + p.aportePorParteCuota, 0))}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               )}
             </>
           )}

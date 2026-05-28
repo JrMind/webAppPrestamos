@@ -691,9 +691,12 @@ export interface PrestamoExcluidoDistribucion {
 
 export interface DistribucionPrestamos {
   grupos: GrupoDistribucion[];
-  prestamosExcluidos: PrestamoExcluidoDistribucion[];
+  prestamosExcluidos: PrestamoExcluidoDistribucion[];   // capital > 4M, no congelados
+  prestamosCongelados: PrestamoExcluidoDistribucion[];  // EsCongelado = true
   totalCapitalDistribuido: number;
   totalCapitalExcluido: number;
+  totalCapitalCongelado: number;
   totalPrestamosDistribuidos: number;
   totalPrestamosExcluidos: number;
+  totalPrestamosCongelados: number;
 }
