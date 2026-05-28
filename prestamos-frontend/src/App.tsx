@@ -530,7 +530,7 @@ function App() {
   useEffect(() => { if (activeTab === 'balance') loadMiBalance(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'comisiones') loadComisiones(); }, [activeTab]);
   useEffect(() => {
-    if (activeTab === 'distribucion') {
+    if (activeTab === 'distribucion' && !distribucionData) {
       setLoadingDistribucion(true);
       distribucionApi.get().then(setDistribucionData).catch(console.error).finally(() => setLoadingDistribucion(false));
     }
