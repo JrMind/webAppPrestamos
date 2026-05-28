@@ -653,7 +653,7 @@ export interface PrestamoDistribucionItem {
   id: number;
   clienteNombre: string;
   clienteCedula: string;
-  montoPrestado: number;
+  capitalRestante: number;
   tasaInteres: number;
   tipoInteres: string;
   frecuenciaPago: string;

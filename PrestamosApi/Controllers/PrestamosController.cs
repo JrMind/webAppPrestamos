@@ -1085,7 +1085,7 @@ public class PrestamosController : BaseApiController
         {
             var grupo = asignaciones.Where(a => a.Grupo == g).Select(a => a.Prestamo).ToList();
             int count      = grupo.Count;
-            decimal totCap = grupo.Sum(p => p.MontoPrestado);
+            decimal totCap = grupo.Sum(p => GetCapitalRestante(p));
             decimal totInt = grupo.Sum(p => p.MontoIntereses);
             decimal totCuota = grupo.Sum(p => p.MontoCuota);
             decimal avgTasa  = count > 0 ? grupo.Average(p => p.TasaInteres) : 0;
@@ -1120,18 +1120,26 @@ public class PrestamosController : BaseApiController
         return Ok(new DistribucionPrestamosDto(
             grupos,
             prestamosExcluidos,
-            elegibles.Sum(p => p.MontoPrestado),
-            excluidos.Sum(p => p.MontoPrestado),
+            elegibles.Sum(p => GetCapitalRestante(p)),
+            excluidos.Sum(p => GetCapitalRestante(p)),
             elegibles.Count,
             excluidos.Count
         ));
     }
 
+    private static decimal GetCapitalRestante(Prestamo p) =>
+        p.EsCongelado
+            ? p.MontoPrestado
+            : p.Cuotas
+                .Where(c => c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial"
+                         || c.EstadoCuota == "Vencida"   || c.EstadoCuota == "Mora")
+                .Sum(c => c.MontoCapital);
+
     private static PrestamoDistribucionItemDto MapToDistribucionItem(Prestamo p) => new(
         p.Id,
         p.Cliente!.Nombre,
         p.Cliente.Cedula,
-        p.MontoPrestado,
+        GetCapitalRestante(p),
         p.TasaInteres,
         p.TipoInteres,
         p.FrecuenciaPago,
@@ -1150,7 +1158,7 @@ public class PrestamosController : BaseApiController
         if (prestamos.Count == 0)
             return new List<(Prestamo, int)>();
 
-        decimal totalCapital = prestamos.Sum(p => p.MontoPrestado);
+        decimal totalCapital = prestamos.Sum(p => GetCapitalRestante(p));
         decimal totalInteres = prestamos.Sum(p => p.MontoIntereses);
         int     totalMora    = prestamos.Count(p => p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"));
 
@@ -1190,7 +1198,7 @@ public class PrestamosController : BaseApiController
                 }
             }
 
-            capitalAcum[mejorGrupo] += prestamo.MontoPrestado;
+            capitalAcum[mejorGrupo] += GetCapitalRestante(prestamo);
             interesAcum[mejorGrupo] += prestamo.MontoIntereses;
             moraAcum[mejorGrupo]    += (enMora ? 1 : 0);
             asignaciones[item.Idx]   = mejorGrupo;

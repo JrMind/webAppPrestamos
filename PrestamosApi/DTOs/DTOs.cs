@@ -525,7 +525,7 @@ public record PrestamoDistribucionItemDto(
     int Id,
     string ClienteNombre,
     string ClienteCedula,
-    decimal MontoPrestado,
+    decimal CapitalRestante,   // capital pendiente real (sin intereses)
     decimal TasaInteres,
     string TipoInteres,
     string FrecuenciaPago,

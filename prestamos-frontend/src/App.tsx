@@ -3447,7 +3447,7 @@ function App() {
                                 <div style={{ fontWeight: 600, color: '#111' }}>{p.clienteNombre}</div>
                                 <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>{p.tasaInteres}% · {p.frecuenciaPago}</div>
                               </td>
-                              <td style={{ padding: '0.35rem 0.5rem', textAlign: 'right', color: '#374151' }}>{formatMoney(p.montoPrestado)}</td>
+                              <td style={{ padding: '0.35rem 0.5rem', textAlign: 'right', color: '#374151' }}>{formatMoney(p.capitalRestante)}</td>
                               <td style={{ padding: '0.35rem 0.5rem', textAlign: 'right', color: '#3b82f6' }}>{formatMoney(p.montoCuota)}</td>
                               <td style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>
                                 {p.enMora
