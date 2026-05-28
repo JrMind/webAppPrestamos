@@ -1176,12 +1176,12 @@ public class PrestamosController : BaseApiController
 
             for (int g = 0; g < 3; g++)
             {
-                // Score = carga actual normalizada del grupo (menor = más disponible)
+                // Capital domina (peso 1.0); interés y mora son desempate (peso 0.05 c/u)
                 double loadCap  = totalCapital > 0 ? (double)capitalAcum[g] / (double)totalCapital : 0;
                 double loadInt  = totalInteres > 0 ? (double)interesAcum[g] / (double)totalInteres : 0;
                 double loadMora = totalMora    > 0 ? moraAcum[g]            / totalMora            : 0;
 
-                double score = loadCap + loadInt + loadMora;
+                double score = loadCap + 0.05 * loadInt + 0.05 * loadMora;
 
                 if (score < mejorScore)
                 {
