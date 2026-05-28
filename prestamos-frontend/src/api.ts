@@ -2,7 +2,7 @@ import {
     Cliente, CreateClienteDto, CreatePagoDto, CreatePrestamoDto,
     Cuota, DashboardMetricas, Pago, Prestamo, LoginDto, AuthResponse,
     Usuario, Cobrador, BalanceSocio, CobrosHoy, MovimientoCapital, Aporte,
-    MetricasGenerales
+    MetricasGenerales, DistribucionPrestamos
 } from './types';
 
 const API_URL = import.meta.env.DEV
@@ -843,6 +843,14 @@ export const transferenciasApi = {
             headers: getHeaders(),
         });
         if (!response.ok) throw new Error('Error al eliminar transferencia');
+    },
+};
+
+// Distribución de préstamos
+export const distribucionApi = {
+    get: async (): Promise<DistribucionPrestamos> => {
+        const response = await fetch(`${API_URL}/prestamos/distribucion`, { headers: getHeaders() });
+        return handleResponse<import('./types').DistribucionPrestamos>(response);
     },
 };
 

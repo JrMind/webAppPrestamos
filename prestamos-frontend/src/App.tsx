@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi, saldosApi } from './api';
-import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto } from './types';
+import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi, saldosApi, distribucionApi } from './api';
+import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto, DistribucionPrestamos } from './types';
 import { MetricasCobradores } from './components/MetricasCobradores';
 import './App.css';
 
@@ -44,7 +44,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(getStoredUser);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'prestamosdia' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias' | 'metricas' | 'comisiones'>('prestamos');
+  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'prestamosdia' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias' | 'metricas' | 'comisiones' | 'distribucion'>('prestamos');
 
   // Data states
   const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
@@ -116,6 +116,10 @@ function App() {
     frecuencia: 'Mensual',
     descripcion: ''
   });
+
+  // Estado para Distribución de Préstamos
+  const [distribucionData, setDistribucionData] = useState<DistribucionPrestamos | null>(null);
+  const [loadingDistribucion, setLoadingDistribucion] = useState(false);
 
   // Estados de Comisiones / Liquidación
   const [comisiones, setComisiones] = useState<LiquidacionCobrador[]>([]);
@@ -503,6 +507,12 @@ function App() {
   useEffect(() => { if (activeTab === 'smshistory') loadSmsHistory(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'balance') loadMiBalance(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'comisiones') loadComisiones(); }, [activeTab]);
+  useEffect(() => {
+    if (activeTab === 'distribucion') {
+      setLoadingDistribucion(true);
+      distribucionApi.get().then(setDistribucionData).catch(console.error).finally(() => setLoadingDistribucion(false));
+    }
+  }, [activeTab]);
 
   // New feature loaders
   const loadSmsCampaigns = async () => {
@@ -1544,6 +1554,7 @@ function App() {
             {currentUser?.rol !== 'Administrador' && <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); loadCostos(); loadGastos(); loadTransferencias(); }}>📊 Ganancias</button>}
             {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'comisiones' ? 'active' : ''}`} onClick={() => setActiveTab('comisiones')}>💳 Comisiones</button>}
             {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'metricas' ? 'active' : ''}`} onClick={() => setActiveTab('metricas')}>📈 Métricas</button>}
+            {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'distribucion' ? 'active' : ''}`} onClick={() => setActiveTab('distribucion')}>⚖️ Distribución</button>}
           </div>
 
           {/* Prestamos Tab */}
@@ -3351,6 +3362,182 @@ function App() {
       {activeTab === 'metricas' && (
         <div className="section">
           <MetricasCobradores />
+        </div>
+      )}
+
+      {/* Distribución de Préstamos Tab */}
+      {activeTab === 'distribucion' && (currentUser?.rol === 'Admin' || currentUser?.rol === 'Socio') && (
+        <div className="section">
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+            <h3 style={{ margin: 0 }}>⚖️ Distribución equitativa de préstamos activos</h3>
+            <button className="btn btn-secondary" onClick={() => {
+              setLoadingDistribucion(true);
+              distribucionApi.get().then(setDistribucionData).catch(console.error).finally(() => setLoadingDistribucion(false));
+            }}>🔄 Recalcular</button>
+          </div>
+
+          {loadingDistribucion && <p style={{ color: '#6b7280' }}>Calculando distribución...</p>}
+
+          {distribucionData && !loadingDistribucion && (
+            <>
+              {/* Resumen general */}
+              <div className="kpi-grid" style={{ marginBottom: '1.5rem' }}>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
+                  <span className="kpi-title">Préstamos distribuidos</span>
+                  <span className="kpi-value" style={{ color: '#10b981' }}>{distribucionData.totalPrestamosDistribuidos}</span>
+                  <span className="kpi-sub">{formatMoney(distribucionData.totalCapitalDistribuido)} en capital</span>
+                </div>
+                <div className="kpi-card" style={{ borderLeft: '4px solid #ef4444' }}>
+                  <span className="kpi-title">Préstamos excluidos (&gt;4M)</span>
+                  <span className="kpi-value" style={{ color: '#ef4444' }}>{distribucionData.totalPrestamosExcluidos}</span>
+                  <span className="kpi-sub">{formatMoney(distribucionData.totalCapitalExcluido)} en capital</span>
+                </div>
+              </div>
+
+              {/* Las 3 partes */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
+                {distribucionData.grupos.map(grupo => (
+                  <div key={grupo.numero} style={{ border: '2px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden', background: '#fff' }}>
+                    {/* Encabezado del grupo */}
+                    <div style={{ background: grupo.numero === 1 ? '#3b82f6' : grupo.numero === 2 ? '#10b981' : '#8b5cf6', color: '#fff', padding: '0.75rem 1rem' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <strong style={{ fontSize: '1.1rem' }}>Parte {grupo.numero}</strong>
+                        <span style={{ fontSize: '0.85rem', opacity: 0.9 }}>{grupo.prestamos.length} préstamos</span>
+                      </div>
+                    </div>
+                    {/* KPIs del grupo */}
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', padding: '0.75rem', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase' }}>Capital</div>
+                        <div style={{ fontWeight: 700, color: '#111', fontSize: '0.95rem' }}>{formatMoney(grupo.totalCapital)}</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase' }}>Intereses totales</div>
+                        <div style={{ fontWeight: 700, color: '#10b981', fontSize: '0.95rem' }}>{formatMoney(grupo.totalIntereses)}</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase' }}>Cuota total/período</div>
+                        <div style={{ fontWeight: 700, color: '#3b82f6', fontSize: '0.95rem' }}>{formatMoney(grupo.totalMontoCuota)}</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase' }}>Tasa prom. / Mora</div>
+                        <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
+                          <span style={{ color: '#f59e0b' }}>{grupo.tasaPromedioInteres}%</span>
+                          <span style={{ color: grupo.porcentajeMorosidad > 30 ? '#ef4444' : '#10b981', marginLeft: '0.5rem', fontSize: '0.85rem' }}>
+                            {grupo.porcentajeMorosidad}% mora
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {/* Lista de préstamos */}
+                    <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
+                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
+                        <thead>
+                          <tr style={{ background: '#f3f4f6', position: 'sticky', top: 0 }}>
+                            <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', fontWeight: 600, color: '#374151' }}>Cliente</th>
+                            <th style={{ padding: '0.4rem 0.5rem', textAlign: 'right', fontWeight: 600, color: '#374151' }}>Capital</th>
+                            <th style={{ padding: '0.4rem 0.5rem', textAlign: 'right', fontWeight: 600, color: '#374151' }}>Cuota</th>
+                            <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', fontWeight: 600, color: '#374151' }}>Estado</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {grupo.prestamos.map(p => (
+                            <tr key={p.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
+                              <td style={{ padding: '0.35rem 0.5rem' }}>
+                                <div style={{ fontWeight: 600, color: '#111' }}>{p.clienteNombre}</div>
+                                <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>{p.tasaInteres}% · {p.frecuenciaPago}</div>
+                              </td>
+                              <td style={{ padding: '0.35rem 0.5rem', textAlign: 'right', color: '#374151' }}>{formatMoney(p.montoPrestado)}</td>
+                              <td style={{ padding: '0.35rem 0.5rem', textAlign: 'right', color: '#3b82f6' }}>{formatMoney(p.montoCuota)}</td>
+                              <td style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>
+                                {p.enMora
+                                  ? <span style={{ background: '#fee2e2', color: '#dc2626', borderRadius: '4px', padding: '1px 5px', fontSize: '0.7rem' }}>Mora</span>
+                                  : <span style={{ background: '#d1fae5', color: '#065f46', borderRadius: '4px', padding: '1px 5px', fontSize: '0.7rem' }}>OK</span>
+                                }
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Préstamos excluidos */}
+              {distribucionData.prestamosExcluidos.length > 0 && (
+                <div style={{ marginTop: '1rem' }}>
+                  <h4 style={{ marginBottom: '0.75rem', color: '#dc2626' }}>
+                    🚫 Préstamos excluidos (capital &gt; $4.000.000) — {distribucionData.prestamosExcluidos.length} préstamos
+                  </h4>
+                  <p style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '0.75rem' }}>
+                    Si estos préstamos se dividieran entre las 3 partes, cada parte recibiría por cuota:
+                  </p>
+                  <div className="table-container">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Cliente</th>
+                          <th>Capital</th>
+                          <th>Tasa</th>
+                          <th>Frecuencia</th>
+                          <th>Cuotas</th>
+                          <th>Cuota total</th>
+                          <th>Estado</th>
+                          <th style={{ color: '#3b82f6' }}>Parte 1 x cuota</th>
+                          <th style={{ color: '#10b981' }}>Parte 2 x cuota</th>
+                          <th style={{ color: '#8b5cf6' }}>Parte 3 x cuota</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {distribucionData.prestamosExcluidos.map(p => (
+                          <tr key={p.id}>
+                            <td>
+                              <strong>{p.clienteNombre}</strong>
+                              <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>{p.clienteCedula}</div>
+                            </td>
+                            <td className="money">{formatMoney(p.montoPrestado)}</td>
+                            <td>{p.tasaInteres}%</td>
+                            <td>{p.frecuenciaPago}</td>
+                            <td>{p.numeroCuotas}</td>
+                            <td className="money">{formatMoney(p.montoCuota)}</td>
+                            <td>
+                              {p.enMora
+                                ? <span className="badge badge-red">Mora</span>
+                                : <span className="badge badge-green">Al día</span>
+                              }
+                            </td>
+                            <td className="money" style={{ color: '#3b82f6', fontWeight: 600 }}>{formatMoney(p.aportePorParteCuota)}</td>
+                            <td className="money" style={{ color: '#10b981', fontWeight: 600 }}>{formatMoney(p.aportePorParteCuota)}</td>
+                            <td className="money" style={{ color: '#8b5cf6', fontWeight: 600 }}>{formatMoney(p.aportePorParteCuota)}</td>
+                          </tr>
+                        ))}
+                        {/* Fila de totales */}
+                        <tr style={{ fontWeight: 700, background: '#f9fafb', borderTop: '2px solid #e5e7eb' }}>
+                          <td colSpan={5}><strong>Total por cuota (si se distribuyeran)</strong></td>
+                          <td className="money">{formatMoney(distribucionData.prestamosExcluidos.reduce((s, p) => s + p.montoCuota, 0))}</td>
+                          <td></td>
+                          <td className="money" style={{ color: '#3b82f6' }}>
+                            {formatMoney(distribucionData.prestamosExcluidos.reduce((s, p) => s + p.aportePorParteCuota, 0))}
+                          </td>
+                          <td className="money" style={{ color: '#10b981' }}>
+                            {formatMoney(distribucionData.prestamosExcluidos.reduce((s, p) => s + p.aportePorParteCuota, 0))}
+                          </td>
+                          <td className="money" style={{ color: '#8b5cf6' }}>
+                            {formatMoney(distribucionData.prestamosExcluidos.reduce((s, p) => s + p.aportePorParteCuota, 0))}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {distribucionData.prestamosExcluidos.length === 0 && (
+                <p style={{ color: '#10b981', fontSize: '0.9rem' }}>No hay préstamos con capital mayor a $4.000.000.</p>
+              )}
+            </>
+          )}
         </div>
       )}
 

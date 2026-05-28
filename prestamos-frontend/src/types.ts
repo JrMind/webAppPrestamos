@@ -647,3 +647,53 @@ export interface MetricasGenerales {
   estadisticasCobradores: EstadisticasCobrador[];
   interesesMensuales: { mes: string; interesCobrado: number }[];
 }
+
+// Distribución de préstamos
+export interface PrestamoDistribucionItem {
+  id: number;
+  clienteNombre: string;
+  clienteCedula: string;
+  montoPrestado: number;
+  tasaInteres: number;
+  tipoInteres: string;
+  frecuenciaPago: string;
+  numeroCuotas: number;
+  montoCuota: number;
+  montoIntereses: number;
+  saldoPendiente: number;
+  enMora: boolean;
+}
+
+export interface GrupoDistribucion {
+  numero: number;
+  prestamos: PrestamoDistribucionItem[];
+  totalCapital: number;
+  totalIntereses: number;
+  totalMontoCuota: number;
+  tasaPromedioInteres: number;
+  totalEnMora: number;
+  porcentajeMorosidad: number;
+}
+
+export interface PrestamoExcluidoDistribucion {
+  id: number;
+  clienteNombre: string;
+  clienteCedula: string;
+  montoPrestado: number;
+  tasaInteres: number;
+  frecuenciaPago: string;
+  numeroCuotas: number;
+  montoCuota: number;
+  montoIntereses: number;
+  enMora: boolean;
+  aportePorParteCuota: number;
+}
+
+export interface DistribucionPrestamos {
+  grupos: GrupoDistribucion[];
+  prestamosExcluidos: PrestamoExcluidoDistribucion[];
+  totalCapitalDistribuido: number;
+  totalCapitalExcluido: number;
+  totalPrestamosDistribuidos: number;
+  totalPrestamosExcluidos: number;
+}

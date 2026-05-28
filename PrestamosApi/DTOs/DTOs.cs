@@ -517,3 +517,56 @@ public record CreateTransferenciaDto(
     string? Descripcion
 );
 
+// ──────────────────────────────────────────────────
+// Distribución de Préstamos entre 3 partes
+// ──────────────────────────────────────────────────
+
+public record PrestamoDistribucionItemDto(
+    int Id,
+    string ClienteNombre,
+    string ClienteCedula,
+    decimal MontoPrestado,
+    decimal TasaInteres,
+    string TipoInteres,
+    string FrecuenciaPago,
+    int NumeroCuotas,
+    decimal MontoCuota,
+    decimal MontoIntereses,
+    decimal SaldoPendiente,
+    bool EnMora
+);
+
+public record GrupoDistribucionDto(
+    int Numero,
+    List<PrestamoDistribucionItemDto> Prestamos,
+    decimal TotalCapital,
+    decimal TotalIntereses,
+    decimal TotalMontoCuota,
+    decimal TasaPromedioInteres,
+    int TotalEnMora,
+    decimal PorcentajeMorosidad
+);
+
+public record PrestamoExcluidoDistribucionDto(
+    int Id,
+    string ClienteNombre,
+    string ClienteCedula,
+    decimal MontoPrestado,
+    decimal TasaInteres,
+    string FrecuenciaPago,
+    int NumeroCuotas,
+    decimal MontoCuota,
+    decimal MontoIntereses,
+    bool EnMora,
+    decimal AportePorParteCuota
+);
+
+public record DistribucionPrestamosDto(
+    List<GrupoDistribucionDto> Grupos,
+    List<PrestamoExcluidoDistribucionDto> PrestamosExcluidos,
+    decimal TotalCapitalDistribuido,
+    decimal TotalCapitalExcluido,
+    int TotalPrestamosDistribuidos,
+    int TotalPrestamosExcluidos
+);
+

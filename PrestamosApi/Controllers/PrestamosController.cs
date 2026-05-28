@@ -111,7 +111,7 @@ public class PrestamosController : BaseApiController
                 p.MontoCuota,
                 p.EstadoPrestamo,
                 p.Descripcion,
-                p.Cuotas.Sum(c => c.MontoPagado),
+                p.Pagos.Sum(pg => pg.MontoPago),
                 p.Cuotas.Sum(c => c.SaldoPendiente),
                 p.Cuotas.Count(c => c.EstadoCuota == "Pagada"),
                 p.Cuotas
@@ -248,7 +248,7 @@ public class PrestamosController : BaseApiController
                 p.MontoCuota,
                 p.EstadoPrestamo,
                 p.Descripcion,
-                p.Cuotas.Sum(c => c.MontoPagado),
+                p.Pagos.Sum(pg => pg.MontoPago),
                 p.Cuotas.Sum(c => c.SaldoPendiente),
                 p.Cuotas.Count(c => c.EstadoCuota == "Pagada"),
                 p.Cuotas
@@ -354,6 +354,7 @@ public class PrestamosController : BaseApiController
         var prestamos = await _context.Prestamos
             .Include(p => p.Cliente)
             .Include(p => p.Cuotas)
+            .Include(p => p.Pagos)
             .Where(p => p.ClienteId == clienteId)
             .OrderByDescending(p => p.FechaPrestamo)
             .Select(p => new PrestamoDto(
@@ -374,7 +375,7 @@ public class PrestamosController : BaseApiController
                 p.MontoCuota,
                 p.EstadoPrestamo,
                 p.Descripcion,
-                p.Cuotas.Sum(c => c.MontoPagado),
+                p.Pagos.Sum(pg => pg.MontoPago),
                 p.Cuotas.Sum(c => c.SaldoPendiente),
                 p.Cuotas.Count(c => c.EstadoCuota == "Pagada"),
                 p.Cuotas
@@ -1041,6 +1042,167 @@ public class PrestamosController : BaseApiController
             sistemaCobrado     = prestamo.SistemaCobrado,
             renovacionCobrada  = prestamo.RenovacionCobrada
         });
+    }
+
+    // ──────────────────────────────────────────────────────
+    // GET /api/prestamos/distribucion
+    // Distribuye los préstamos activos (<= 4M) en 3 grupos
+    // con balance equitativo en capital, mora e interés.
+    // ──────────────────────────────────────────────────────
+    [HttpGet("distribucion")]
+    public async Task<ActionResult<DistribucionPrestamosDto>> GetDistribucion()
+    {
+        var userId = GetCurrentUserId();
+        var isCobrador = IsCobrador();
+
+        var query = _context.Prestamos
+            .Include(p => p.Cliente)
+            .Include(p => p.Cuotas)
+            .Where(p => p.EstadoPrestamo == "Activo")
+            .AsQueryable();
+
+        if (isCobrador && userId.HasValue)
+            query = query.Where(p => p.CobradorId == userId.Value);
+        else if (IsAdministrador())
+        {
+            var fechaScope = GetFechaInicioAcceso();
+            var cobsScope  = GetCobradorIdsPermitidos();
+            if (fechaScope.HasValue)
+                query = query.Where(p => p.FechaPrestamo >= fechaScope.Value);
+            if (cobsScope != null)
+                query = query.Where(p => p.CobradorId.HasValue && cobsScope.Contains(p.CobradorId.Value));
+        }
+
+        var todos = await query.ToListAsync();
+
+        const decimal LIMITE = 4_000_000m;
+        var elegibles = todos.Where(p => p.MontoPrestado <= LIMITE).ToList();
+        var excluidos  = todos.Where(p => p.MontoPrestado >  LIMITE).ToList();
+
+        var asignaciones = DistribuirEquitativamente(elegibles);
+
+        var grupos = Enumerable.Range(0, 3).Select(g =>
+        {
+            var grupo = asignaciones.Where(a => a.Grupo == g).Select(a => a.Prestamo).ToList();
+            int count      = grupo.Count;
+            decimal totCap = grupo.Sum(p => p.MontoPrestado);
+            decimal totInt = grupo.Sum(p => p.MontoIntereses);
+            decimal totCuota = grupo.Sum(p => p.MontoCuota);
+            decimal avgTasa  = count > 0 ? grupo.Average(p => p.TasaInteres) : 0;
+            int enMora = grupo.Count(p => p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"));
+
+            return new GrupoDistribucionDto(
+                g + 1,
+                grupo.Select(MapToDistribucionItem).ToList(),
+                totCap,
+                totInt,
+                totCuota,
+                Math.Round(avgTasa, 2),
+                enMora,
+                count > 0 ? Math.Round((decimal)enMora / count * 100, 1) : 0
+            );
+        }).ToList();
+
+        var prestamosExcluidos = excluidos.Select(p => new PrestamoExcluidoDistribucionDto(
+            p.Id,
+            p.Cliente!.Nombre,
+            p.Cliente.Cedula,
+            p.MontoPrestado,
+            p.TasaInteres,
+            p.FrecuenciaPago,
+            p.NumeroCuotas,
+            p.MontoCuota,
+            p.MontoIntereses,
+            p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"),
+            Math.Round(p.MontoCuota / 3, 0)
+        )).ToList();
+
+        return Ok(new DistribucionPrestamosDto(
+            grupos,
+            prestamosExcluidos,
+            elegibles.Sum(p => p.MontoPrestado),
+            excluidos.Sum(p => p.MontoPrestado),
+            elegibles.Count,
+            excluidos.Count
+        ));
+    }
+
+    private static PrestamoDistribucionItemDto MapToDistribucionItem(Prestamo p) => new(
+        p.Id,
+        p.Cliente!.Nombre,
+        p.Cliente.Cedula,
+        p.MontoPrestado,
+        p.TasaInteres,
+        p.TipoInteres,
+        p.FrecuenciaPago,
+        p.NumeroCuotas,
+        p.MontoCuota,
+        p.MontoIntereses,
+        p.Cuotas.Sum(c => c.SaldoPendiente),
+        p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida")
+    );
+
+    // Algoritmo greedy multi-criterio: balance simultáneo de capital, interés y mora
+    private static List<(Prestamo Prestamo, int Grupo)> DistribuirEquitativamente(List<Prestamo> prestamos)
+    {
+        if (prestamos.Count == 0)
+            return new List<(Prestamo, int)>();
+
+        decimal totalCapital = prestamos.Sum(p => p.MontoPrestado);
+        decimal totalInteres = prestamos.Sum(p => p.MontoIntereses);
+        int     totalMora    = prestamos.Count(p => p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"));
+
+        decimal targetCapital = totalCapital / 3;
+        decimal targetInteres = totalInteres / 3;
+        double  targetMora    = totalMora / 3.0;
+
+        decimal[] capitalAcum = new decimal[3];
+        decimal[] interesAcum = new decimal[3];
+        double[]  moraAcum    = new double[3];
+
+        // LPT: ordenar de mayor a menor capital para mejor balance inicial
+        var ordenados = prestamos
+            .Select((p, i) => (Prestamo: p, Idx: i))
+            .OrderByDescending(x => x.Prestamo.MontoPrestado)
+            .ToList();
+
+        int[] asignaciones = new int[prestamos.Count];
+
+        foreach (var (prestamo, idx) in ordenados)
+        {
+            bool enMora = prestamo.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida");
+
+            int    mejorGrupo = 0;
+            double mejorScore = double.MaxValue;
+
+            for (int g = 0; g < 3; g++)
+            {
+                double newCap  = (double)(capitalAcum[g] + prestamo.MontoPrestado);
+                double newInt  = (double)(interesAcum[g] + prestamo.MontoIntereses);
+                double newMora = moraAcum[g] + (enMora ? 1 : 0);
+
+                double devCap  = totalCapital > 0 ? Math.Abs(newCap  - (double)targetCapital) / (double)totalCapital : 0;
+                double devInt  = totalInteres > 0 ? Math.Abs(newInt  - (double)targetInteres) / (double)totalInteres : 0;
+                double devMora = totalMora    > 0 ? Math.Abs(newMora - targetMora)             / totalMora           : 0;
+
+                double score = devCap + devInt + devMora;
+
+                if (score < mejorScore)
+                {
+                    mejorScore = score;
+                    mejorGrupo = g;
+                }
+            }
+
+            capitalAcum[mejorGrupo] += prestamo.MontoPrestado;
+            interesAcum[mejorGrupo] += prestamo.MontoIntereses;
+            moraAcum[mejorGrupo]    += (enMora ? 1 : 0);
+            asignaciones[idx]        = mejorGrupo;
+        }
+
+        return prestamos
+            .Select((p, i) => (Prestamo: p, Grupo: asignaciones[i]))
+            .ToList();
     }
 }
 
