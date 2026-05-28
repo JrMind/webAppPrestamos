@@ -1074,7 +1074,10 @@ public class PrestamosController : BaseApiController
                 query = query.Where(p => p.CobradorId.HasValue && cobsScope.Contains(p.CobradorId.Value));
         }
 
-        var todos = await query.ToListAsync();
+        var todos = (await query.ToListAsync())
+            // Solo préstamos con cuotas aún por cobrar
+            .Where(p => p.Cuotas.Sum(c => c.SaldoPendiente) > 0)
+            .ToList();
 
         const decimal LIMITE = 4_000_000m;
         // Congelados: fuera de las 3 partes sin importar monto
