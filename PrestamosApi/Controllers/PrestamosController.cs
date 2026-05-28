@@ -1075,8 +1075,11 @@ public class PrestamosController : BaseApiController
         }
 
         var todos = (await query.ToListAsync())
-            // Solo préstamos con cuotas aún por cobrar
-            .Where(p => p.Cuotas.Sum(c => c.SaldoPendiente) > 0)
+            // Congelados: salen solo si capital = 0 (devolvieron el dinero)
+            // Normales: salen solo si ya no hay saldo pendiente en cuotas
+            .Where(p => p.EsCongelado
+                ? p.MontoPrestado > 0
+                : p.Cuotas.Sum(c => c.SaldoPendiente) > 0)
             .ToList();
 
         const decimal LIMITE = 4_000_000m;
