@@ -122,13 +122,24 @@ function App() {
   const [loadingDistribucion, setLoadingDistribucion] = useState(false);
 
   const recalcularGrupoDistribucion = (numero: number, prestamos: DistribucionPrestamos['grupos'][0]['prestamos']): DistribucionPrestamos['grupos'][0] => {
-    const count = prestamos.length;
     const totalCapital = prestamos.reduce((s, p) => s + p.capitalRestante, 0);
     const totalIntereses = prestamos.reduce((s, p) => s + p.montoIntereses, 0);
     const totalMontoCuota = prestamos.reduce((s, p) => s + p.montoCuota, 0);
-    const tasaPromedioInteres = count > 0 ? prestamos.reduce((s, p) => s + p.tasaInteres, 0) / count : 0;
-    const totalEnMora = prestamos.filter(p => p.enMora).length;
-    return { numero, prestamos, totalCapital, totalIntereses, totalMontoCuota, tasaPromedioInteres: Math.round(tasaPromedioInteres * 100) / 100, totalEnMora, porcentajeMorosidad: count > 0 ? Math.round(totalEnMora / count * 1000) / 10 : 0 };
+    // Tasa ponderada por capital
+    const tasaPonderadaCapital = totalCapital > 0
+      ? Math.round(prestamos.reduce((s, p) => s + p.capitalRestante * p.tasaInteres, 0) / totalCapital * 100) / 100
+      : 0;
+    // % capital en mora
+    const capitalEnMora = prestamos.filter(p => p.enMora).reduce((s, p) => s + p.capitalRestante, 0);
+    const porcentajeCapitalEnMora = totalCapital > 0
+      ? Math.round(capitalEnMora / totalCapital * 1000) / 10
+      : 0;
+    // Días promedio en mora
+    const conMora = prestamos.filter(p => p.enMora && p.diasEnMora > 0);
+    const diasPromedioMora = conMora.length > 0
+      ? Math.round(conMora.reduce((s, p) => s + p.diasEnMora, 0) / conMora.length)
+      : 0;
+    return { numero, prestamos, totalCapital, totalIntereses, totalMontoCuota, tasaPonderadaCapital, porcentajeCapitalEnMora, diasPromedioMora };
   };
 
   const handleMoverPrestamo = (prestamoId: number, fromNumero: number, toNumero: number) => {
@@ -3440,7 +3451,7 @@ function App() {
                       </div>
                     </div>
                     {/* KPIs del grupo */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', padding: '0.75rem', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', padding: '0.75rem', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
                       <div style={{ textAlign: 'center' }}>
                         <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase' }}>Capital</div>
                         <div style={{ fontWeight: 700, color: '#111', fontSize: '0.95rem' }}>{formatMoney(grupo.totalCapital)}</div>
@@ -3454,12 +3465,20 @@ function App() {
                         <div style={{ fontWeight: 700, color: '#3b82f6', fontSize: '0.95rem' }}>{formatMoney(grupo.totalMontoCuota)}</div>
                       </div>
                       <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase' }}>Tasa prom. / Mora</div>
+                        <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase' }}>Tasa pond. capital</div>
+                        <div style={{ fontWeight: 700, color: '#f59e0b', fontSize: '0.95rem' }}>{grupo.tasaPonderadaCapital}%</div>
+                      </div>
+                      <div style={{ textAlign: 'center' }}>
+                        <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase' }}>Capital en mora</div>
                         <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                          <span style={{ color: '#f59e0b' }}>{grupo.tasaPromedioInteres}%</span>
-                          <span style={{ color: grupo.porcentajeMorosidad > 30 ? '#ef4444' : '#10b981', marginLeft: '0.5rem', fontSize: '0.85rem' }}>
-                            {grupo.porcentajeMorosidad}% mora
+                          <span style={{ color: grupo.porcentajeCapitalEnMora > 20 ? '#ef4444' : '#10b981' }}>
+                            {grupo.porcentajeCapitalEnMora}%
                           </span>
+                          {grupo.diasPromedioMora > 0 && (
+                            <span style={{ color: '#6b7280', marginLeft: '0.4rem', fontSize: '0.75rem' }}>
+                              · {grupo.diasPromedioMora}d prom.
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>

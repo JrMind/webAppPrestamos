@@ -1095,12 +1095,39 @@ public class PrestamosController : BaseApiController
         var grupos = Enumerable.Range(0, 3).Select(g =>
         {
             var grupo    = asignaciones.Where(a => a.Grupo == g).Select(a => a.Prestamo).ToList();
-            int count    = grupo.Count;
             decimal totCap   = grupo.Sum(p => GetCapitalRestante(p));
             decimal totInt   = grupo.Sum(p => p.MontoIntereses);
             decimal totCuota = grupo.Sum(p => p.MontoCuota);
-            decimal avgTasa  = count > 0 ? grupo.Average(p => p.TasaInteres) : 0;
-            int enMora = grupo.Count(p => p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"));
+
+            // 1. Tasa ponderada por capital
+            decimal tasaPonderada = totCap > 0
+                ? Math.Round(grupo.Sum(p => GetCapitalRestante(p) * p.TasaInteres) / totCap, 2)
+                : 0;
+
+            // 2. % capital en mora
+            decimal capitalEnMora = grupo
+                .Where(p => p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"))
+                .Sum(p => GetCapitalRestante(p));
+            decimal pctCapMora = totCap > 0
+                ? Math.Round(capitalEnMora / totCap * 100, 1)
+                : 0;
+
+            // 3. Días promedio en mora (solo clientes con mora)
+            var conMora = grupo
+                .Where(p => p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"))
+                .ToList();
+            double diasPromMora = conMora.Count > 0
+                ? Math.Round(conMora.Average(p =>
+                {
+                    var oldest = p.Cuotas
+                        .Where(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida")
+                        .OrderBy(c => c.FechaCobro)
+                        .FirstOrDefault();
+                    return oldest != null
+                        ? Math.Max(0, (DateTime.UtcNow - oldest.FechaCobro).TotalDays)
+                        : 0;
+                }), 0)
+                : 0;
 
             return new GrupoDistribucionDto(
                 g + 1,
@@ -1108,9 +1135,9 @@ public class PrestamosController : BaseApiController
                 totCap,
                 totInt,
                 totCuota,
-                Math.Round(avgTasa, 2),
-                enMora,
-                count > 0 ? Math.Round((decimal)enMora / count * 100, 1) : 0
+                tasaPonderada,
+                pctCapMora,
+                diasPromMora
             );
         }).ToList();
 
@@ -1152,20 +1179,32 @@ public class PrestamosController : BaseApiController
                          || c.EstadoCuota == "Vencida"   || c.EstadoCuota == "Mora")
                 .Sum(c => c.MontoCapital);
 
-    private static PrestamoDistribucionItemDto MapToDistribucionItem(Prestamo p) => new(
-        p.Id,
-        p.Cliente!.Nombre,
-        p.Cliente.Cedula,
-        GetCapitalRestante(p),
-        p.TasaInteres,
-        p.TipoInteres,
-        p.FrecuenciaPago,
-        p.NumeroCuotas,
-        p.MontoCuota,
-        p.MontoIntereses,
-        p.Cuotas.Sum(c => c.SaldoPendiente),
-        p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida")
-    );
+    private static PrestamoDistribucionItemDto MapToDistribucionItem(Prestamo p)
+    {
+        var cuotaMasAntigua = p.Cuotas
+            .Where(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida")
+            .OrderBy(c => c.FechaCobro)
+            .FirstOrDefault();
+        int diasEnMora = cuotaMasAntigua != null
+            ? Math.Max(0, (int)(DateTime.UtcNow - cuotaMasAntigua.FechaCobro).TotalDays)
+            : 0;
+
+        return new(
+            p.Id,
+            p.Cliente!.Nombre,
+            p.Cliente.Cedula,
+            GetCapitalRestante(p),
+            p.TasaInteres,
+            p.TipoInteres,
+            p.FrecuenciaPago,
+            p.NumeroCuotas,
+            p.MontoCuota,
+            p.MontoIntereses,
+            p.Cuotas.Sum(c => c.SaldoPendiente),
+            p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"),
+            diasEnMora
+        );
+    }
 
     // Algoritmo LPT (Longest Processing Time) multi-criterio:
     // Asigna cada préstamo al grupo con MENOR carga acumulada normalizada.
@@ -1175,13 +1214,16 @@ public class PrestamosController : BaseApiController
         if (prestamos.Count == 0)
             return new List<(Prestamo, int)>();
 
-        decimal totalCapital = prestamos.Sum(p => GetCapitalRestante(p));
-        decimal totalInteres = prestamos.Sum(p => p.MontoIntereses);
-        int     totalMora    = prestamos.Count(p => p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"));
+        decimal totalCapital    = prestamos.Sum(p => GetCapitalRestante(p));
+        decimal totalInteres    = prestamos.Sum(p => p.MontoIntereses);
+        // Mora ponderada por capital (más preciso que contar préstamos)
+        decimal totalCapMora    = prestamos
+            .Where(p => p.Cuotas.Any(c => c.EstadoCuota == "Mora" || c.EstadoCuota == "Vencida"))
+            .Sum(p => GetCapitalRestante(p));
 
         decimal[] capitalAcum = new decimal[3];
         decimal[] interesAcum = new decimal[3];
-        double[]  moraAcum    = new double[3];
+        double[]  moraAcum    = new double[3];  // capital en mora acumulado por grupo
 
         // LPT: ordenar de mayor a menor capital para mejor balance inicial
         var ordenados = prestamos
@@ -1204,7 +1246,7 @@ public class PrestamosController : BaseApiController
                 // Capital domina (peso 1.0); interés y mora son desempate (peso 0.05 c/u)
                 double loadCap  = totalCapital > 0 ? (double)capitalAcum[g] / (double)totalCapital : 0;
                 double loadInt  = totalInteres > 0 ? (double)interesAcum[g] / (double)totalInteres : 0;
-                double loadMora = totalMora    > 0 ? moraAcum[g]            / totalMora            : 0;
+                double loadMora = totalCapMora > 0 ? moraAcum[g]            / (double)totalCapMora : 0;
 
                 double score = loadCap + 0.05 * loadInt + 0.05 * loadMora;
 
@@ -1215,9 +1257,10 @@ public class PrestamosController : BaseApiController
                 }
             }
 
-            capitalAcum[mejorGrupo] += GetCapitalRestante(prestamo);
+            decimal capRestante = GetCapitalRestante(prestamo);
+            capitalAcum[mejorGrupo] += capRestante;
             interesAcum[mejorGrupo] += prestamo.MontoIntereses;
-            moraAcum[mejorGrupo]    += (enMora ? 1 : 0);
+            moraAcum[mejorGrupo]    += enMora ? (double)capRestante : 0;
             asignaciones[item.Idx]   = mejorGrupo;
         }
 

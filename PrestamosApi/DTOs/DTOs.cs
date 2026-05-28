@@ -525,7 +525,7 @@ public record PrestamoDistribucionItemDto(
     int Id,
     string ClienteNombre,
     string ClienteCedula,
-    decimal CapitalRestante,   // capital pendiente real (sin intereses)
+    decimal CapitalRestante,
     decimal TasaInteres,
     string TipoInteres,
     string FrecuenciaPago,
@@ -533,7 +533,8 @@ public record PrestamoDistribucionItemDto(
     decimal MontoCuota,
     decimal MontoIntereses,
     decimal SaldoPendiente,
-    bool EnMora
+    bool EnMora,
+    int DiasEnMora  // días desde la cuota más antigua en mora (0 si está al día)
 );
 
 public record GrupoDistribucionDto(
@@ -542,9 +543,9 @@ public record GrupoDistribucionDto(
     decimal TotalCapital,
     decimal TotalIntereses,
     decimal TotalMontoCuota,
-    decimal TasaPromedioInteres,
-    int TotalEnMora,
-    decimal PorcentajeMorosidad
+    decimal TasaPonderadaCapital,     // tasa promedio ponderada por capital restante
+    decimal PorcentajeCapitalEnMora,  // % del capital del grupo con cuotas vencidas/mora
+    double DiasPromedioMora           // promedio de días en mora de los clientes morosos
 );
 
 public record PrestamoExcluidoDistribucionDto(

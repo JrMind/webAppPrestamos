@@ -662,6 +662,7 @@ export interface PrestamoDistribucionItem {
   montoIntereses: number;
   saldoPendiente: number;
   enMora: boolean;
+  diasEnMora: number;
 }
 
 export interface GrupoDistribucion {
@@ -670,9 +671,9 @@ export interface GrupoDistribucion {
   totalCapital: number;
   totalIntereses: number;
   totalMontoCuota: number;
-  tasaPromedioInteres: number;
-  totalEnMora: number;
-  porcentajeMorosidad: number;
+  tasaPonderadaCapital: number;
+  porcentajeCapitalEnMora: number;
+  diasPromedioMora: number;
 }
 
 export interface PrestamoExcluidoDistribucion {
