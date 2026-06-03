@@ -893,13 +893,13 @@ function App() {
     setShowPrestamoModal(true);
   };
 
-  const addFuenteCapital = (tipo: 'Reserva' | 'Interno' | 'Externo', usuarioId?: number, aportadorExternoId?: number) => {
+  const addFuenteCapital = (tipo: 'Reserva' | 'Interno' | 'Externo', usuarioId?: number, aportadorExternoId?: number, medioPago: 'Nequi' | 'Efectivo' = 'Efectivo') => {
     const newFuente: FuenteCapital = {
       tipo,
       usuarioId: tipo === 'Interno' ? usuarioId : undefined,
       aportadorExternoId: tipo === 'Externo' ? aportadorExternoId : undefined,
       montoAportado: 0,
-      medioPago: 'Efectivo'
+      medioPago
     };
     setFuentesCapital([...fuentesCapital, newFuente]);
   };
@@ -2830,68 +2830,61 @@ function App() {
                       </button>
                     </div>
 
-                    {balanceCapital && (
-                      <div style={{ display: 'flex', gap: '1rem', marginBottom: '0.75rem', fontSize: '0.85rem' }}>
-                        <span style={{ color: '#10b981' }}>Reserva: {formatMoney(balanceCapital.reservaDisponible)}</span>
-                        <span style={{ color: '#3b82f6' }}>Socios: {balanceCapital.socios.length}</span>
-                        <span style={{ color: '#f59e0b' }}>Aportadores: {balanceCapital.aportadoresExternos.length}</span>
-                      </div>
-                    )}
-
                     {showFuentesSection && (
                       <>
+                        {/* Opciones de medio de pago (Efectivo / Nequi) */}
+                        <div style={{ display: 'flex', gap: '0.75rem', marginBottom: '0.75rem' }}>
+                          <button
+                            type="button"
+                            onClick={() => addFuenteCapital('Reserva', undefined, undefined, 'Efectivo')}
+                            style={{ flex: 1, padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #f59e0b', background: 'rgba(245,158,11,0.08)', cursor: 'pointer', textAlign: 'left' }}
+                          >
+                            <div style={{ fontWeight: 600, color: '#f59e0b', marginBottom: '0.15rem' }}>💵 Efectivo</div>
+                            <div style={{ fontSize: '0.8rem', color: '#aaa' }}>Disponible: {formatMoney(metricas?.balanceEfectivo ?? 0)}</div>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => addFuenteCapital('Reserva', undefined, undefined, 'Nequi')}
+                            style={{ flex: 1, padding: '0.6rem 0.75rem', borderRadius: '8px', border: '1px solid #10b981', background: 'rgba(16,185,129,0.08)', cursor: 'pointer', textAlign: 'left' }}
+                          >
+                            <div style={{ fontWeight: 600, color: '#10b981', marginBottom: '0.15rem' }}>📱 Nequi</div>
+                            <div style={{ fontSize: '0.8rem', color: '#aaa' }}>Disponible: {formatMoney(metricas?.balanceNequi ?? 0)}</div>
+                          </button>
+                        </div>
+
+                        {/* Socios y Aportadores */}
+                        {((balanceCapital?.socios?.length ?? 0) > 0 || (balanceCapital?.aportadoresExternos?.length ?? 0) > 0) && (
+                          <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                            {balanceCapital?.socios.map(socio => (
+                              <button key={socio.id} type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }} onClick={() => addFuenteCapital('Interno', socio.id)}>
+                                + {socio.nombre}
+                              </button>
+                            ))}
+                            {balanceCapital?.aportadoresExternos.map(aportador => (
+                              <button key={aportador.id} type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem', borderColor: '#f59e0b' }} onClick={() => addFuenteCapital('Externo', undefined, aportador.id)}>
+                                + {aportador.nombre} (Ext)
+                              </button>
+                            ))}
+                          </div>
+                        )}
+
                         {/* Lista de fuentes agregadas */}
                         {fuentesCapital.map((fuente, index) => (
                           <div key={index} style={{ display: 'flex', gap: '0.5rem', alignItems: 'center', marginBottom: '0.5rem', padding: '0.5rem', background: 'var(--surface)', borderRadius: '6px' }}>
-                            <span style={{ minWidth: '80px', fontWeight: 500, color: fuente.tipo === 'Reserva' ? '#10b981' : fuente.tipo === 'Interno' ? '#3b82f6' : '#f59e0b' }}>
-                              {fuente.tipo}
+                            <span style={{ fontWeight: 600, fontSize: '0.85rem', color: fuente.medioPago === 'Nequi' ? '#10b981' : '#f59e0b', minWidth: '90px' }}>
+                              {fuente.tipo === 'Reserva' ? (fuente.medioPago === 'Nequi' ? '📱 Nequi' : '💵 Efectivo') : fuente.tipo === 'Interno' ? `👤 ${balanceCapital?.socios.find(s => s.id === fuente.usuarioId)?.nombre || 'Socio'}` : `🤝 ${balanceCapital?.aportadoresExternos.find(a => a.id === fuente.aportadorExternoId)?.nombre || 'Aportador'}`}
                             </span>
-                            {fuente.tipo === 'Interno' && balanceCapital && (
-                              <span style={{ flex: 1, fontSize: '0.85rem' }}>
-                                {balanceCapital.socios.find(s => s.id === fuente.usuarioId)?.nombre || 'Socio'}
-                              </span>
-                            )}
-                            {fuente.tipo === 'Externo' && balanceCapital && (
-                              <span style={{ flex: 1, fontSize: '0.85rem' }}>
-                                {balanceCapital.aportadoresExternos.find(a => a.id === fuente.aportadorExternoId)?.nombre || 'Aportador'}
-                              </span>
-                            )}
                             <input
                               type="number"
                               min="0"
                               value={fuente.montoAportado || ''}
                               onChange={e => updateFuenteMonto(index, Number(e.target.value))}
-                              style={{ width: '110px' }}
+                              style={{ flex: 1 }}
                               placeholder="Monto"
                             />
-                            <select
-                              value={fuente.medioPago}
-                              onChange={e => updateFuenteMedioPago(index, e.target.value as 'Nequi' | 'Efectivo')}
-                              style={{ width: '110px', fontSize: '0.82rem', padding: '0.2rem 0.3rem' }}
-                            >
-                              <option value="Efectivo">💵 Efectivo</option>
-                              <option value="Nequi">📱 Nequi</option>
-                            </select>
                             <button type="button" onClick={() => removeFuente(index)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '1.2rem' }}>×</button>
                           </div>
                         ))}
-
-                        {/* Botones para agregar fuentes */}
-                        <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginTop: '0.5rem' }}>
-                          <button type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }} onClick={() => addFuenteCapital('Reserva')}>
-                            + Reserva
-                          </button>
-                          {balanceCapital?.socios.map(socio => (
-                            <button key={socio.id} type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem' }} onClick={() => addFuenteCapital('Interno', socio.id)}>
-                              + {socio.nombre}
-                            </button>
-                          ))}
-                          {balanceCapital?.aportadoresExternos.map(aportador => (
-                            <button key={aportador.id} type="button" className="btn btn-secondary" style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem', borderColor: '#f59e0b' }} onClick={() => addFuenteCapital('Externo', undefined, aportador.id)}>
-                              + {aportador.nombre} (Ext)
-                            </button>
-                          ))}
-                        </div>
 
                         {/* Total asignado */}
                         <div style={{ marginTop: '0.75rem', display: 'flex', justifyContent: 'space-between', padding: '0.5rem', background: totalFuentesAsignado === prestamoForm.montoPrestado ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)', borderRadius: '6px' }}>
