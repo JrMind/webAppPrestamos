@@ -910,11 +910,6 @@ function App() {
     setFuentesCapital(updated);
   };
 
-  const updateFuenteMedioPago = (index: number, medioPago: 'Nequi' | 'Efectivo') => {
-    const updated = [...fuentesCapital];
-    updated[index].medioPago = medioPago;
-    setFuentesCapital(updated);
-  };
 
   const removeFuente = (index: number) => {
     setFuentesCapital(fuentesCapital.filter((_, i) => i !== index));
