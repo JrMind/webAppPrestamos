@@ -319,6 +319,7 @@ export interface FuenteCapital {
   usuarioId?: number;
   aportadorExternoId?: number;
   montoAportado: number;
+  medioPago: 'Nequi' | 'Efectivo';
 }
 
 // Socio interno

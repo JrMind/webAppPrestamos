@@ -260,7 +260,8 @@ public record FuenteCapitalDto(
     string Tipo, // "Reserva" | "Interno" | "Externo"
     int? UsuarioId, // Solo para Interno (socio)
     int? AportadorExternoId, // Solo para Externo
-    decimal MontoAportado
+    decimal MontoAportado,
+    string MedioPago = "Efectivo" // "Nequi" | "Efectivo"
 );
 
 // DTO para crear préstamo con fuentes de capital

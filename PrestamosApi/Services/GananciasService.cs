@@ -371,11 +371,16 @@ public class GananciasService : IGananciasService
             .Where(t => t.Destino == medioPago)
             .SumAsync(t => (decimal?)t.Monto) ?? 0;
 
+        // 5. Capital prestado desembolsado desde este medio
+        var totalCapitalPrestado = await _context.FuentesCapitalPrestamo
+            .Where(f => f.MedioPago == medioPago)
+            .SumAsync(f => (decimal?)f.MontoAportado) ?? 0;
+
         var claveAjuste = $"ajuste_saldo_{medioPago.ToLower()}";
         var ajusteConfig = await _context.ConfiguracionesSistema
             .FirstOrDefaultAsync(c => c.Clave == claveAjuste);
         var ajuste = ajusteConfig != null && decimal.TryParse(ajusteConfig.Valor, out var a) ? a : 0m;
 
-        return totalPagos + cobradosDirectos - totalGastos - transferenciasEnviadas + transferenciasRecibidas + ajuste;
+        return totalPagos + cobradosDirectos - totalGastos - totalCapitalPrestado - transferenciasEnviadas + transferenciasRecibidas + ajuste;
     }
 }

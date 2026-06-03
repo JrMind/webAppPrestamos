@@ -898,7 +898,8 @@ function App() {
       tipo,
       usuarioId: tipo === 'Interno' ? usuarioId : undefined,
       aportadorExternoId: tipo === 'Externo' ? aportadorExternoId : undefined,
-      montoAportado: 0
+      montoAportado: 0,
+      medioPago: 'Efectivo'
     };
     setFuentesCapital([...fuentesCapital, newFuente]);
   };
@@ -906,6 +907,12 @@ function App() {
   const updateFuenteMonto = (index: number, monto: number) => {
     const updated = [...fuentesCapital];
     updated[index].montoAportado = monto;
+    setFuentesCapital(updated);
+  };
+
+  const updateFuenteMedioPago = (index: number, medioPago: 'Nequi' | 'Efectivo') => {
+    const updated = [...fuentesCapital];
+    updated[index].medioPago = medioPago;
     setFuentesCapital(updated);
   };
 
@@ -2854,9 +2861,17 @@ function App() {
                               min="0"
                               value={fuente.montoAportado || ''}
                               onChange={e => updateFuenteMonto(index, Number(e.target.value))}
-                              style={{ width: '120px' }}
+                              style={{ width: '110px' }}
                               placeholder="Monto"
                             />
+                            <select
+                              value={fuente.medioPago}
+                              onChange={e => updateFuenteMedioPago(index, e.target.value as 'Nequi' | 'Efectivo')}
+                              style={{ width: '110px', fontSize: '0.82rem', padding: '0.2rem 0.3rem' }}
+                            >
+                              <option value="Efectivo">💵 Efectivo</option>
+                              <option value="Nequi">📱 Nequi</option>
+                            </select>
                             <button type="button" onClick={() => removeFuente(index)} style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#ef4444', fontSize: '1.2rem' }}>×</button>
                           </div>
                         ))}

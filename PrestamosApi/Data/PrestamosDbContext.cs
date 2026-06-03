@@ -261,6 +261,7 @@ public class PrestamosDbContext : DbContext
             entity.Property(e => e.UsuarioId).HasColumnName("usuarioid");
             entity.Property(e => e.AportadorExternoId).HasColumnName("aportadorexternoid");
             entity.Property(e => e.MontoAportado).HasColumnName("montoaportado").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.MedioPago).HasColumnName("mediopago").HasMaxLength(20).HasDefaultValue("Efectivo");
             entity.Property(e => e.PorcentajeParticipacion).HasColumnName("porcentajeparticipacion").HasColumnType("decimal(5,2)").HasDefaultValue(0);
             entity.Property(e => e.FechaRegistro).HasColumnName("fecharegistro").HasDefaultValueSql("NOW()");
 

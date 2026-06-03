@@ -598,6 +598,7 @@ public class PrestamosController : BaseApiController
                     UsuarioId = fuente.UsuarioId,
                     AportadorExternoId = fuente.AportadorExternoId,
                     MontoAportado = fuente.MontoAportado,
+                    MedioPago = fuente.MedioPago ?? "Efectivo",
                     FechaRegistro = DateTime.UtcNow
                 };
                 _context.FuentesCapitalPrestamo.Add(fuenteCapital);

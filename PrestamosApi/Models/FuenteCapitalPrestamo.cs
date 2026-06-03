@@ -8,6 +8,7 @@ public class FuenteCapitalPrestamo
     public int? UsuarioId { get; set; } // Solo para tipo "Interno" (socio)
     public int? AportadorExternoId { get; set; } // Solo para tipo "Externo"
     public decimal MontoAportado { get; set; }
+    public string MedioPago { get; set; } = "Efectivo"; // "Nequi" | "Efectivo"
     public decimal PorcentajeParticipacion { get; set; } = 0; // % de las ganancias de este préstamo
     public DateTime FechaRegistro { get; set; } = DateTime.UtcNow;
     
