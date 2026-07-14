@@ -465,6 +465,66 @@ public class CobrosController : BaseApiController
     }
 
     /// <summary>
+    /// Devuelve los clientes morosos (con cuotas vencidas sin pagar) agrupados por cliente,
+    /// sin importar cobrador ni tipo de préstamo, ordenados por total adeudado de mayor a menor.
+    /// GET /api/cobros/morosos
+    /// </summary>
+    [HttpGet("morosos")]
+    public async Task<ActionResult<object>> GetClientesMorosos()
+    {
+        var today = DateTime.UtcNow.Date;
+
+        var cuotasVencidas = await _context.CuotasPrestamo
+            .Where(c => c.FechaCobro.Date < today
+                        && c.EstadoCuota != "Pagada"
+                        && !c.Cobrado
+                        && c.Prestamo!.EstadoPrestamo != "Terminado")
+            .Select(c => new
+            {
+                ClienteId = c.Prestamo!.ClienteId,
+                ClienteNombre = c.Prestamo.Cliente!.Nombre,
+                ClienteTelefono = c.Prestamo.Cliente.Telefono,
+                c.PrestamoId,
+                c.SaldoPendiente,
+                c.FechaCobro,
+                CobradorNombre = c.Prestamo.Cobrador != null ? c.Prestamo.Cobrador.Nombre : null
+            })
+            .ToListAsync();
+
+        var morosos = cuotasVencidas
+            .GroupBy(c => c.ClienteId)
+            .Select(g => new
+            {
+                ClienteId = g.Key,
+                ClienteNombre = g.First().ClienteNombre,
+                ClienteTelefono = g.First().ClienteTelefono,
+                CuotasVencidas = g.Count(),
+                TotalAdeudado = g.Sum(x => x.SaldoPendiente),
+                DiasMoraMax = (int)(today - g.Min(x => x.FechaCobro).Date).TotalDays,
+                Prestamos = g.Select(x => x.PrestamoId).Distinct().OrderBy(id => id).ToList(),
+                Cobradores = g.Select(x => x.CobradorNombre)
+                    .Where(n => !string.IsNullOrEmpty(n))
+                    .Distinct()
+                    .ToList()
+            })
+            .OrderByDescending(m => m.TotalAdeudado)
+            .ThenByDescending(m => m.CuotasVencidas)
+            .ToList();
+
+        return Ok(new
+        {
+            fecha = today,
+            morosos,
+            resumen = new
+            {
+                totalClientes = morosos.Count,
+                totalCuotasVencidas = morosos.Sum(m => m.CuotasVencidas),
+                totalAdeudado = morosos.Sum(m => m.TotalAdeudado)
+            }
+        });
+    }
+
+    /// <summary>
     /// Envía un SMS recordatorio al cliente para una cuota específica
     /// </summary>
     [HttpPost("{cuotaId}/enviar-recordatorio")]

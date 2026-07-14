@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi, saldosApi, distribucionApi } from './api';
-import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto, DistribucionPrestamos } from './types';
+import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MorososResponse, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto, DistribucionPrestamos } from './types';
 import { MetricasCobradores } from './components/MetricasCobradores';
 import './App.css';
 
@@ -401,8 +401,9 @@ function App() {
   const [filtroBusqueda, setFiltroBusqueda] = useState('');
   const [filtroClienteId] = useState<number | undefined>();
   const [filtroClienteBusqueda, setFiltroClienteBusqueda] = useState('');
-  const [filtroCobradorId, setFiltroCobradorId] = useState<number | undefined>();
+  const [filtroCobradorId, setFiltroCobradorId] = useState<number | 'morosos' | undefined>();
   const [cobradoresList, setCobradoresList] = useState<Cobrador[]>([]);
+  const [morososData, setMorososData] = useState<MorososResponse | null>(null);
 
   // Modals
   const [showClienteModal, setShowClienteModal] = useState(false);
@@ -530,7 +531,7 @@ function App() {
     // Solo al montar la app (equivale a componentDidMount)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(() => { if (activeTab === 'cobros') { loadCobrosDelMes(); loadCobradoresList(); } }, [activeTab, filtroCobradorId]);
+  useEffect(() => { if (activeTab === 'cobros') { if (filtroCobradorId === 'morosos') { loadMorosos(); } else { loadCobrosDelMes(); } loadCobradoresList(); } }, [activeTab, filtroCobradorId]);
   useEffect(() => { if (activeTab === 'prestamosdia') loadPrestamosDelDia(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'socios') loadBalanceSocios(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'usuarios') loadUsuarios(); }, [activeTab]);
@@ -571,13 +572,25 @@ function App() {
 
   const loadCobrosDelMes = async () => {
     setLoadingCobros(true);
-    setLoadingCobros(true);
     try {
-      const data = await cobrosDelMesApi.getCobrosDelMes(filtroCobradorId);
+      const data = await cobrosDelMesApi.getCobrosDelMes(typeof filtroCobradorId === 'number' ? filtroCobradorId : undefined);
       setCobrosDelMes(data);
     } catch (error) {
       console.error('Error loading cobros del mes:', error);
       showToast('Error al cargar cobros', 'error');
+    } finally {
+      setLoadingCobros(false);
+    }
+  };
+
+  const loadMorosos = async () => {
+    setLoadingCobros(true);
+    try {
+      const data = await cobrosDelMesApi.getMorosos();
+      setMorososData(data);
+    } catch (error) {
+      console.error('Error loading morosos:', error);
+      showToast('Error al cargar morosos', 'error');
     } finally {
       setLoadingCobros(false);
     }
@@ -1715,11 +1728,15 @@ function App() {
                   <div className="filter-group">
                     <label>Filtrar por Cobrador</label>
                     <select
-                      value={filtroCobradorId || ''}
-                      onChange={e => setFiltroCobradorId(e.target.value ? Number(e.target.value) : undefined)}
+                      value={filtroCobradorId === undefined ? '' : String(filtroCobradorId)}
+                      onChange={e => {
+                        const v = e.target.value;
+                        setFiltroCobradorId(v === '' ? undefined : v === 'morosos' ? 'morosos' : Number(v));
+                      }}
                       style={{ minWidth: '200px' }}
                     >
                       <option value="">Todos</option>
+                      <option value="morosos">🔴 Morosos (mayor deuda)</option>
                       <option value="0">Sin Cobrador</option>
                       {cobradoresList.map(c => (
                         <option key={c.id} value={c.id}>{c.nombre}</option>
@@ -1730,6 +1747,41 @@ function App() {
               )}
               {loadingCobros ? (
                 <div className="loading"><div className="spinner"></div></div>
+              ) : filtroCobradorId === 'morosos' ? (
+                morososData ? (
+                  <>
+                    <div className="kpi-grid" style={{ marginBottom: '1rem' }}>
+                      <div className="kpi-card" style={{ borderColor: '#ef4444' }}><span className="kpi-title">🔴 Clientes Morosos</span><span className="kpi-value" style={{ color: '#ef4444' }}>{morososData.resumen.totalClientes}</span></div>
+                      <div className="kpi-card" style={{ borderColor: '#f59e0b' }}><span className="kpi-title">📋 Cuotas Vencidas</span><span className="kpi-value" style={{ color: '#f59e0b' }}>{morososData.resumen.totalCuotasVencidas}</span></div>
+                      <div className="kpi-card" style={{ borderColor: '#ef4444' }}><span className="kpi-title">💰 Total Adeudado</span><span className="kpi-value" style={{ color: '#ef4444' }}>{formatMoney(morososData.resumen.totalAdeudado)}</span></div>
+                    </div>
+                    <h4 style={{ color: '#ef4444', margin: '1rem 0 0.5rem' }}>🔴 Clientes que más deben (mayor a menor)</h4>
+                    <div className="table-container">
+                      <table><thead><tr><th>#</th><th>Cliente</th><th>Cuotas Vencidas</th><th>Días Mora</th><th>Total Adeudado</th><th>Cobrador(es)</th><th>Acciones</th></tr></thead>
+                        <tbody>{morososData.morosos.map((m, idx) => (
+                          <tr key={m.clienteId} style={{ background: idx < 3 ? 'rgba(239,68,68,0.15)' : 'rgba(239,68,68,0.05)' }}>
+                            <td><strong>{idx + 1}</strong></td>
+                            <td><strong>{m.clienteNombre}</strong><div style={{ fontSize: '0.75rem' }}>{m.clienteTelefono}</div></td>
+                            <td><span className="badge badge-red">{m.cuotasVencidas}</span></td>
+                            <td><span className="badge badge-red">{m.diasMoraMax}d</span></td>
+                            <td className="money" style={{ color: '#ef4444', fontWeight: 700 }}>{formatMoney(m.totalAdeudado)}</td>
+                            <td>{m.cobradores.length > 0 ? m.cobradores.join(', ') : '-'}</td>
+                            <td>
+                              <div className="actions">
+                                {m.prestamos.map(pid => (
+                                  <button key={pid} className="btn btn-secondary btn-sm" onClick={async () => {
+                                    const p = await prestamosApi.getById(pid);
+                                    openDetalle(p);
+                                  }}>Ver #{pid}</button>
+                                ))}
+                              </div>
+                            </td>
+                          </tr>
+                        ))}{morososData.morosos.length === 0 && <tr><td colSpan={7} className="empty-state">No hay clientes morosos 🎉</td></tr>}</tbody>
+                      </table>
+                    </div>
+                  </>
+                ) : null
               ) : cobrosDelMes ? (
                 <>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>

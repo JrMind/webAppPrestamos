@@ -579,7 +579,7 @@ export const prestamosConFuentesApi = {
 };
 
 // SMS Campaigns
-import type { SmsCampaign, CreateSmsCampaignDto, SmsHistoryResponse, CobrosDelMes, MiBalance as MiBalanceType } from './types';
+import type { SmsCampaign, CreateSmsCampaignDto, SmsHistoryResponse, CobrosDelMes, MorososResponse, MiBalance as MiBalanceType } from './types';
 
 export const smsCampaignsApi = {
     getAll: async (): Promise<SmsCampaign[]> => {
@@ -655,6 +655,11 @@ export const cobrosDelMesApi = {
             : `${API_URL}/cobros/mes`;
         const response = await fetch(url, { headers: getHeaders() });
         return handleResponse<CobrosDelMes>(response);
+    },
+
+    getMorosos: async (): Promise<MorososResponse> => {
+        const response = await fetch(`${API_URL}/cobros/morosos`, { headers: getHeaders() });
+        return handleResponse<MorososResponse>(response);
     },
 };
 

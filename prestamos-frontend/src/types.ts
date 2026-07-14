@@ -487,6 +487,28 @@ export interface CobrosDelMes {
   };
 }
 
+// Clientes morosos (Cobros > filtro Morosos)
+export interface ClienteMoroso {
+  clienteId: number;
+  clienteNombre: string;
+  clienteTelefono?: string;
+  cuotasVencidas: number;
+  totalAdeudado: number;
+  diasMoraMax: number;
+  prestamos: number[];
+  cobradores: string[];
+}
+
+export interface MorososResponse {
+  fecha: string;
+  morosos: ClienteMoroso[];
+  resumen: {
+    totalClientes: number;
+    totalCuotasVencidas: number;
+    totalAdeudado: number;
+  };
+}
+
 // Préstamos del Día
 export interface PrestamoDelDia {
   id: number;
