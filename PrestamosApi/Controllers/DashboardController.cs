@@ -15,11 +15,13 @@ public class DashboardController : BaseApiController
 {
     private readonly PrestamosDbContext _context;
     private readonly IGananciasService _gananciasService;
+    private readonly IMoraService _moraService;
 
-    public DashboardController(PrestamosDbContext context, IGananciasService gananciasService)
+    public DashboardController(PrestamosDbContext context, IGananciasService gananciasService, IMoraService moraService)
     {
         _context = context;
         _gananciasService = gananciasService;
+        _moraService = moraService;
     }
 
     // Aplica filtros de scope (fecha y cobradores) a queries de Prestamos
@@ -293,6 +295,18 @@ public class DashboardController : BaseApiController
                 capitalInicial = 0;
             }
 
+            // Mora acumulada de todas las cuotas vencidas (informativa: aún no cobrada)
+            decimal moraAcumuladaTotal = 0;
+            try
+            {
+                moraAcumuladaTotal = await _moraService.CalcularMoraDeCuotasAsync(
+                    ScopeCuotas(_context.CuotasPrestamo, fechaScope, cobsScope));
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Error calculando mora global: {ex.Message}");
+            }
+
             return Ok(new DashboardMetricasDto(
                 TotalPrestado: totalPrestado,
                 TotalACobrar: totalACobrar,
@@ -313,7 +327,9 @@ public class DashboardController : BaseApiController
                 ReservaDisponible: reservaDisponible,
                 CapitalInicial: (decimal)Math.Round(capitalInicial, 2),
                 BalanceNequi: balanceNequi,
-                BalanceEfectivo: balanceEfectivo
+                BalanceEfectivo: balanceEfectivo,
+                CapitalTotal: (decimal)Math.Round(capitalInicial + reservaDisponible, 2),
+                MoraAcumuladaTotal: moraAcumuladaTotal
             ));
         }
         catch (Exception ex)

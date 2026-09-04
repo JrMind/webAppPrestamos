@@ -130,6 +130,7 @@ public class PrestamosDbContext : DbContext
             entity.Property(e => e.MetodoPago).HasColumnName("metodopago").HasMaxLength(50);
             entity.Property(e => e.Comprobante).HasColumnName("comprobante").HasMaxLength(200);
             entity.Property(e => e.Observaciones).HasColumnName("observaciones");
+            entity.Property(e => e.TipoPago).HasColumnName("tipopago").HasMaxLength(20).HasDefaultValue("Cuota");
 
             entity.HasOne(e => e.Prestamo)
                 .WithMany(p => p.Pagos)

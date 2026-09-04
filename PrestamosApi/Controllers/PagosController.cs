@@ -17,19 +17,22 @@ public class PagosController : BaseApiController
     private readonly ITwilioService _twilioService;
     private readonly IDistribucionGananciasService _distribucionService;
     private readonly IPrestamoService _prestamoService;
+    private readonly IGananciasService _gananciasService;
     private readonly ILogger<PagosController> _logger;
 
     public PagosController(
-        PrestamosDbContext context, 
-        ITwilioService twilioService, 
+        PrestamosDbContext context,
+        ITwilioService twilioService,
         IDistribucionGananciasService distribucionService,
         IPrestamoService prestamoService,
+        IGananciasService gananciasService,
         ILogger<PagosController> logger)
     {
         _context = context;
         _twilioService = twilioService;
         _distribucionService = distribucionService;
         _prestamoService = prestamoService;
+        _gananciasService = gananciasService;
         _logger = logger;
     }
 
@@ -49,7 +52,8 @@ public class PagosController : BaseApiController
                 p.FechaPago,
                 p.MetodoPago,
                 p.Comprobante,
-                p.Observaciones
+                p.Observaciones,
+                p.TipoPago
             ))
             .ToListAsync();
 
@@ -386,7 +390,7 @@ public class PagosController : BaseApiController
 
         return CreatedAtAction(nameof(GetPagosByPrestamo), new { prestamoId = pago.PrestamoId },
             new PagoDto(pago.Id, pago.PrestamoId, pago.CuotaId, null, pago.MontoPago,
-                pago.FechaPago, pago.MetodoPago, pago.Comprobante, pago.Observaciones));
+                pago.FechaPago, pago.MetodoPago, pago.Comprobante, pago.Observaciones, pago.TipoPago));
     }
 
     /// <summary>
@@ -468,7 +472,7 @@ public class PagosController : BaseApiController
                 pago.Cuota.EstadoCuota = "Parcial";
             }
         }
-        else if (!pago.CuotaId.HasValue && prestamo != null && prestamo.EsCongelado)
+        else if (pago.TipoPago == "AbonoCapital" && prestamo != null && prestamo.EsCongelado)
         {
             // Es un abono al capital en un préstamo congelado, revertimos el capital
             prestamo.MontoPrestado += pago.MontoPago;
@@ -498,14 +502,23 @@ public class PagosController : BaseApiController
             }
         }
 
+        // Mora y solo-interés no amortizan nada: solo hay que devolver el dinero de caja
+        var esCobroSinAmortizacion = pago.TipoPago == "Mora" || pago.TipoPago == "SoloInteres";
+
         // Actualizar estado del préstamo si estaba pagado
-        if (prestamo != null && prestamo.EstadoPrestamo == "Pagado")
+        if (!esCobroSinAmortizacion && prestamo != null && prestamo.EstadoPrestamo == "Pagado")
         {
             prestamo.EstadoPrestamo = "Activo";
         }
 
         _context.Pagos.Remove(pago);
         await _context.SaveChangesAsync();
+
+        if (esCobroSinAmortizacion)
+        {
+            await _gananciasService.ActualizarReservaAsync(
+                -pago.MontoPago, $"Reverso de {pago.TipoPago} préstamo #{pago.PrestamoId}");
+        }
 
         return NoContent();
     }
@@ -544,6 +557,7 @@ public class PagosController : BaseApiController
             MontoPago = dto.Monto,
             FechaPago = DateTime.UtcNow,
             MetodoPago = dto.MetodoPago ?? "Efectivo",
+            TipoPago = "AbonoCapital",
             Observaciones = $"Abono al capital. Capital anterior: ${capitalAnterior:N0}, Nuevo capital: ${prestamo.MontoPrestado:N0}"
         };
         _context.Pagos.Add(pago);
@@ -596,12 +610,59 @@ public class PagosController : BaseApiController
 
         await _context.SaveChangesAsync();
 
-        return Ok(new { 
+        return Ok(new {
             message = $"Abono de ${dto.Monto:N0} aplicado exitosamente",
             capitalAnterior = capitalAnterior,
             nuevoCapital = prestamo.MontoPrestado,
             nuevaCuota = prestamo.MontoCuota,
             estadoPrestamo = prestamo.EstadoPrestamo
+        });
+    }
+
+    /// <summary>
+    /// Registra un pago de solo interés: el cliente paga el interés del período
+    /// pero no abona ninguna cuota. No amortiza capital ni toca el plan de cuotas;
+    /// el dinero entra a caja y al balance del medio de pago.
+    /// </summary>
+    [HttpPost("solo-interes/{prestamoId}")]
+    public async Task<IActionResult> PagoSoloInteres(int prestamoId, [FromBody] RegistrarSoloInteresDto dto)
+    {
+        if (dto.Monto <= 0)
+            return BadRequest(new { message = "El monto debe ser mayor a 0" });
+
+        var prestamo = await _context.Prestamos.FirstOrDefaultAsync(p => p.Id == prestamoId);
+        if (prestamo == null)
+            return NotFound(new { message = "Préstamo no encontrado" });
+
+        var metodoPago = string.IsNullOrWhiteSpace(dto.MetodoPago) ? "Efectivo" : dto.MetodoPago;
+
+        var pago = new Pago
+        {
+            PrestamoId = prestamoId,
+            CuotaId = null,
+            MontoPago = dto.Monto,
+            FechaPago = dto.FechaPago.HasValue
+                ? DateTime.SpecifyKind(dto.FechaPago.Value, DateTimeKind.Utc)
+                : DateTime.UtcNow,
+            MetodoPago = metodoPago,
+            TipoPago = "SoloInteres",
+            Observaciones = dto.Observaciones ?? "Pago de interés del período (no amortiza capital)"
+        };
+
+        _context.Pagos.Add(pago);
+        await _context.SaveChangesAsync();
+
+        await _gananciasService.ActualizarReservaAsync(
+            dto.Monto, $"Pago de solo interés préstamo #{prestamoId}");
+
+        _logger.LogInformation("Solo interés cobrado en préstamo #{PrestamoId}: ${Monto} por {Medio}",
+            prestamoId, dto.Monto, metodoPago);
+
+        return Ok(new
+        {
+            message = $"Pago de interés de ${dto.Monto:N0} registrado",
+            pagoId = pago.Id,
+            capitalPendiente = prestamo.MontoPrestado
         });
     }
 }

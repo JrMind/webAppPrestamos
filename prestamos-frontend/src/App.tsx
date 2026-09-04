@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi, saldosApi, distribucionApi } from './api';
-import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MorososResponse, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto, DistribucionPrestamos } from './types';
+import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi, saldosApi, distribucionApi, moraApi } from './api';
+import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MorososResponse, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto, DistribucionPrestamos, MoraPrestamo } from './types';
 import { MetricasCobradores } from './components/MetricasCobradores';
 import './App.css';
 
@@ -415,6 +415,9 @@ function App() {
   const [selectedPrestamo, setSelectedPrestamo] = useState<Prestamo | null>(null);
   const [cuotasDetalle, setCuotasDetalle] = useState<Cuota[]>([]);
   const [pagosDetalle, setPagosDetalle] = useState<Pago[]>([]);
+  const [moraDetalle, setMoraDetalle] = useState<MoraPrestamo | null>(null);
+  const [showCobroExtraModal, setShowCobroExtraModal] = useState<null | 'Mora' | 'SoloInteres'>(null);
+  const [cobroExtraForm, setCobroExtraForm] = useState({ monto: 0, fechaPago: '', metodoPago: 'Efectivo' });
   const [selectedCuota, setSelectedCuota] = useState<Cuota | null>(null);
 
   // Client search state
@@ -1232,14 +1235,49 @@ function App() {
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
+  // Recarga cuotas, pagos y mora del préstamo abierto en el detalle
+  const refreshDetalle = async (prestamoId: number) => {
+    const [cuotas, pagos, mora] = await Promise.all([
+      cuotasApi.getByPrestamo(prestamoId),
+      pagosApi.getByPrestamo(prestamoId),
+      moraApi.getByPrestamo(prestamoId).catch(() => null),
+    ]);
+    setCuotasDetalle(cuotas);
+    setPagosDetalle(pagos);
+    setMoraDetalle(mora);
+  };
+
   const openDetalle = async (prestamo: Prestamo) => {
     setSelectedPrestamo(prestamo);
     try {
-      const [cuotas, pagos] = await Promise.all([cuotasApi.getByPrestamo(prestamo.id), pagosApi.getByPrestamo(prestamo.id)]);
-      setCuotasDetalle(cuotas);
-      setPagosDetalle(pagos);
+      await refreshDetalle(prestamo.id);
       setShowDetalleModal(true);
     } catch { showToast('Error al cargar detalles', 'error'); }
+  };
+
+  const openCobroExtraModal = (tipo: 'Mora' | 'SoloInteres') => {
+    const sugerido = tipo === 'Mora' ? Math.max(0, Math.round(moraDetalle?.moraSaldo ?? 0)) : 0;
+    setCobroExtraForm({ monto: sugerido, fechaPago: formatDateInput(new Date()), metodoPago: 'Efectivo' });
+    setShowCobroExtraModal(tipo);
+  };
+
+  const handleCobroExtra = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPrestamo || !showCobroExtraModal) return;
+    const { monto, metodoPago, fechaPago } = cobroExtraForm;
+    if (monto <= 0) { showToast('Ingrese un monto válido', 'warning'); return; }
+    try {
+      if (showCobroExtraModal === 'Mora') {
+        await moraApi.registrarPago(selectedPrestamo.id, monto, metodoPago, fechaPago);
+        showToast(`Cobro de mora de ${formatMoney(monto)} registrado`, 'success');
+      } else {
+        await pagosApi.soloInteres(selectedPrestamo.id, monto, metodoPago, fechaPago);
+        showToast(`Pago de interés de ${formatMoney(monto)} registrado`, 'success');
+      }
+      setShowCobroExtraModal(null);
+      await refreshDetalle(selectedPrestamo.id);
+      loadData();
+    } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
   };
 
   const openPagoModal = (cuota: Cuota) => {
@@ -1255,9 +1293,7 @@ function App() {
       showToast('Pago registrado', 'success');
       setShowPagoModal(false);
       if (selectedPrestamo) {
-        const [cuotas, pagos] = await Promise.all([cuotasApi.getByPrestamo(selectedPrestamo.id), pagosApi.getByPrestamo(selectedPrestamo.id)]);
-        setCuotasDetalle(cuotas);
-        setPagosDetalle(pagos);
+        await refreshDetalle(selectedPrestamo.id);
       }
       loadData();
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
@@ -1269,14 +1305,9 @@ function App() {
       await pagosApi.delete(pagoId);
       showToast('Pago deshecho correctamente', 'success');
       if (selectedPrestamo) {
-        const [pActualizado, cuotas, pagos] = await Promise.all([
-          prestamosApi.getById(selectedPrestamo.id),
-          cuotasApi.getByPrestamo(selectedPrestamo.id),
-          pagosApi.getByPrestamo(selectedPrestamo.id)
-        ]);
+        const pActualizado = await prestamosApi.getById(selectedPrestamo.id);
         setSelectedPrestamo(pActualizado);
-        setCuotasDetalle(cuotas);
-        setPagosDetalle(pagos);
+        await refreshDetalle(selectedPrestamo.id);
       }
       loadData();
     } catch (error: unknown) { showToast(error instanceof Error ? error.message : 'Error', 'error'); }
@@ -3120,6 +3151,78 @@ function App() {
                     </div>
                   </div>
                 )}
+                {/* Mora acumulada por cuotas vencidas */}
+                {moraDetalle && (
+                  <div style={{ gridColumn: '1 / -1', padding: '1rem', background: 'rgba(239, 68, 68, 0.08)', borderRadius: '8px', border: '1px solid #ef4444' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <h4 style={{ margin: 0, color: '#ef4444' }}>⚠️ Mora por Atraso</h4>
+                      <span style={{ fontSize: '0.75rem', color: '#888' }}>
+                        {moraDetalle.tasaMoraMensual}% mensual · {moraDetalle.tasaMoraDiaria}% diario sobre capital impago
+                      </span>
+                    </div>
+
+                    {moraDetalle.cuotas.length === 0 ? (
+                      <div style={{ fontSize: '0.85rem', color: '#10b981' }}>✅ Sin cuotas vencidas: no hay mora acumulada.</div>
+                    ) : (
+                      <>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', marginBottom: '0.75rem' }}>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: '#888' }}>Mora Acumulada</label>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#ef4444' }}>{formatMoney(moraDetalle.moraTotal)}</div>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: '#888' }}>Mora Cobrada</label>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#10b981' }}>{formatMoney(moraDetalle.moraPagada)}</div>
+                          </div>
+                          <div>
+                            <label style={{ fontSize: '0.75rem', color: '#888' }}>Saldo de Mora</label>
+                            <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: moraDetalle.moraSaldo > 0 ? '#f59e0b' : '#10b981' }}>{formatMoney(moraDetalle.moraSaldo)}</div>
+                          </div>
+                        </div>
+
+                        <div className="table-container" style={{ maxHeight: '160px', overflow: 'auto', marginBottom: '0.75rem' }}>
+                          <table>
+                            <thead>
+                              <tr>
+                                <th>Cuota</th>
+                                <th>Vencida el</th>
+                                <th>Días</th>
+                                <th>Capital impago</th>
+                                <th>Mora/día</th>
+                                <th>Mora acumulada</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {moraDetalle.cuotas.map(m => (
+                                <tr key={m.cuotaId}>
+                                  <td>#{m.numeroCuota}</td>
+                                  <td>{formatDate(m.fechaCobro)}</td>
+                                  <td style={{ color: '#f59e0b' }}>{m.diasVencidos}</td>
+                                  <td className="money">{formatMoney(m.baseMora)}</td>
+                                  <td className="money" style={{ color: '#888' }}>{formatMoney(m.moraDiaria)}</td>
+                                  <td className="money" style={{ color: '#ef4444', fontWeight: 'bold' }}>{formatMoney(m.moraAcumulada)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </>
+                    )}
+
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                      <button className="btn btn-danger btn-sm" onClick={() => openCobroExtraModal('Mora')}>
+                        💸 Registrar cobro de mora
+                      </button>
+                      <button className="btn btn-secondary btn-sm" onClick={() => openCobroExtraModal('SoloInteres')}>
+                        🧾 Registrar pago de solo interés
+                      </button>
+                    </div>
+                    <div style={{ fontSize: '0.72rem', color: '#888', marginTop: '0.5rem' }}>
+                      Cobrar la mora es opcional. Lo que registres entra a caja (reserva y balance del medio de pago); no amortiza capital ni cuotas.
+                    </div>
+                  </div>
+                )}
+
                 <div style={{ marginTop: '1rem', gridColumn: '1 / -1', display: 'flex', gap: '0.5rem' }}>
                   <button className="btn btn-primary btn-sm" onClick={() => { setShowDetalleModal(false); openEditPrestamo(selectedPrestamo); }}>✏️ Editar Préstamo</button>
                   <button className="btn btn-secondary btn-sm" onClick={async () => {
@@ -3144,6 +3247,7 @@ function App() {
                       <th>Valor Cuota</th>
                       <th>Pagado</th>
                       <th>Pendiente</th>
+                      <th>Mora</th>
                       <th>Estado</th>
                       <th></th>
                     </tr>
@@ -3182,6 +3286,18 @@ function App() {
                           <td className="money">{formatMoney(c.montoCuota)}</td>
                           <td className="money" style={{ color: '#10b981' }}>{formatMoney(c.montoPagado)}</td>
                           <td className="money" style={{ color: c.saldoPendiente > 0 && !esTerminado ? '#ef4444' : '#10b981' }}>{formatMoney(c.saldoPendiente)}</td>
+                          <td className="money">
+                            {(() => {
+                              const m = moraDetalle?.cuotas.find(x => x.cuotaId === c.id);
+                              if (!m) return <span style={{ color: '#666' }}>-</span>;
+                              return (
+                                <span style={{ color: '#ef4444' }} title={`${m.diasVencidos} días × ${formatMoney(m.moraDiaria)}/día`}>
+                                  {formatMoney(m.moraAcumulada)}
+                                  <span style={{ fontSize: '0.7rem', color: '#888', display: 'block' }}>{m.diasVencidos} días</span>
+                                </span>
+                              );
+                            })()}
+                          </td>
                           <td>
                             <span className={`badge ${c.estadoCuota === 'Pagada' ? 'badge-green' : (c.estadoCuota === 'Vencida' && !esTerminado) ? 'badge-red' : c.estadoCuota === 'Parcial' ? 'badge-orange' : 'badge-gray'}`}>
                               {c.estadoCuota === 'Pagada' ? '✅ Pagada' : (c.estadoCuota === 'Vencida' && !esTerminado) ? '⚠️ Vencida' : c.estadoCuota === 'Parcial' ? '🔄 Parcial' : '⏳ Pendiente'}
@@ -3211,9 +3327,12 @@ function App() {
                         <tr key={p.id}>
                           <td>{formatDate(p.fechaPago)}</td>
                           <td>
-                            <span className={`badge ${p.numeroCuota ? 'badge-blue' : 'badge-orange'}`}>
-                              {p.numeroCuota ? 'Pago de Cuota' : 'Abono a Capital'}
-                            </span>
+                            {(() => {
+                              const tipo = p.tipoPago ?? (p.numeroCuota ? 'Cuota' : 'AbonoCapital');
+                              const etiqueta = { Cuota: 'Pago de Cuota', AbonoCapital: 'Abono a Capital', Mora: 'Cobro de Mora', SoloInteres: 'Solo Interés' }[tipo] ?? tipo;
+                              const clase = { Cuota: 'badge-blue', AbonoCapital: 'badge-orange', Mora: 'badge-red', SoloInteres: 'badge-green' }[tipo] ?? 'badge-gray';
+                              return <span className={`badge ${clase}`}>{etiqueta}</span>;
+                            })()}
                           </td>
                           <td className="money" style={{ color: '#10b981' }}>{formatMoney(p.montoPago)}</td>
                           <td>{p.metodoPago || 'Efectivo'}</td>
@@ -3235,6 +3354,63 @@ function App() {
             <div className="modal-footer">
               <button className="btn btn-secondary" onClick={() => setShowDetalleModal(false)}>Cerrar</button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {showCobroExtraModal && selectedPrestamo && (
+        <div className="modal-overlay" onClick={() => setShowCobroExtraModal(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>{showCobroExtraModal === 'Mora' ? 'Registrar Cobro de Mora' : 'Registrar Pago de Solo Interés'}</h2>
+              <button className="modal-close" onClick={() => setShowCobroExtraModal(null)}>×</button>
+            </div>
+            <form onSubmit={handleCobroExtra}>
+              <div className="modal-body">
+                {showCobroExtraModal === 'Mora' ? (
+                  <div className="form-group">
+                    <label>Saldo de Mora</label>
+                    <div className="money" style={{ fontSize: '1.5rem', color: '#ef4444' }}>{formatMoney(moraDetalle?.moraSaldo ?? 0)}</div>
+                  </div>
+                ) : (
+                  <div className="form-group">
+                    <label>Capital pendiente del préstamo</label>
+                    <div className="money" style={{ fontSize: '1.5rem', color: '#f59e0b' }}>{formatMoney(selectedPrestamo.montoPrestado)}</div>
+                  </div>
+                )}
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label>Monto Cobrado *</label>
+                    <input type="number" min="1" step="0.01" required autoFocus
+                      value={cobroExtraForm.monto}
+                      onChange={e => setCobroExtraForm({ ...cobroExtraForm, monto: Number(e.target.value) })} />
+                  </div>
+                  <div className="form-group">
+                    <label>Fecha *</label>
+                    <input type="date" required value={cobroExtraForm.fechaPago}
+                      onChange={e => setCobroExtraForm({ ...cobroExtraForm, fechaPago: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label>Medio de Pago *</label>
+                    <select value={cobroExtraForm.metodoPago}
+                      onChange={e => setCobroExtraForm({ ...cobroExtraForm, metodoPago: e.target.value })}>
+                      <option value="Efectivo">💵 Efectivo</option>
+                      <option value="Nequi">📱 Nequi</option>
+                    </select>
+                  </div>
+                </div>
+                <div style={{ padding: '0.5rem 0.75rem', background: 'rgba(59,130,246,0.1)', borderRadius: '6px', marginTop: '0.5rem', fontSize: '0.85rem', color: '#3b82f6', border: '1px solid rgba(59,130,246,0.2)' }}>
+                  💡 Este cobro entra a <strong>{cobroExtraForm.metodoPago}</strong> y a la reserva disponible.
+                  {showCobroExtraModal === 'Mora'
+                    ? ' Puede registrar un abono parcial de la mora.'
+                    : ' No amortiza capital: el préstamo mantiene su saldo.'}
+                </div>
+              </div>
+              <div className="modal-footer">
+                <button type="button" className="btn btn-secondary" onClick={() => setShowCobroExtraModal(null)}>Cancelar</button>
+                <button type="submit" className="btn btn-primary">Registrar</button>
+              </div>
+            </form>
           </div>
         </div>
       )}

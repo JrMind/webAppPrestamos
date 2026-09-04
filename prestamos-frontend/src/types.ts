@@ -212,6 +212,27 @@ export interface Pago {
   metodoPago?: string;
   comprobante?: string;
   observaciones?: string;
+  tipoPago?: 'Cuota' | 'AbonoCapital' | 'Mora' | 'SoloInteres';
+}
+
+export interface MoraCuota {
+  cuotaId: number;
+  numeroCuota: number;
+  fechaCobro: string;
+  diasVencidos: number;
+  baseMora: number;      // capital de la cuota aún impago
+  moraDiaria: number;
+  moraAcumulada: number;
+}
+
+export interface MoraPrestamo {
+  prestamoId: number;
+  tasaMoraMensual: number;
+  tasaMoraDiaria: number;  // en % (ej: 0.6667)
+  moraTotal: number;
+  moraPagada: number;
+  moraSaldo: number;
+  cuotas: MoraCuota[];
 }
 
 export interface CreatePagoDto {
@@ -280,6 +301,8 @@ export interface DashboardMetricas {
   dineroCirculando: number;
   reservaDisponible: number;
   capitalInicial: number;  // Capital Circulante real
+  capitalTotal: number;    // capital en la calle + caja
+  moraAcumuladaTotal: number;
 
   // Balances por medio de pago
   balanceNequi: number;

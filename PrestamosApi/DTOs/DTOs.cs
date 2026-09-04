@@ -144,8 +144,47 @@ public record PagoDto(
     DateTime FechaPago,
     string? MetodoPago,
     string? Comprobante,
-    string? Observaciones
+    string? Observaciones,
+    string TipoPago = "Cuota"
 );
+
+// Mora DTOs
+public record MoraCuotaDto(
+    int CuotaId,
+    int NumeroCuota,
+    DateTime FechaCobro,
+    int DiasVencidos,
+    decimal BaseMora,        // capital de la cuota aún impago
+    decimal MoraDiaria,
+    decimal MoraAcumulada
+);
+
+public record MoraPrestamoDto(
+    int PrestamoId,
+    decimal TasaMoraMensual,
+    decimal TasaMoraDiaria,  // en % (ej: 0.6667)
+    decimal MoraTotal,
+    decimal MoraPagada,
+    decimal MoraSaldo,
+    List<MoraCuotaDto> Cuotas
+);
+
+public record RegistrarPagoMoraDto(
+    int PrestamoId,
+    decimal Monto,
+    DateTime? FechaPago = null,
+    string? MetodoPago = null,
+    string? Observaciones = null
+);
+
+public record RegistrarSoloInteresDto(
+    decimal Monto,
+    DateTime? FechaPago = null,
+    string? MetodoPago = null,
+    string? Observaciones = null
+);
+
+public record TasaMoraDto(decimal TasaMoraMensual);
 
 public record CreatePagoDto(
     int PrestamoId,
@@ -181,7 +220,11 @@ public record DashboardMetricasDto(
     decimal CapitalInicial = 0,     // Capital Circulante real
     // Balances por medio de pago
     decimal BalanceNequi = 0,
-    decimal BalanceEfectivo = 0
+    decimal BalanceEfectivo = 0,
+    // Capital Total = capital en la calle + caja disponible
+    decimal CapitalTotal = 0,
+    // Mora acumulada de todas las cuotas vencidas (informativa, aún no cobrada)
+    decimal MoraAcumuladaTotal = 0
 );
 
 public record EvolucionPrestamosDto(

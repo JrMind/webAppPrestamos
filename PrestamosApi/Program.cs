@@ -67,6 +67,7 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IGananciasService, GananciasService>();
 builder.Services.AddScoped<ITwilioService, TwilioService>();
 builder.Services.AddScoped<ICierreMesService, CierreMesService>();
+builder.Services.AddScoped<IMoraService, MoraService>();
 
 // Background Services
 builder.Services.AddHostedService<NotificationBackgroundService>();

@@ -2,7 +2,7 @@ import {
     Cliente, CreateClienteDto, CreatePagoDto, CreatePrestamoDto,
     Cuota, DashboardMetricas, Pago, Prestamo, LoginDto, AuthResponse,
     Usuario, Cobrador, BalanceSocio, CobrosHoy, MovimientoCapital, Aporte,
-    MetricasGenerales, DistribucionPrestamos
+    MetricasGenerales, DistribucionPrestamos, MoraPrestamo
 } from './types';
 
 const API_URL = import.meta.env.DEV
@@ -359,6 +359,43 @@ export const prestamosApi = {
 };
 
 // Cuotas
+// Mora (penalidad por cuotas vencidas)
+export const moraApi = {
+    getByPrestamo: async (prestamoId: number): Promise<MoraPrestamo> => {
+        const response = await fetch(`${API_URL}/mora/prestamo/${prestamoId}`, { headers: getHeaders() });
+        return handleResponse<MoraPrestamo>(response);
+    },
+
+    registrarPago: async (
+        prestamoId: number,
+        monto: number,
+        metodoPago?: string,
+        fechaPago?: string,
+        observaciones?: string,
+    ): Promise<{ message: string; pagoId: number; mora: MoraPrestamo }> => {
+        const response = await fetch(`${API_URL}/mora/pago`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ prestamoId, monto, metodoPago, fechaPago, observaciones }),
+        });
+        return handleResponse(response);
+    },
+
+    getTasa: async (): Promise<{ tasaMoraMensual: number }> => {
+        const response = await fetch(`${API_URL}/mora/tasa`, { headers: getHeaders() });
+        return handleResponse(response);
+    },
+
+    updateTasa: async (tasaMoraMensual: number): Promise<{ tasaMoraMensual: number }> => {
+        const response = await fetch(`${API_URL}/mora/tasa`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({ tasaMoraMensual }),
+        });
+        return handleResponse(response);
+    },
+};
+
 export const cuotasApi = {
     getByPrestamo: async (prestamoId: number): Promise<Cuota[]> => {
         const response = await fetch(`${API_URL}/cuotas/prestamo/${prestamoId}`, { headers: getHeaders() });
@@ -415,6 +452,20 @@ export const pagosApi = {
             method: 'POST',
             headers: getHeaders(),
             body: JSON.stringify({ monto, metodoPago }),
+        });
+        return handleResponse(response);
+    },
+
+    // Pago de solo interés: no amortiza capital, entra a caja
+    soloInteres: async (prestamoId: number, monto: number, metodoPago?: string, fechaPago?: string): Promise<{
+        message: string;
+        pagoId: number;
+        capitalPendiente: number;
+    }> => {
+        const response = await fetch(`${API_URL}/pagos/solo-interes/${prestamoId}`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify({ monto, metodoPago, fechaPago }),
         });
         return handleResponse(response);
     },

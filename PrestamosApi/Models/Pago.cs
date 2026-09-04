@@ -10,6 +10,9 @@ public class Pago
     public string? MetodoPago { get; set; } // Efectivo, Transferencia, etc.
     public string? Comprobante { get; set; }
     public string? Observaciones { get; set; }
+    // Cuota = abono a una cuota | AbonoCapital = reduce capital (congelados)
+    // Mora = penalidad por atraso | SoloInteres = interés del período sin amortizar capital
+    public string TipoPago { get; set; } = "Cuota";
 
     // Navegación
     public Prestamo? Prestamo { get; set; }
