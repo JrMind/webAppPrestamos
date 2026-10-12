@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { dashboardApi } from '../api';
 import { MetricasGenerales } from '../types';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const formatMoney = (amount: number): string =>
   new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount);
@@ -69,6 +69,7 @@ export const MetricasCobradores = () => {
   const [metricas, setMetricas] = useState<MetricasGenerales | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [mesSeleccionado, setMesSeleccionado] = useState<string | null>(null);
 
   useEffect(() => {
     dashboardApi.getMetricasCobradores()
@@ -86,6 +87,8 @@ export const MetricasCobradores = () => {
 
   if (error) return <div style={s.errorBox}>❌ {error}</div>;
   if (!metricas) return <div style={s.center}>Sin datos disponibles</div>;
+
+  const detalleMes = metricas.interesesMensuales?.find(m => m.mes === mesSeleccionado) ?? null;
 
   return (
     <div style={s.container}>
@@ -198,10 +201,88 @@ export const MetricasCobradores = () => {
                   fill="var(--accent-blue)" 
                   radius={[4, 4, 0, 0]} 
                   barSize={40}
-                />
+                  cursor="pointer"
+                  onClick={(data: any) => {
+                    const mes = data?.payload?.mes ?? data?.mes;
+                    if (mes) setMesSeleccionado(prev => (prev === mes ? null : mes));
+                  }}
+                >
+                  {metricas.interesesMensuales.slice().reverse().map(m => (
+                    <Cell
+                      key={m.mes}
+                      fill={mesSeleccionado && mesSeleccionado !== m.mes ? 'rgba(59,130,246,0.35)' : 'var(--accent-blue)'}
+                    />
+                  ))}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
           </div>
+          {!detalleMes && (
+            <p style={{ ...s.kpiSub, padding: '0 1.25rem 1rem' }}>Haz clic en una barra para ver qué préstamos pagaron esos intereses.</p>
+          )}
+        </div>
+      )}
+
+      {/* Detalle del mes seleccionado */}
+      {detalleMes && (
+        <div style={s.tableWrap}>
+          <div style={{ ...s.tableHeader, justifyContent: 'space-between' }}>
+            <span style={s.tableHeaderTitle}>
+              🔎 Intereses de {detalleMes.mes}: {formatMoney(detalleMes.interesCobrado)} · {detalleMes.prestamos.length} {detalleMes.prestamos.length === 1 ? 'préstamo' : 'préstamos'}
+            </span>
+            <button
+              onClick={() => setMesSeleccionado(null)}
+              style={{ background: 'transparent', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-secondary)', padding: '0.25rem 0.6rem', cursor: 'pointer' }}
+            >
+              ✕ Cerrar
+            </button>
+          </div>
+          {detalleMes.prestamos.length === 0 ? (
+            <div style={s.center}>No hubo intereses cobrados en este mes.</div>
+          ) : (
+            <div style={{ overflowX: 'auto' }}>
+              <table style={s.table}>
+                <thead>
+                  <tr>
+                    <th style={s.th}>Préstamo</th>
+                    <th style={s.th}>Cliente</th>
+                    <th style={s.th}>Cobrador</th>
+                    <th style={s.th}>Cuotas</th>
+                    <th style={s.th}>Monto Pagado</th>
+                    <th style={s.th}>Interés</th>
+                    <th style={s.th}>% del Mes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {detalleMes.prestamos.map((p, i) => (
+                    <tr key={p.prestamoId} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                      <td style={{ ...s.td, color: 'var(--text-muted)' }}>#{p.prestamoId}</td>
+                      <td style={{ ...s.td, fontWeight: 600 }}>
+                        {p.clienteNombre}
+                        {p.esCongelado && <span style={{ ...s.badge('rgba(139,92,246,0.35)'), marginLeft: '0.5rem' }}>Congelado</span>}
+                      </td>
+                      <td style={s.td}>{p.cobradorNombre ?? '—'}</td>
+                      <td style={s.td}>{p.cuotasPagadas}</td>
+                      <td style={s.td}>{formatMoney(p.montoPagado)}</td>
+                      <td style={{ ...s.td, fontWeight: 700, color: 'var(--accent-green)' }}>{formatMoney(p.interesCobrado)}</td>
+                      <td style={s.td}>
+                        {detalleMes.interesCobrado > 0 ? formatPercent((p.interesCobrado / detalleMes.interesCobrado) * 100) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td style={s.tdFoot} colSpan={3}>TOTAL</td>
+                    <td style={s.tdFoot}>{detalleMes.prestamos.reduce((sum, p) => sum + p.cuotasPagadas, 0)}</td>
+                    <td style={s.tdFoot}>{formatMoney(detalleMes.prestamos.reduce((sum, p) => sum + p.montoPagado, 0))}</td>
+                    <td style={s.tdFoot}>{formatMoney(detalleMes.interesCobrado)}</td>
+                    <td style={s.tdFoot}>100%</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
         </div>
       )}
 

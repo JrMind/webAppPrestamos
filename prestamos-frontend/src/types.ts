@@ -691,7 +691,23 @@ export interface MetricasGenerales {
   capitalFantasma: number;
   totalPrestamosActivos: number;
   estadisticasCobradores: EstadisticasCobrador[];
-  interesesMensuales: { mes: string; interesCobrado: number }[];
+  interesesMensuales: InteresMensual[];
+}
+
+export interface InteresMensualPrestamo {
+  prestamoId: number;
+  clienteNombre: string;
+  cobradorNombre?: string | null;
+  esCongelado: boolean;
+  cuotasPagadas: number;
+  montoPagado: number;
+  interesCobrado: number;
+}
+
+export interface InteresMensual {
+  mes: string;
+  interesCobrado: number;
+  prestamos: InteresMensualPrestamo[];
 }
 
 // Distribución de préstamos

@@ -15,6 +15,18 @@ public class InteresMensualDto
 {
     public string Mes { get; set; } = string.Empty;
     public decimal InteresCobrado { get; set; }
+    public List<InteresMensualPrestamoDto> Prestamos { get; set; } = new();
+}
+
+public class InteresMensualPrestamoDto
+{
+    public int PrestamoId { get; set; }
+    public string ClienteNombre { get; set; } = string.Empty;
+    public string? CobradorNombre { get; set; }
+    public bool EsCongelado { get; set; }
+    public int CuotasPagadas { get; set; }
+    public decimal MontoPagado { get; set; }
+    public decimal InteresCobrado { get; set; }
 }
 
 public class MetricasGeneralesDto
