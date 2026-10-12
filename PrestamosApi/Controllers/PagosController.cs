@@ -251,12 +251,10 @@ public class PagosController : BaseApiController
                     cuota.EstadoCuota = "Pagada";
                     cuota.FechaPago = fechaPagoUtc;
 
-                    // IMPORTANTE: Generar la cuota del PRÓXIMO MES automáticamente
-                    if (prestamo.EstadoPrestamo == "Activo")
-                    {
-                        var nuevaCuotaCongelada = _prestamoService.GenerarSiguienteCuotaCongelada(prestamo, cuota);
+                    // IMPORTANTE: Generar la cuota del PRÓXIMO periodo automáticamente (también si estaba "Vencido")
+                    var nuevaCuotaCongelada = _prestamoService.GenerarCuotaCongeladaSiFalta(prestamo);
+                    if (nuevaCuotaCongelada != null)
                         _context.CuotasPrestamo.Add(nuevaCuotaCongelada);
-                    }
                 }
                 else
                 {

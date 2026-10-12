@@ -322,6 +322,7 @@ public record CreatePrestamoConFuentesDto(
     decimal PorcentajeCobrador,
     List<FuenteCapitalDto> FuentesCapital, // Lista de fuentes
     bool EsCongelado = false,
+    string? DiaSemana = null, // Para Semanal: Lunes, Martes, etc.
     int? NumeroCuotasDirecto = null, // Override: usar X cuotas
     // Cargos adicionales
     decimal ValorSistema = 0,

@@ -6,6 +6,8 @@ public interface IPrestamoService
 {
     List<CuotaPrestamo> GenerarCuotas(Prestamo prestamo, DateTime? fechaPrimerPago = null);
     CuotaPrestamo GenerarSiguienteCuotaCongelada(Prestamo prestamo, CuotaPrestamo ultimaCuota);
+    List<DateTime> CalcularFechasCuotas(DateTime fechaInicio, string frecuenciaPago, string? diaSemana, int cantidad);
+    CuotaPrestamo? GenerarCuotaCongeladaSiFalta(Prestamo prestamo);
     (decimal MontoTotal, decimal MontoIntereses, decimal MontoCuota, int NumeroCuotas, DateTime FechaVencimiento) 
         CalcularPrestamo(decimal montoPrestado, decimal tasaInteres, string tipoInteres, 
                          string frecuenciaPago, int duracion, string unidadDuracion, DateTime fechaPrestamo,
@@ -75,8 +77,10 @@ public class PrestamoService : IPrestamoService
             montoCuota = Math.Round(montoTotal / numeroCuotas, 2);
         }
         
-        // Calcular fecha de vencimiento (fecha de la última cuota)
-        DateTime fechaVencimiento = CalcularFechaCuota(fechaPrestamo, frecuenciaPago, numeroCuotas);
+        // Fecha de vencimiento = fecha de la última cuota del calendario (la primera cuota cae en la fecha del préstamo).
+        // Congelados: solo existe una cuota a la vez; el vencimiento sigue a la cuota pendiente (ver GenerarCuotaCongeladaSiFalta).
+        var fechasCalendario = CalcularFechasCuotas(fechaPrestamo, frecuenciaPago, null, numeroCuotas);
+        DateTime fechaVencimiento = fechasCalendario[^1];
         
         return (Math.Round(montoTotal, 2), Math.Round(montoIntereses, 2), montoCuota, numeroCuotas, fechaVencimiento);
     }
@@ -84,16 +88,11 @@ public class PrestamoService : IPrestamoService
     public List<CuotaPrestamo> GenerarCuotas(Prestamo prestamo, DateTime? fechaPrimerPago = null)
     {
         var cuotas = new List<CuotaPrestamo>();
-        // La primera cuota es la fecha indicada, o se calcula desde la fecha del préstamo
-        DateTime fechaBase = fechaPrimerPago ?? prestamo.FechaPrestamo; 
-        
-        // Si no se especificó fechaPrimerPago, calculamos la primera cuota según frecuencia
-        if (fechaPrimerPago == null)
-        {
-             fechaBase = CalcularProximaFecha(prestamo.FechaPrestamo, prestamo.FrecuenciaPago, prestamo.DiaSemana);
-        }
-
-        DateTime fechaActual = fechaBase;
+        // La primera cuota es la fecha indicada, o un periodo después de la fecha del préstamo
+        var fechas = fechaPrimerPago.HasValue
+            ? CalcularFechasCuotas(fechaPrimerPago.Value, prestamo.FrecuenciaPago, prestamo.DiaSemana, prestamo.NumeroCuotas)
+            : CalcularFechasCuotas(prestamo.FechaPrestamo, prestamo.FrecuenciaPago, prestamo.DiaSemana, prestamo.NumeroCuotas + 1)
+                .Skip(1).ToList();
 
         // Calcular interés y capital por cuota (distribución lineal)
         decimal interesPorCuota = Math.Round(prestamo.MontoIntereses / prestamo.NumeroCuotas, 2);
@@ -107,12 +106,7 @@ public class PrestamoService : IPrestamoService
         
         for (int i = 1; i <= prestamo.NumeroCuotas; i++)
         {
-             // Para la primera cuota usamos la fecha base decidida
-             // Para las siguientes, sumamos el periodo a la fecha anterior
-            if (i > 1)
-            {
-                fechaActual = CalcularProximaFecha(fechaActual, prestamo.FrecuenciaPago, prestamo.DiaSemana);
-            }
+            DateTime fechaActual = fechas[i - 1];
 
             if (prestamo.EsCongelado)
             {
@@ -165,11 +159,43 @@ public class PrestamoService : IPrestamoService
         return cuotas;
     }
 
+    /// <summary>
+    /// Si un préstamo congelado sigue vigente (Activo o Vencido) y ya no tiene cuota de interés pendiente,
+    /// genera la siguiente y mueve el vencimiento a esa cuota. Requiere prestamo.Cuotas cargadas.
+    /// El llamador debe agregar la cuota devuelta al contexto.
+    /// Antes solo se generaba con el préstamo en "Activo": un congelado que el worker pasaba a "Vencido"
+    /// (o que se cobraba con "Marcar cobrado"/abonos) se quedaba sin cuotas y desaparecía de Cobros e intereses.
+    /// </summary>
+    public CuotaPrestamo? GenerarCuotaCongeladaSiFalta(Prestamo prestamo)
+    {
+        if (!prestamo.EsCongelado || prestamo.MontoPrestado <= 0) return null;
+        if (prestamo.EstadoPrestamo != "Activo" && prestamo.EstadoPrestamo != "Vencido") return null;
+        if (prestamo.Cuotas.Any(c => c.EstadoCuota != "Pagada")) return null;
+
+        var ultima = prestamo.Cuotas
+            .OrderByDescending(c => c.FechaCobro)
+            .ThenByDescending(c => c.NumeroCuota)
+            .FirstOrDefault();
+        if (ultima == null) return null;
+
+        var nueva = GenerarSiguienteCuotaCongelada(prestamo, ultima);
+        nueva.NumeroCuota = prestamo.Cuotas.Max(c => c.NumeroCuota) + 1;
+
+        var hoy = DateTime.UtcNow.Date;
+        if (nueva.FechaCobro.Date < hoy) nueva.EstadoCuota = "Vencida";
+        prestamo.FechaVencimiento = nueva.FechaCobro;
+        prestamo.EstadoPrestamo = nueva.FechaCobro.Date < hoy ? "Vencido" : "Activo";
+
+        return nueva;
+    }
+
     public CuotaPrestamo GenerarSiguienteCuotaCongelada(Prestamo prestamo, CuotaPrestamo ultimaCuota)
     {
-        // Calcular fecha de la nueva cuota
-        DateTime nuevaFecha = CalcularProximaFecha(ultimaCuota.FechaCobro, prestamo.FrecuenciaPago, prestamo.DiaSemana);
-        DateTime fechaCobro = DateTime.SpecifyKind(nuevaFecha, DateTimeKind.Utc);
+        // Siguiente fecha del calendario anclado a la fecha del préstamo (no se encadena desde la cuota
+        // anterior para que un corrimiento por domingo no arrastre las fechas siguientes)
+        DateTime fechaCobro = DateTime.SpecifyKind(
+            SiguienteFechaCalendario(prestamo.FechaPrestamo, prestamo.FrecuenciaPago, prestamo.DiaSemana, ultimaCuota.FechaCobro),
+            DateTimeKind.Utc);
 
         // Recalcular monto por si hubo abonos a capital
         // Cuota = Capital * (Tasa/100) * factor
@@ -198,34 +224,103 @@ public class PrestamoService : IPrestamoService
         };
     }
 
-    private DateTime CalcularProximaFecha(DateTime fechaAnterior, string frecuencia, string? diaSemana)
+    /// <summary>
+    /// Fechas de cobro de las primeras <paramref name="cantidad"/> cuotas, empezando en <paramref name="fechaInicio"/>.
+    /// Cada fecha se calcula sobre el calendario a partir de la fecha de inicio (no encadenada desde la anterior):
+    /// - Quincenal: dos días fijos por mes (día de inicio y +15, o -15 si el inicio es después del 15),
+    ///   ajustados al último día en meses cortos. Ej: inicio 15 → 15 y 30 (28/29 en febrero).
+    /// - Mensual: mismo día de cada mes, ajustado al último día en meses cortos.
+    /// - Semanal: cada 7 días, o el día de la semana indicado a partir de la segunda cuota.
+    /// - Diario: días consecutivos sin domingos.
+    /// Si una fecha cae domingo se cobra el lunes, sin correr las fechas siguientes.
+    /// </summary>
+    public List<DateTime> CalcularFechasCuotas(DateTime fechaInicio, string frecuenciaPago, string? diaSemana, int cantidad)
     {
-        DateTime proximaFecha;
+        var inicio = fechaInicio.Date;
+        var fechas = new List<DateTime>(Math.Max(cantidad, 0));
 
-        if (frecuencia == "Semanal" && !string.IsNullOrEmpty(diaSemana))
+        if (frecuenciaPago == "Diario")
         {
-             // Si ya estamos en una fecha alineada al día, sumamos 7. Si no, buscamos el día.
-             proximaFecha = CalcularFechaSemanalPorDia(fechaAnterior.AddDays(1), 1, diaSemana);
-        }
-        else
-        {
-             proximaFecha = frecuencia switch
+            var fecha = MoverDomingoALunes(inicio);
+            for (int i = 0; i < cantidad; i++)
             {
-                "Diario" => fechaAnterior.AddDays(1),
-                "Semanal" => fechaAnterior.AddDays(7),
-                "Quincenal" => fechaAnterior.AddDays(15),
-                "Mensual" => fechaAnterior.AddMonths(1),
-                _ => fechaAnterior.AddMonths(1)
-            };
+                if (i > 0) fecha = MoverDomingoALunes(fecha.AddDays(1));
+                fechas.Add(DateTime.SpecifyKind(fecha, DateTimeKind.Utc));
+            }
+            return fechas;
         }
 
-        // EXCLUIR DOMINGOS: Si cae domingo, pasar al lunes
-        if (proximaFecha.DayOfWeek == DayOfWeek.Sunday)
+        for (int i = 0; i < cantidad; i++)
+            fechas.Add(DateTime.SpecifyKind(MoverDomingoALunes(FechaCalendario(inicio, frecuenciaPago, diaSemana, i)), DateTimeKind.Utc));
+
+        return fechas;
+    }
+
+    /// <summary>
+    /// Fecha (sin corrimiento por domingo) de la cuota número <paramref name="indice"/> (0 = la de inicio).
+    /// </summary>
+    private static DateTime FechaCalendario(DateTime inicio, string frecuenciaPago, string? diaSemana, int indice)
+    {
+        switch (frecuenciaPago)
         {
-            proximaFecha = proximaFecha.AddDays(1);
+            case "Diario":
+                return inicio.AddDays(indice);
+
+            case "Semanal":
+                if (indice == 0 || string.IsNullOrEmpty(diaSemana))
+                    return inicio.AddDays(indice * 7);
+                return CalcularFechaSemanalPorDia(inicio, indice, diaSemana);
+
+            case "Quincenal":
+                return FechaQuincenal(inicio, indice);
+
+            default: // Mensual
+                // AddMonths desde el inicio (no encadenado): 31 ene → 28 feb → 31 mar
+                return inicio.AddMonths(indice);
+        }
+    }
+
+    private static DateTime FechaQuincenal(DateTime inicio, int indice)
+    {
+        int dia = inicio.Day;
+        var mesBase = new DateTime(inicio.Year, inicio.Month, 1);
+
+        if (dia <= 15)
+        {
+            // Días del mes: dia y dia+15 (ej. 15 → 15 y 30; 5 → 5 y 20)
+            var mes = mesBase.AddMonths(indice / 2);
+            return indice % 2 == 0 ? DiaAjustado(mes, dia) : DiaAjustado(mes, dia + 15);
         }
 
-        return proximaFecha;
+        // Días del mes: dia y dia-15 del mes siguiente (ej. 20 → 20 y 5; 31 → último día y 16)
+        return indice % 2 == 0
+            ? DiaAjustado(mesBase.AddMonths(indice / 2), dia)
+            : DiaAjustado(mesBase.AddMonths(indice / 2 + 1), dia - 15);
+    }
+
+    private static DateTime DiaAjustado(DateTime primeroDelMes, int dia) =>
+        primeroDelMes.AddDays(Math.Min(dia, DateTime.DaysInMonth(primeroDelMes.Year, primeroDelMes.Month)) - 1);
+
+    private static DateTime MoverDomingoALunes(DateTime fecha) =>
+        fecha.DayOfWeek == DayOfWeek.Sunday ? fecha.AddDays(1) : fecha;
+
+    /// <summary>
+    /// Primera fecha del calendario anclado en <paramref name="fechaAncla"/> que sea posterior a <paramref name="despuesDe"/>.
+    /// </summary>
+    private static DateTime SiguienteFechaCalendario(DateTime fechaAncla, string frecuenciaPago, string? diaSemana, DateTime despuesDe)
+    {
+        var ancla = fechaAncla.Date;
+        var limite = despuesDe.Date;
+
+        if (frecuenciaPago != "Diario")
+        {
+            for (int i = 0; i < 10000; i++)
+            {
+                var fecha = MoverDomingoALunes(FechaCalendario(ancla, frecuenciaPago, diaSemana, i));
+                if (fecha > limite) return fecha;
+            }
+        }
+        return MoverDomingoALunes(limite.AddDays(1));
     }
 
     private int CalcularDiasTotales(int duracion, string unidadDuracion)
@@ -272,32 +367,7 @@ public class PrestamoService : IPrestamoService
         };
     }
 
-    private DateTime CalcularFechaCuota(DateTime fechaInicial, string frecuenciaPago, int numeroCuota, string? diaSemana = null)
-    {
-        DateTime fecha;
-        
-        if (frecuenciaPago == "Semanal" && !string.IsNullOrEmpty(diaSemana))
-        {
-            // Calcular basado en día de semana específico
-            fecha = CalcularFechaSemanalPorDia(fechaInicial, numeroCuota, diaSemana);
-        }
-        else
-        {
-            fecha = frecuenciaPago switch
-            {
-                "Diario" => fechaInicial.AddDays(numeroCuota),
-                "Semanal" => fechaInicial.AddDays(numeroCuota * 7),
-                "Quincenal" => CalcularFechaQuincenal(fechaInicial, numeroCuota),
-                "Mensual" => CalcularFechaMensual(fechaInicial, numeroCuota),
-                _ => fechaInicial.AddDays(numeroCuota * 30)
-            };
-        }
-        
-        // Asegurar que la fecha sea UTC para PostgreSQL
-        return DateTime.SpecifyKind(fecha, DateTimeKind.Utc);
-    }
-
-    private DateTime CalcularFechaSemanalPorDia(DateTime fechaInicial, int numeroCuota, string diaSemana)
+    private static DateTime CalcularFechaSemanalPorDia(DateTime fechaInicial, int numeroCuota, string diaSemana)
     {
         // Mapear nombre del día a DayOfWeek
         DayOfWeek diaObjetivo = diaSemana switch
@@ -321,31 +391,5 @@ public class PrestamoService : IPrestamoService
         
         // Las siguientes cuotas son cada 7 días
         return primeraCuota.AddDays((numeroCuota - 1) * 7);
-    }
-
-    /// <summary>
-    /// Calcula la fecha de una cuota quincenal sumando exactamente 15 días calendario
-    /// por cada cuota desde la fecha inicial.
-    /// </summary>
-    private DateTime CalcularFechaQuincenal(DateTime fechaInicial, int numeroCuota)
-    {
-        // Quincenal = exactamente 15 días calendario por cuota
-        return fechaInicial.AddDays(numeroCuota * 15);
-    }
-
-    private DateTime CalcularFechaMensual(DateTime fechaInicial, int numeroCuota)
-    {
-        var fecha = fechaInicial.AddMonths(numeroCuota);
-        
-        // Ajustar si el día no existe en el mes destino
-        int diaOriginal = fechaInicial.Day;
-        int diasEnMes = DateTime.DaysInMonth(fecha.Year, fecha.Month);
-        
-        if (diaOriginal > diasEnMes)
-        {
-            fecha = new DateTime(fecha.Year, fecha.Month, diasEnMes, 0, 0, 0, DateTimeKind.Utc);
-        }
-        
-        return fecha;
     }
 }

@@ -447,6 +447,10 @@ public class PrestamosController : BaseApiController
             ValorRenovacion = dto.ValorRenovacion
         };
 
+        // Todo en una transacción: si algo falla después de guardar el préstamo (fuentes, reserva, cuotas)
+        // no debe quedar un préstamo sin cuotas, que no aparece en Cobros ni genera intereses.
+        await using var transaccion = await _context.Database.BeginTransactionAsync();
+
         _context.Prestamos.Add(prestamo);
         await _context.SaveChangesAsync();
 
@@ -488,7 +492,10 @@ public class PrestamosController : BaseApiController
         // Generar cuotas (Fecha del préstamo se usa como fecha base para primera cuota)
         var cuotas = _prestamoService.GenerarCuotas(prestamo, fechaPrestamoUtc);
         _context.CuotasPrestamo.AddRange(cuotas);
+        if (cuotas.Count > 0)
+            prestamo.FechaVencimiento = cuotas.Max(c => c.FechaCobro);
         await _context.SaveChangesAsync();
+        await transaccion.CommitAsync();
 
         return CreatedAtAction(nameof(GetPrestamo), new { id = prestamo.Id },
             new PrestamoDto(
@@ -566,6 +573,7 @@ public class PrestamosController : BaseApiController
             TasaInteres = dto.TasaInteres,
             TipoInteres = dto.TipoInteres,
             FrecuenciaPago = dto.FrecuenciaPago,
+            DiaSemana = dto.DiaSemana,
             NumeroCuotas = numeroCuotas,
             FechaPrestamo = fechaPrestamoUtc,
             FechaVencimiento = fechaVencimientoUtc,
@@ -580,6 +588,10 @@ public class PrestamosController : BaseApiController
             ValorSistema = dto.ValorSistema,
             ValorRenovacion = dto.ValorRenovacion
         };
+
+        // Todo en una transacción: si algo falla después de guardar el préstamo (fuentes, reserva, cuotas)
+        // no debe quedar un préstamo sin cuotas, que no aparece en Cobros ni genera intereses.
+        await using var transaccion = await _context.Database.BeginTransactionAsync();
 
         _context.Prestamos.Add(prestamo);
         await _context.SaveChangesAsync();
@@ -634,10 +646,13 @@ public class PrestamosController : BaseApiController
             }
         }
 
-        // Generar cuotas
-        var cuotas = _prestamoService.GenerarCuotas(prestamo);
+        // Generar cuotas (Fecha del préstamo se usa como fecha base para primera cuota, igual que CreatePrestamo)
+        var cuotas = _prestamoService.GenerarCuotas(prestamo, fechaPrestamoUtc);
         _context.CuotasPrestamo.AddRange(cuotas);
+        if (cuotas.Count > 0)
+            prestamo.FechaVencimiento = cuotas.Max(c => c.FechaCobro);
         await _context.SaveChangesAsync();
+        await transaccion.CommitAsync();
 
         return CreatedAtAction(nameof(GetPrestamo), new { id = prestamo.Id },
             new PrestamoDto(
@@ -741,8 +756,12 @@ public class PrestamosController : BaseApiController
             prestamo.MontoIntereses = nuevoMontoIntereses;
             prestamo.MontoCuota = nuevoMontoCuota;
             
-            // 1. Calcular total pagado históricamente (según tabla Pagos)
-            decimal totalPagadoHist = prestamo.Pagos.Sum(p => p.MontoPago);
+            // 1. Pagos que amortizan cuotas (los cobros de Mora y SoloInteres no abonan a cuotas)
+            var pagosAmortizan = prestamo.Pagos
+                .Where(p => p.TipoPago != "Mora" && p.TipoPago != "SoloInteres")
+                .OrderBy(p => p.FechaPago)
+                .ToList();
+            decimal totalPagadoHist = pagosAmortizan.Sum(p => p.MontoPago);
             
             // 2. Desvincular pagos de las cuotas antiguas
             foreach(var pago in prestamo.Pagos) pago.CuotaId = null; 
@@ -756,6 +775,12 @@ public class PrestamosController : BaseApiController
                 : prestamo.FechaPrestamo;
             
             var nuevasCuotas = _prestamoService.GenerarCuotas(prestamo, fechaInicio);
+
+            // La fecha de vencimiento sigue a la nueva fecha (antes quedaba la original)
+            if (nuevasCuotas.Count > 0)
+            {
+                prestamo.FechaVencimiento = nuevasCuotas.Max(c => c.FechaCobro);
+            }
              
             // 5. Re-aplicar pagos históricos a las nuevas cuotas
             if (totalPagadoHist > 0 && !prestamo.EsCongelado)
@@ -765,22 +790,37 @@ public class PrestamosController : BaseApiController
                 // Si ERA congelado y sigue siéndolo, reasignamos.
                 
                 var cuotasOrdenadas = nuevasCuotas.OrderBy(c => c.FechaCobro).ToList();
-                decimal remanente = totalPagadoHist;
-                
+
+                // Se recorren los pagos en orden cronológico para conservar la fecha real de pago
+                // de cada cuota (la usan las métricas de intereses cobrados por mes).
+                int idxPago = 0;
+                decimal restantePago = pagosAmortizan.Count > 0 ? pagosAmortizan[0].MontoPago : 0;
+
                 foreach (var c in cuotasOrdenadas)
                 {
-                    if (remanente <= 0) break;
-                    
-                    decimal abono = Math.Min(remanente, c.MontoCuota);
-                    c.MontoPagado = abono;
-                    c.SaldoPendiente = c.MontoCuota - abono;
+                    while (restantePago <= 0 && idxPago < pagosAmortizan.Count - 1)
+                        restantePago = pagosAmortizan[++idxPago].MontoPago;
+                    if (restantePago <= 0) break;
+
+                    decimal pagadoCuota = 0;
+                    while (pagadoCuota < c.MontoCuota)
+                    {
+                        if (restantePago <= 0)
+                        {
+                            if (idxPago >= pagosAmortizan.Count - 1) break;
+                            restantePago = pagosAmortizan[++idxPago].MontoPago;
+                            continue;
+                        }
+                        decimal abono = Math.Min(restantePago, c.MontoCuota - pagadoCuota);
+                        pagadoCuota += abono;
+                        restantePago -= abono;
+                        c.FechaPago = DateTime.SpecifyKind(pagosAmortizan[idxPago].FechaPago, DateTimeKind.Utc);
+                    }
+
+                    // Los pagos quedan sueltos (CuotaId = null); el saldo de las cuotas sí queda actualizado.
+                    c.MontoPagado = pagadoCuota;
+                    c.SaldoPendiente = c.MontoCuota - pagadoCuota;
                     c.EstadoCuota = c.SaldoPendiente <= 0.01m ? "Pagada" : "Parcial";
-                    
-                    // Re-vincular pagos históricos a las nuevas cuotas si calzan?
-                    // Es difícil mapear N pagos a M cuotas exactamente sin lógica compleja.
-                    // Dejamos los pagos sueltos (CuotaId = null) pero el saldo de las cuotas actualizado.
-                    
-                    remanente -= abono;
                 }
             }
             else if (totalPagadoHist > 0 && prestamo.EsCongelado)
@@ -797,6 +837,12 @@ public class PrestamosController : BaseApiController
                  // Por seguridad, en edición de congelados no re-aplicamos automáticamente a la cuota futura
                  // para evitar "regalar" meses de interés.
             }
+
+            // Si la nueva fecha es anterior, las cuotas que quedan en el pasado sin pagar quedan vencidas
+            // (y empiezan a generar mora en MoraService)
+            var hoy = DateTime.UtcNow.Date;
+            foreach (var c in nuevasCuotas.Where(c => c.EstadoCuota == "Pendiente" && c.FechaCobro.Date < hoy))
+                c.EstadoCuota = "Vencida";
 
             _context.CuotasPrestamo.AddRange(nuevasCuotas);
         }

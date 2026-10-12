@@ -16,15 +16,18 @@ public class CobrosController : BaseApiController
     private readonly PrestamosDbContext _context;
     private readonly Services.ITwilioService _twilioService;
     private readonly Services.IDistribucionGananciasService _distribucionService;
+    private readonly Services.IPrestamoService _prestamoService;
 
     public CobrosController(
-        PrestamosDbContext context, 
+        PrestamosDbContext context,
         Services.ITwilioService twilioService,
-        Services.IDistribucionGananciasService distribucionService)
+        Services.IDistribucionGananciasService distribucionService,
+        Services.IPrestamoService prestamoService)
     {
         _context = context;
         _twilioService = twilioService;
         _distribucionService = distribucionService;
+        _prestamoService = prestamoService;
     }
 
     [HttpGet("hoy")]
@@ -129,7 +132,7 @@ public class CobrosController : BaseApiController
 
         // Cuotas vencidas (días anteriores no pagadas)
         var cuotasVencidas = await baseQuery
-            .Where(c => c.FechaCobro.Date < today && c.EstadoCuota != "Pagada" && !c.Cobrado && c.Prestamo!.EstadoPrestamo != "Terminado")
+            .Where(c => c.FechaCobro.Date < today && c.EstadoCuota != "Pagada" && (!c.Cobrado || c.SaldoPendiente > 0.01m) && c.Prestamo!.EstadoPrestamo != "Terminado")
             .OrderBy(c => c.FechaCobro)
             .ThenBy(c => c.Prestamo!.Cliente!.Nombre)
             .Select(c => new
@@ -213,6 +216,14 @@ public class CobrosController : BaseApiController
                 
                 var gananciasService = new Services.GananciasService(_context);
                 await gananciasService.ActualizarReservaAsync(capitalRecuperado, $"Pago cuota #{cuota.NumeroCuota} préstamo #{cuota.PrestamoId}");
+            }
+
+            // Congelados: al cobrar la cuota de interés se genera la del siguiente periodo
+            if (cuota.Prestamo != null)
+            {
+                var nuevaCuotaCongelada = _prestamoService.GenerarCuotaCongeladaSiFalta(cuota.Prestamo);
+                if (nuevaCuotaCongelada != null)
+                    _context.CuotasPrestamo.Add(nuevaCuotaCongelada);
             }
         }
         else if (!dto.Cobrado)
@@ -308,7 +319,7 @@ public class CobrosController : BaseApiController
             .SumAsync(c => c.SaldoPendiente);
 
         var cuotasVencidas = await _context.CuotasPrestamo
-            .Where(c => c.FechaCobro.Date < targetDate && c.EstadoCuota != "Pagada" && !c.Cobrado)
+            .Where(c => c.FechaCobro.Date < targetDate && c.EstadoCuota != "Pagada" && (!c.Cobrado || c.SaldoPendiente > 0.01m))
             .SumAsync(c => c.SaldoPendiente);
 
         return Ok(new
@@ -399,9 +410,10 @@ public class CobrosController : BaseApiController
             })
             .ToListAsync();
 
-        // Cuotas vencidas (días anteriores no pagadas)
+        // Cuotas vencidas (días anteriores no pagadas). Una cuota marcada "cobrado" que quedó con saldo
+        // (pago parcial) también sigue apareciendo, si no desaparecía de todas las listas.
         var cuotasVencidas = await baseQuery
-            .Where(c => c.FechaCobro.Date < today && !c.Cobrado)
+            .Where(c => c.FechaCobro.Date < today && (!c.Cobrado || c.SaldoPendiente > 0.01m))
             .OrderBy(c => c.FechaCobro)
             .ThenBy(c => c.Prestamo!.Cliente!.Nombre)
             .Select(c => new
@@ -477,7 +489,7 @@ public class CobrosController : BaseApiController
         var cuotasVencidas = await _context.CuotasPrestamo
             .Where(c => c.FechaCobro.Date < today
                         && c.EstadoCuota != "Pagada"
-                        && !c.Cobrado
+                        && (!c.Cobrado || c.SaldoPendiente > 0.01m)
                         && c.Prestamo!.EstadoPrestamo != "Terminado")
             .Select(c => new
             {
@@ -737,6 +749,11 @@ public class CobrosController : BaseApiController
         {
             await gananciasService.ActualizarReservaAsync(capitalRecuperadoTotal, $"Abono a préstamo #{prestamo.Id}");
         }
+
+        // Congelados: si el abono cubrió la cuota de interés se genera la del siguiente periodo
+        var nuevaCuotaCongelada = _prestamoService.GenerarCuotaCongeladaSiFalta(prestamo);
+        if (nuevaCuotaCongelada != null)
+            _context.CuotasPrestamo.Add(nuevaCuotaCongelada);
 
         await _context.SaveChangesAsync();
 

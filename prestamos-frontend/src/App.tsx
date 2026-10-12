@@ -3,11 +3,20 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi, saldosApi, distribucionApi, moraApi } from './api';
 import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MorososResponse, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto, DistribucionPrestamos, MoraPrestamo } from './types';
 import { MetricasCobradores } from './components/MetricasCobradores';
+import { calcularFechasCuotas } from './calendarioCuotas';
 import './App.css';
 
 const formatMoney = (amount: number): string => new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(amount);
-const formatDate = (dateStr: string): string => new Date(dateStr).toLocaleDateString('es-CO');
-const formatDateInput = (date: Date): string => date.toISOString().split('T')[0];
+// Las fechas de calendario (fecha del préstamo, cobro, vencimiento) llegan como medianoche UTC
+// ("2026-10-15T00:00:00Z"); con new Date() en Colombia (UTC-5) se mostrarían como el día anterior.
+const parseFecha = (dateStr: string): Date => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})(T00:00:00(\.0+)?(Z|[+-]00:00)?)?$/.exec(dateStr);
+  return m ? new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3])) : new Date(dateStr);
+};
+const formatDate = (dateStr: string): string => parseFecha(dateStr).toLocaleDateString('es-CO');
+// Fecha local (no UTC): toISOString() en Colombia (UTC-5) devuelve el día siguiente después de las 7pm
+const formatDateInput = (date: Date): string =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 
 // Calcula el estado real del préstamo considerando la fecha de vencimiento
 const getEstadoVirtual = (p: { cuotasPagadas: number; numeroCuotas: number; estadoPrestamo: string; fechaVencimiento?: string }): string => {
@@ -15,7 +24,7 @@ const getEstadoVirtual = (p: { cuotasPagadas: number; numeroCuotas: number; esta
   if (p.estadoPrestamo === 'Terminado') return 'Terminado';
   if (p.estadoPrestamo === 'Activo' && p.fechaVencimiento) {
     const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-    const venc = new Date(p.fechaVencimiento); venc.setHours(0, 0, 0, 0);
+    const venc = parseFecha(p.fechaVencimiento);
     if (hoy > venc) return 'Vencido';
   }
   return p.estadoPrestamo;
@@ -895,7 +904,7 @@ function App() {
       frecuenciaPago: 'Mensual',
       duracion: 1,
       unidadDuracion: 'Meses',
-      fechaPrestamo: new Date().toISOString().split('T')[0],
+      fechaPrestamo: formatDateInput(new Date()),
       descripcion: '',
       porcentajeCobrador: 0,
       diaSemana: undefined,
@@ -1089,9 +1098,11 @@ function App() {
       montoCuota = montoTotal / numeroCuotas;
     }
 
-    const fechaVencimiento = new Date(prestamoForm.fechaPrestamo);
-    fechaVencimiento.setDate(fechaVencimiento.getDate() + diasTotales);
-    return { numeroCuotas, montoIntereses, montoTotal, montoCuota, fechaVencimiento: fechaVencimiento.toISOString(), esCongelado: prestamoForm.esCongelado };
+    // Mismo calendario que el backend: la primera cuota cae en la fecha del préstamo
+    const fechasCuotas = calcularFechasCuotas(prestamoForm.fechaPrestamo, prestamoForm.frecuenciaPago, prestamoForm.diaSemana, prestamoForm.esCongelado ? 1 : numeroCuotas);
+    const primeraCuota = fechasCuotas[0];
+    const ultimaCuota = fechasCuotas[fechasCuotas.length - 1];
+    return { numeroCuotas, montoIntereses, montoTotal, montoCuota, primeraCuota, ultimaCuota, esCongelado: prestamoForm.esCongelado };
   };
   const preview = calcularPreview();
 
@@ -1204,6 +1215,9 @@ function App() {
             descripcion: prestamoForm.descripcion,
             cobradorId: prestamoForm.cobradorId,
             porcentajeCobrador: prestamoForm.porcentajeCobrador,
+            diaSemana: prestamoForm.diaSemana,
+            esCongelado: prestamoForm.esCongelado || false,
+            numeroCuotasDirecto: (prestamoForm as any).numeroCuotasDirecto,
             fuentesCapital: fuentesCapital
           });
         } else {
@@ -2991,6 +3005,14 @@ function App() {
                         <div className="preview-item"><span>Intereses</span><strong style={{ color: '#10b981' }}>{formatMoney(preview.montoIntereses)}</strong></div>
                         <div className="preview-item"><span>Total</span><strong>{formatMoney(preview.montoTotal)}</strong></div>
                         <div className="preview-item"><span>Por Cuota</span><strong style={{ color: '#3b82f6' }}>{formatMoney(preview.montoCuota)}</strong></div>
+                      </div>
+                    )}
+                    {preview.primeraCuota && (
+                      <div className="preview-grid" style={{ marginTop: '0.5rem' }}>
+                        <div className="preview-item"><span>Primera cuota</span><strong>{preview.primeraCuota.toLocaleDateString('es-CO')}</strong></div>
+                        {!preview.esCongelado && preview.ultimaCuota && (
+                          <div className="preview-item"><span>Última cuota</span><strong>{preview.ultimaCuota.toLocaleDateString('es-CO')}</strong></div>
+                        )}
                       </div>
                     )}
                   </div>

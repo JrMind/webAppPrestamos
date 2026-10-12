@@ -383,6 +383,7 @@ export interface CreatePrestamoConFuentesDto {
   porcentajeCobrador: number;
   fuentesCapital: FuenteCapital[];
   esCongelado?: boolean;
+  diaSemana?: string;
   numeroCuotasDirecto?: number;
   // Cargos adicionales
   valorSistema?: number;

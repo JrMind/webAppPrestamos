@@ -63,7 +63,50 @@ public class AutomatedCierreWorker : BackgroundService
     {
         using var scope = _serviceProvider.CreateScope();
         var context = scope.ServiceProvider.GetRequiredService<PrestamosDbContext>();
+        var prestamoService = scope.ServiceProvider.GetRequiredService<IPrestamoService>();
         var hoyUtc = DateTime.UtcNow.Date;
+
+        var vigentes = await context.Prestamos
+            .Include(p => p.Cuotas)
+            .Where(p => p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido")
+            .ToListAsync();
+
+        int congeladosReparados = 0, marcadosPagados = 0;
+        foreach (var p in vigentes)
+        {
+            if (p.EsCongelado)
+            {
+                // Congelado sin cuota de interés pendiente (se cobró estando "Vencido" o con "Marcar cobrado"):
+                // generar la siguiente para que vuelva a aparecer en Cobros
+                var nueva = prestamoService.GenerarCuotaCongeladaSiFalta(p);
+                if (nueva != null)
+                {
+                    context.CuotasPrestamo.Add(nueva);
+                    congeladosReparados++;
+                    continue;
+                }
+
+                // El vencimiento de un congelado es su cuota pendiente
+                var pendiente = p.Cuotas.Where(c => c.EstadoCuota != "Pagada").OrderBy(c => c.FechaCobro).FirstOrDefault();
+                if (pendiente != null && p.FechaVencimiento.Date != pendiente.FechaCobro.Date)
+                    p.FechaVencimiento = pendiente.FechaCobro;
+            }
+            else if (p.Cuotas.Count > 0 && p.Cuotas.All(c => c.EstadoCuota == "Pagada"))
+            {
+                // Todas las cuotas cobradas (p. ej. con "Marcar cobrado") pero el préstamo seguía Activo/Vencido
+                p.EstadoPrestamo = "Pagado";
+                marcadosPagados++;
+            }
+        }
+
+        if (context.ChangeTracker.HasChanges())
+        {
+            await context.SaveChangesAsync();
+            if (congeladosReparados > 0 || marcadosPagados > 0)
+                _logger.LogInformation(
+                    "Préstamos reparados: {Congelados} congelados con nueva cuota, {Pagados} marcados Pagado",
+                    congeladosReparados, marcadosPagados);
+        }
 
         var prestamosAVencer = await context.Prestamos
             .Where(p => p.EstadoPrestamo == "Activo" && p.FechaVencimiento < hoyUtc)
