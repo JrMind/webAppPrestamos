@@ -108,10 +108,10 @@ public record UpdatePrestamoDto(
     decimal PorcentajeCobrador,
     string? DiaSemana,
     bool EsCongelado = false,
-    // Cargos adicionales
-    decimal ValorSistema = 0,
+    // Cargos adicionales (null = no se modifican)
+    decimal? ValorSistema = null,
     bool SistemaCobrado = false,
-    decimal ValorRenovacion = 0,
+    decimal? ValorRenovacion = null,
     bool RenovacionCobrada = false
 );
 

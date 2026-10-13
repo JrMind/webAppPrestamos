@@ -688,17 +688,34 @@ public class PrestamosController : BaseApiController
         prestamo.EstadoPrestamo = dto.EstadoPrestamo;
         prestamo.CobradorId = dto.CobradorId;
         prestamo.PorcentajeCobrador = dto.PorcentajeCobrador;
-        // Cargos adicionales (solo valores, cobrado se maneja con PUT /{id}/cargos)
-        prestamo.ValorSistema = dto.ValorSistema;
-        prestamo.ValorRenovacion = dto.ValorRenovacion;
+        // Cargos adicionales (solo valores, cobrado se maneja con PUT /{id}/cargos).
+        // El formulario de edición no los envía: si no vienen se conservan (antes cada edición los dejaba en 0).
+        if (dto.ValorSistema.HasValue) prestamo.ValorSistema = dto.ValorSistema.Value;
+        if (dto.ValorRenovacion.HasValue) prestamo.ValorRenovacion = dto.ValorRenovacion.Value;
 
-        bool cambiosEstructurales = 
+        // Las cuotas actuales no siguen el calendario de la fecha del préstamo (p. ej. préstamos creados con
+        // fuentes antes de la corrección, con la primera cuota un periodo después). Guardar con la misma
+        // fecha debe rehacerlas; antes no pasaba nada porque la fecha "no cambió".
+        var fechaPrimerPagoDto = DateTime.SpecifyKind((dto.FechaPrimerPago ?? dto.FechaPrestamo).Date, DateTimeKind.Utc);
+        var fechasEsperadas = _prestamoService.CalcularFechasCuotas(
+            fechaPrimerPagoDto, dto.FrecuenciaPago, dto.DiaSemana, dto.EsCongelado ? 1 : dto.NumeroCuotas);
+        // Solo si no tiene nada pagado, para no mover fechas de cuotas ya cobradas en una edición cualquiera.
+        bool calendarioDesfasado = !dto.EsCongelado && !prestamo.EsCongelado
+            && prestamo.Cuotas.All(c => c.MontoPagado == 0) && !prestamo.Cuotas
+            .OrderBy(c => c.NumeroCuota)
+            .Select(c => c.FechaCobro.Date)
+            .SequenceEqual(fechasEsperadas.Select(f => f.Date));
+
+        bool cambiosEstructurales =
             prestamo.MontoPrestado != dto.MontoPrestado ||
             prestamo.TasaInteres != dto.TasaInteres ||
+            prestamo.TipoInteres != dto.TipoInteres ||
             prestamo.FrecuenciaPago != dto.FrecuenciaPago ||
             prestamo.NumeroCuotas != dto.NumeroCuotas || // Nota: NumeroCuotas viene del DTO, pero se recalcula
             prestamo.FechaPrestamo.Date != dto.FechaPrestamo.Date ||
-            prestamo.DiaSemana != dto.DiaSemana;
+            prestamo.DiaSemana != dto.DiaSemana ||
+            prestamo.EsCongelado != dto.EsCongelado ||
+            calendarioDesfasado;
 
         if (cambiosEstructurales)
         {
@@ -756,12 +773,20 @@ public class PrestamosController : BaseApiController
             prestamo.MontoIntereses = nuevoMontoIntereses;
             prestamo.MontoCuota = nuevoMontoCuota;
             
-            // 1. Pagos que amortizan cuotas (los cobros de Mora y SoloInteres no abonan a cuotas)
-            var pagosAmortizan = prestamo.Pagos
-                .Where(p => p.TipoPago != "Mora" && p.TipoPago != "SoloInteres")
-                .OrderBy(p => p.FechaPago)
+            // 1. Lo ya pagado se toma de las cuotas actuales (MontoPagado + FechaPago): incluye las cobradas con
+            //    "Marcar cobrado", que no crean registro en Pagos. Si la tabla Pagos registra más de lo aplicado
+            //    a cuotas (pagos sin cuota asociada), la diferencia también se reaplica.
+            //    Los cobros de Mora y SoloInteres no abonan a cuotas.
+            var pagosAmortizan = prestamo.Cuotas
+                .Where(c => c.MontoPagado > 0)
+                .OrderBy(c => c.FechaPago ?? c.FechaCobro)
+                .Select(c => (Monto: c.MontoPagado, Fecha: c.FechaPago ?? c.FechaCobro))
                 .ToList();
-            decimal totalPagadoHist = pagosAmortizan.Sum(p => p.MontoPago);
+            var pagosTabla = prestamo.Pagos.Where(p => p.TipoPago != "Mora" && p.TipoPago != "SoloInteres").ToList();
+            decimal sinAplicar = pagosTabla.Sum(p => p.MontoPago) - pagosAmortizan.Sum(x => x.Monto);
+            if (sinAplicar > 0.01m)
+                pagosAmortizan.Add((sinAplicar, pagosTabla.Max(p => p.FechaPago)));
+            decimal totalPagadoHist = pagosAmortizan.Sum(x => x.Monto);
             
             // 2. Desvincular pagos de las cuotas antiguas
             foreach(var pago in prestamo.Pagos) pago.CuotaId = null; 
@@ -794,12 +819,12 @@ public class PrestamosController : BaseApiController
                 // Se recorren los pagos en orden cronológico para conservar la fecha real de pago
                 // de cada cuota (la usan las métricas de intereses cobrados por mes).
                 int idxPago = 0;
-                decimal restantePago = pagosAmortizan.Count > 0 ? pagosAmortizan[0].MontoPago : 0;
+                decimal restantePago = pagosAmortizan.Count > 0 ? pagosAmortizan[0].Monto : 0;
 
                 foreach (var c in cuotasOrdenadas)
                 {
                     while (restantePago <= 0 && idxPago < pagosAmortizan.Count - 1)
-                        restantePago = pagosAmortizan[++idxPago].MontoPago;
+                        restantePago = pagosAmortizan[++idxPago].Monto;
                     if (restantePago <= 0) break;
 
                     decimal pagadoCuota = 0;
@@ -808,13 +833,13 @@ public class PrestamosController : BaseApiController
                         if (restantePago <= 0)
                         {
                             if (idxPago >= pagosAmortizan.Count - 1) break;
-                            restantePago = pagosAmortizan[++idxPago].MontoPago;
+                            restantePago = pagosAmortizan[++idxPago].Monto;
                             continue;
                         }
                         decimal abono = Math.Min(restantePago, c.MontoCuota - pagadoCuota);
                         pagadoCuota += abono;
                         restantePago -= abono;
-                        c.FechaPago = DateTime.SpecifyKind(pagosAmortizan[idxPago].FechaPago, DateTimeKind.Utc);
+                        c.FechaPago = DateTime.SpecifyKind(pagosAmortizan[idxPago].Fecha, DateTimeKind.Utc);
                     }
 
                     // Los pagos quedan sueltos (CuotaId = null); el saldo de las cuotas sí queda actualizado.
