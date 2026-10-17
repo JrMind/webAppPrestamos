@@ -510,6 +510,15 @@ export const dashboardApi = {
         const response = await fetch(`${API_URL}/dashboard/metricas-cobradores`, { headers: getHeaders() });
         return handleResponse<MetricasGenerales>(response);
     },
+
+    actualizarSalarioCobrador: async (cobradorId: number, salarioMensual: number): Promise<void> => {
+        const response = await fetch(`${API_URL}/dashboard/salarios-cobradores/${cobradorId}`, {
+            method: 'PUT',
+            headers: getHeaders(),
+            body: JSON.stringify({ salarioMensual }),
+        });
+        await handleResponse<unknown>(response);
+    },
 };
 
 // Balance Personal

@@ -693,11 +693,19 @@ export interface MetricasGenerales {
   totalPrestamosActivos: number;
   estadisticasCobradores: EstadisticasCobrador[];
   interesesMensuales: InteresMensual[];
+  salariosCobradores: SalarioCobrador[];
+}
+
+export interface SalarioCobrador {
+  cobradorId: number;
+  cobradorNombre: string;
+  salarioMensual: number;
 }
 
 export interface InteresMensualPrestamo {
   prestamoId: number;
   clienteNombre: string;
+  cobradorId?: number | null;
   cobradorNombre?: string | null;
   esCongelado: boolean;
   cuotasPagadas: number;

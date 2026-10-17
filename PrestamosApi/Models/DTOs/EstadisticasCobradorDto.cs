@@ -22,6 +22,7 @@ public class InteresMensualPrestamoDto
 {
     public int PrestamoId { get; set; }
     public string ClienteNombre { get; set; } = string.Empty;
+    public int? CobradorId { get; set; }
     public string? CobradorNombre { get; set; }
     public bool EsCongelado { get; set; }
     public int CuotasPagadas { get; set; }
@@ -36,4 +37,17 @@ public class MetricasGeneralesDto
     public int TotalPrestamosActivos { get; set; }
     public List<EstadisticasCobradorDto> EstadisticasCobradores { get; set; } = new();
     public List<InteresMensualDto> InteresesMensuales { get; set; } = new();
+    public List<SalarioCobradorDto> SalariosCobradores { get; set; } = new();
+}
+
+public class SalarioCobradorDto
+{
+    public int CobradorId { get; set; }
+    public string CobradorNombre { get; set; } = string.Empty;
+    public decimal SalarioMensual { get; set; }
+}
+
+public class ActualizarSalarioCobradorDto
+{
+    public decimal SalarioMensual { get; set; }
 }

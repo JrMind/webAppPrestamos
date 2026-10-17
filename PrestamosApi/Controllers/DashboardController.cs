@@ -358,7 +358,8 @@ public class DashboardController : BaseApiController
                     PromedioTasasActivos = 0,
                     CapitalFantasma = 0,
                     TotalPrestamosActivos = 0,
-                    EstadisticasCobradores = new List<EstadisticasCobradorDto>()
+                    EstadisticasCobradores = new List<EstadisticasCobradorDto>(),
+                    SalariosCobradores = await ObtenerSalariosCobradoresAsync(cobsScope)
                 });
             }
 
@@ -426,6 +427,7 @@ public class DashboardController : BaseApiController
                 {
                     PrestamoId     = g.Key,
                     ClienteNombre  = p?.Cliente?.Nombre ?? $"Préstamo #{g.Key}",
+                    CobradorId     = p?.CobradorId,
                     CobradorNombre = p?.Cobrador?.Nombre,
                     EsCongelado    = p?.EsCongelado == true,
                     CuotasPagadas  = g.Count(),
@@ -450,7 +452,8 @@ public class DashboardController : BaseApiController
                 CapitalFantasma = Math.Round(capitalFantasma, 2),
                 TotalPrestamosActivos = prestamosActivos.Count,
                 EstadisticasCobradores = cobradores,
-                InteresesMensuales = interesesMensuales
+                InteresesMensuales = interesesMensuales,
+                SalariosCobradores = await ObtenerSalariosCobradoresAsync(cobsScope)
             };
 
             return Ok(resultado);
@@ -459,6 +462,67 @@ public class DashboardController : BaseApiController
         {
             return StatusCode(500, new { message = "Error calculando métricas de cobradores", error = ex.Message });
         }
+    }
+
+    // Salario mensual de cada cobrador, guardado en ConfiguracionesSistema con la clave "SalarioCobrador:{id}"
+    // (sin cambio de esquema). Se usa para ver si los intereses que cobró en el mes cubren su salario.
+    private const string PrefijoSalarioCobrador = "SalarioCobrador:";
+
+    private async Task<List<SalarioCobradorDto>> ObtenerSalariosCobradoresAsync(List<int>? cobsScope)
+    {
+        var cobradores = await _context.Usuarios
+            .Where(u => u.Rol == RolUsuario.Cobrador && u.Activo)
+            .Where(u => cobsScope == null || cobsScope.Contains(u.Id))
+            .OrderBy(u => u.Nombre)
+            .Select(u => new { u.Id, u.Nombre })
+            .ToListAsync();
+
+        var salarios = (await _context.ConfiguracionesSistema
+                .Where(c => c.Clave.StartsWith(PrefijoSalarioCobrador))
+                .ToListAsync())
+            .ToDictionary(c => c.Clave, c => decimal.TryParse(c.Valor, System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture, out var v) ? v : 0m);
+
+        return cobradores.Select(c => new SalarioCobradorDto
+        {
+            CobradorId = c.Id,
+            CobradorNombre = c.Nombre,
+            SalarioMensual = salarios.GetValueOrDefault($"{PrefijoSalarioCobrador}{c.Id}")
+        }).ToList();
+    }
+
+    [HttpPut("salarios-cobradores/{cobradorId:int}")]
+    [AuthorizeRoles(RolUsuario.Socio, RolUsuario.Admin)]
+    public async Task<IActionResult> ActualizarSalarioCobrador(int cobradorId, ActualizarSalarioCobradorDto dto)
+    {
+        if (dto.SalarioMensual < 0)
+            return BadRequest(new { message = "El salario no puede ser negativo" });
+
+        var cobrador = await _context.Usuarios.FirstOrDefaultAsync(u => u.Id == cobradorId && u.Rol == RolUsuario.Cobrador);
+        if (cobrador == null)
+            return NotFound(new { message = "Cobrador no encontrado" });
+
+        var clave = $"{PrefijoSalarioCobrador}{cobradorId}";
+        var valor = dto.SalarioMensual.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        var config = await _context.ConfiguracionesSistema.FirstOrDefaultAsync(c => c.Clave == clave);
+        if (config == null)
+        {
+            _context.ConfiguracionesSistema.Add(new ConfiguracionSistema
+            {
+                Clave = clave,
+                Valor = valor,
+                FechaActualizacion = DateTime.UtcNow,
+                Descripcion = $"Salario mensual del cobrador {cobrador.Nombre}"
+            });
+        }
+        else
+        {
+            config.Valor = valor;
+            config.FechaActualizacion = DateTime.UtcNow;
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok(new SalarioCobradorDto { CobradorId = cobradorId, CobradorNombre = cobrador.Nombre, SalarioMensual = dto.SalarioMensual });
     }
 
     [HttpGet("mantenimiento/reparar-prestamos")]

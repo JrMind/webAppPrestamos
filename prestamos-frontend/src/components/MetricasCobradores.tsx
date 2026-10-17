@@ -70,6 +70,25 @@ export const MetricasCobradores = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [mesSeleccionado, setMesSeleccionado] = useState<string | null>(null);
+  const [salarioEditando, setSalarioEditando] = useState<{ cobradorId: number; valor: string } | null>(null);
+  const [errorSalario, setErrorSalario] = useState<string | null>(null);
+
+  const guardarSalario = async () => {
+    if (!salarioEditando || !metricas) return;
+    const salario = Number(salarioEditando.valor.replace(/[^\d]/g, '')) || 0;
+    try {
+      await dashboardApi.actualizarSalarioCobrador(salarioEditando.cobradorId, salario);
+      setMetricas({
+        ...metricas,
+        salariosCobradores: metricas.salariosCobradores.map(c =>
+          c.cobradorId === salarioEditando.cobradorId ? { ...c, salarioMensual: salario } : c),
+      });
+      setSalarioEditando(null);
+      setErrorSalario(null);
+    } catch (err) {
+      setErrorSalario(err instanceof Error ? err.message : 'Error al guardar el salario');
+    }
+  };
 
   useEffect(() => {
     dashboardApi.getMetricasCobradores()
@@ -89,6 +108,25 @@ export const MetricasCobradores = () => {
   if (!metricas) return <div style={s.center}>Sin datos disponibles</div>;
 
   const detalleMes = metricas.interesesMensuales?.find(m => m.mes === mesSeleccionado) ?? null;
+
+  // Resumen por cobrador del mes seleccionado: lo cobrado vs su salario mensual.
+  // Incluye cobradores activos sin cobros en el mes (no cubrieron) y los préstamos sin cobrador.
+  const resumenCobradores = (() => {
+    if (!detalleMes) return [];
+    const filas = new Map<string, { cobradorId: number | null; nombre: string; prestamos: number; cobrado: number; interes: number; salario: number }>();
+    for (const c of metricas.salariosCobradores ?? []) {
+      filas.set(String(c.cobradorId), { cobradorId: c.cobradorId, nombre: c.cobradorNombre, prestamos: 0, cobrado: 0, interes: 0, salario: c.salarioMensual });
+    }
+    for (const p of detalleMes.prestamos) {
+      const key = p.cobradorId != null ? String(p.cobradorId) : 'sin';
+      const fila = filas.get(key) ?? { cobradorId: p.cobradorId ?? null, nombre: p.cobradorNombre ?? 'Sin cobrador', prestamos: 0, cobrado: 0, interes: 0, salario: 0 };
+      fila.prestamos += 1;
+      fila.cobrado += p.montoPagado;
+      fila.interes += p.interesCobrado;
+      filas.set(key, fila);
+    }
+    return [...filas.values()].sort((a, b) => b.interes - a.interes);
+  })();
 
   return (
     <div style={s.container}>
@@ -283,6 +321,78 @@ export const MetricasCobradores = () => {
               </table>
             </div>
           )}
+
+          {/* Resumen por cobrador: ¿los intereses que cobró cubren su salario? */}
+          <div style={{ ...s.tableHeader, borderTop: '1px solid var(--border)' }}>
+            <span style={s.tableHeaderTitle}>💼 Cobrado por cobrador en {detalleMes.mes} vs salario</span>
+          </div>
+          {errorSalario && <div style={{ ...s.errorBox, margin: '0.75rem 1.25rem' }}>❌ {errorSalario}</div>}
+          <div style={{ overflowX: 'auto' }}>
+            <table style={s.table}>
+              <thead>
+                <tr>
+                  <th style={s.th}>Cobrador</th>
+                  <th style={s.th}>Préstamos</th>
+                  <th style={s.th}>Total Cobrado</th>
+                  <th style={s.th}>Intereses</th>
+                  <th style={s.th}>Salario Mensual</th>
+                  <th style={s.th}>Diferencia</th>
+                  <th style={s.th}>¿Cubrió su salario?</th>
+                </tr>
+              </thead>
+              <tbody>
+                {resumenCobradores.map((r, i) => {
+                  const diferencia = r.interes - r.salario;
+                  const editando = r.cobradorId != null && salarioEditando?.cobradorId === r.cobradorId;
+                  return (
+                    <tr key={r.cobradorId ?? 'sin'} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                      <td style={{ ...s.td, fontWeight: 600 }}>{r.nombre}</td>
+                      <td style={s.td}>{r.prestamos}</td>
+                      <td style={s.td}>{formatMoney(r.cobrado)}</td>
+                      <td style={{ ...s.td, fontWeight: 700, color: 'var(--accent-green)' }}>{formatMoney(r.interes)}</td>
+                      <td style={s.td}>
+                        {r.cobradorId == null ? '—' : editando ? (
+                          <input
+                            autoFocus
+                            inputMode="numeric"
+                            value={salarioEditando!.valor}
+                            onChange={e => setSalarioEditando({ cobradorId: r.cobradorId!, valor: e.target.value })}
+                            onKeyDown={e => { if (e.key === 'Enter') guardarSalario(); if (e.key === 'Escape') setSalarioEditando(null); }}
+                            onBlur={guardarSalario}
+                            style={{ width: 120, padding: '0.3rem 0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}
+                          />
+                        ) : (
+                          <button
+                            title="Editar salario"
+                            onClick={() => setSalarioEditando({ cobradorId: r.cobradorId!, valor: String(r.salario || '') })}
+                            style={{ background: 'transparent', border: 'none', color: r.salario > 0 ? 'var(--text-primary)' : 'var(--text-muted)', cursor: 'pointer', padding: 0, fontSize: '0.875rem' }}
+                          >
+                            {r.salario > 0 ? formatMoney(r.salario) : 'Definir'} ✏️
+                          </button>
+                        )}
+                      </td>
+                      <td style={{ ...s.td, fontWeight: 700, color: r.salario <= 0 ? 'var(--text-muted)' : diferencia >= 0 ? 'var(--accent-green)' : 'var(--accent-red)' }}>
+                        {r.salario > 0 ? `${diferencia >= 0 ? '+' : '−'}${formatMoney(Math.abs(diferencia))}` : '—'}
+                      </td>
+                      <td style={s.td}>
+                        {r.cobradorId == null ? <span style={{ color: 'var(--text-muted)' }}>—</span>
+                          : r.salario <= 0 ? <span style={{ color: 'var(--text-muted)' }}>Sin salario definido</span>
+                          : diferencia >= 0
+                            ? <span style={s.badge('rgba(16,185,129,0.35)')}>✅ Sí cubrió</span>
+                            : <span style={s.badge('rgba(239,68,68,0.35)')}>❌ No cubrió</span>}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {resumenCobradores.length === 0 && (
+                  <tr><td style={{ ...s.td, textAlign: 'center', color: 'var(--text-muted)' }} colSpan={7}>No hay cobradores registrados</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ ...s.kpiSub, padding: '0.75rem 1.25rem 1rem' }}>
+            Se compara el interés cobrado en el mes con el salario mensual del cobrador. Haz clic en el salario para definirlo o cambiarlo.
+          </p>
         </div>
       )}
 
