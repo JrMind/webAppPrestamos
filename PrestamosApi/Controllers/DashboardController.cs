@@ -414,6 +414,16 @@ public class DashboardController : BaseApiController
                 .Where(c => c.FechaCobro >= mesInicioBusqueda && c.FechaCobro < mesFinBusqueda)
                 .ToListAsync();
 
+            // Pagos que no pasan por las cuotas: abono a capital (congelados), mora y solo interés
+            var tiposFueraDeCuota = new[] { "AbonoCapital", "Mora", "SoloInteres" };
+            var otrosPagosUltimosMeses = await ScopePagos(
+                _context.Pagos
+                    .Include(p => p.Prestamo).ThenInclude(p => p!.Cobrador),
+                fechaScope, cobsScope)
+                .Where(p => tiposFueraDeCuota.Contains(p.TipoPago)
+                        && p.FechaPago >= mesInicioBusqueda && p.FechaPago < mesFinBusqueda)
+                .ToListAsync();
+
             var interesesMensuales = new List<InteresMensualDto>();
             for (int i = 11; i >= 0; i--)
             {
@@ -488,12 +498,27 @@ public class DashboardController : BaseApiController
             .OrderByDescending(x => x.TotalProgramado)
             .ToList();
 
+        var otrosPagosMes = otrosPagosUltimosMeses
+            .Where(p => p.FechaPago >= mesFoco && p.FechaPago < mesFocoFin)
+            .GroupBy(p => p.Prestamo?.CobradorId)
+            .Select(g => new OtrosPagosCobradorDto
+            {
+                CobradorId     = g.Key,
+                CobradorNombre = g.First().Prestamo?.Cobrador?.Nombre,
+                Prestamos      = g.Select(p => p.PrestamoId).Distinct().Count(),
+                AbonosCapital  = Math.Round(g.Where(p => p.TipoPago == "AbonoCapital").Sum(p => p.MontoPago), 2),
+                Mora           = Math.Round(g.Where(p => p.TipoPago == "Mora").Sum(p => p.MontoPago), 2),
+                SoloInteres    = Math.Round(g.Where(p => p.TipoPago == "SoloInteres").Sum(p => p.MontoPago), 2)
+            })
+            .ToList();
+
         interesesMensuales.Add(new InteresMensualDto
         {
             Mes            = mesFoco.ToString("MMM yyyy"),
             InteresCobrado = Math.Round(cuotasMes.Sum(InteresDeCuota), 2),
             Prestamos      = prestamosMes,
-            Programado     = programadoMes
+            Programado     = programadoMes,
+            OtrosPagos     = otrosPagosMes
         });
     }
             var resultado = new MetricasGeneralesDto

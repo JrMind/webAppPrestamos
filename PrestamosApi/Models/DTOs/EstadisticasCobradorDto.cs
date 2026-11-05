@@ -17,6 +17,18 @@ public class InteresMensualDto
     public decimal InteresCobrado { get; set; }
     public List<InteresMensualPrestamoDto> Prestamos { get; set; } = new();
     public List<ProgramadoCobradorDto> Programado { get; set; } = new();
+    public List<OtrosPagosCobradorDto> OtrosPagos { get; set; } = new();
+}
+
+// Pagos del mes que no se registran en cuotas (abono a capital de congelados, mora, solo interés), por cobrador
+public class OtrosPagosCobradorDto
+{
+    public int? CobradorId { get; set; }
+    public string? CobradorNombre { get; set; }
+    public int Prestamos { get; set; }
+    public decimal AbonosCapital { get; set; }
+    public decimal Mora { get; set; }
+    public decimal SoloInteres { get; set; }
 }
 
 // Cuotas con fecha de cobro dentro del mes (lo que estaba programado cobrar), por cobrador

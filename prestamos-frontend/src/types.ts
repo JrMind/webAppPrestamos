@@ -736,6 +736,17 @@ export interface InteresMensual {
   interesCobrado: number;
   prestamos: InteresMensualPrestamo[];
   programado: ProgramadoCobrador[];
+  otrosPagos: OtrosPagosCobrador[];
+}
+
+// Pagos del mes que no se registran en cuotas, por cobrador
+export interface OtrosPagosCobrador {
+  cobradorId: number | null;
+  cobradorNombre: string | null;
+  prestamos: number;
+  abonosCapital: number;
+  mora: number;
+  soloInteres: number;
 }
 
 // Cuotas con fecha de cobro dentro del mes (lo programado), por cobrador

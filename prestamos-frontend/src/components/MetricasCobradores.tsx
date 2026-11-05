@@ -123,16 +123,31 @@ export const MetricasCobradores = () => {
   // Incluye cobradores activos sin cobros en el mes (no cubrieron) y los préstamos sin cobrador.
   const resumenCobradores = (() => {
     if (!detalleMes) return [];
-    const filas = new Map<string, { cobradorId: number | null; nombre: string; prestamos: number; cobrado: number; interes: number; salario: number }>();
+    type Fila = { cobradorId: number | null; nombre: string; prestamos: number; cuotas: number; abonosCapital: number; mora: number; soloInteres: number; cobrado: number; interes: number; salario: number };
+    const nueva = (cobradorId: number | null, nombre: string, salario: number): Fila =>
+      ({ cobradorId, nombre, prestamos: 0, cuotas: 0, abonosCapital: 0, mora: 0, soloInteres: 0, cobrado: 0, interes: 0, salario });
+    const filas = new Map<string, Fila>();
     for (const c of metricas.salariosCobradores ?? []) {
-      filas.set(String(c.cobradorId), { cobradorId: c.cobradorId, nombre: c.cobradorNombre, prestamos: 0, cobrado: 0, interes: 0, salario: c.salarioMensual });
+      filas.set(String(c.cobradorId), nueva(c.cobradorId, c.cobradorNombre, c.salarioMensual));
     }
     for (const p of detalleMes.prestamos) {
       const key = p.cobradorId != null ? String(p.cobradorId) : 'sin';
-      const fila = filas.get(key) ?? { cobradorId: p.cobradorId ?? null, nombre: p.cobradorNombre ?? 'Sin cobrador', prestamos: 0, cobrado: 0, interes: 0, salario: 0 };
+      const fila = filas.get(key) ?? nueva(p.cobradorId ?? null, p.cobradorNombre ?? 'Sin cobrador', 0);
       fila.prestamos += 1;
+      fila.cuotas += p.montoPagado;
       fila.cobrado += p.montoPagado;
       fila.interes += p.interesCobrado;
+      filas.set(key, fila);
+    }
+    // Pagos que no pasan por cuotas: abono a capital, mora y solo interés (este último también es interés)
+    for (const o of detalleMes.otrosPagos ?? []) {
+      const key = o.cobradorId != null ? String(o.cobradorId) : 'sin';
+      const fila = filas.get(key) ?? nueva(o.cobradorId ?? null, o.cobradorNombre ?? 'Sin cobrador', 0);
+      fila.abonosCapital += o.abonosCapital;
+      fila.mora += o.mora;
+      fila.soloInteres += o.soloInteres;
+      fila.cobrado += o.abonosCapital + o.mora + o.soloInteres;
+      fila.interes += o.soloInteres;
       filas.set(key, fila);
     }
     return [...filas.values()].sort((a, b) => b.interes - a.interes);
@@ -358,6 +373,10 @@ export const MetricasCobradores = () => {
                 <tr>
                   <th style={s.th}>Cobrador</th>
                   <th style={s.th}>Préstamos</th>
+                  <th style={s.th}>Cuotas</th>
+                  <th style={s.th}>Abonos a capital</th>
+                  <th style={s.th}>Mora</th>
+                  <th style={s.th}>Solo interés</th>
                   <th style={s.th}>Total Cobrado</th>
                   <th style={s.th}>Intereses</th>
                   <th style={s.th}>Salario Mensual</th>
@@ -373,7 +392,11 @@ export const MetricasCobradores = () => {
                     <tr key={r.cobradorId ?? 'sin'} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
                       <td style={{ ...s.td, fontWeight: 600 }}>{r.nombre}</td>
                       <td style={s.td}>{r.prestamos}</td>
-                      <td style={s.td}>{formatMoney(r.cobrado)}</td>
+                      <td style={s.td}>{formatMoney(r.cuotas)}</td>
+                      <td style={s.td}>{formatMoney(r.abonosCapital)}</td>
+                      <td style={s.td}>{formatMoney(r.mora)}</td>
+                      <td style={s.td}>{formatMoney(r.soloInteres)}</td>
+                      <td style={{ ...s.td, fontWeight: 700 }}>{formatMoney(r.cobrado)}</td>
                       <td style={{ ...s.td, fontWeight: 700, color: 'var(--accent-green)' }}>{formatMoney(r.interes)}</td>
                       <td style={s.td}>
                         {r.cobradorId == null ? '—' : editando ? (
@@ -410,12 +433,13 @@ export const MetricasCobradores = () => {
                   );
                 })}
                 {resumenCobradores.length === 0 && (
-                  <tr><td style={{ ...s.td, textAlign: 'center', color: 'var(--text-muted)' }} colSpan={7}>No hay cobradores registrados</td></tr>
+                  <tr><td style={{ ...s.td, textAlign: 'center', color: 'var(--text-muted)' }} colSpan={11}>No hay cobradores registrados</td></tr>
                 )}
               </tbody>
             </table>
           </div>
           <p style={{ ...s.kpiSub, padding: '0.75rem 1.25rem 1rem' }}>
+            Total cobrado = Cuotas + Abonos a capital + Mora + Solo interés, según la fecha de pago dentro del mes. Intereses = interés de las cuotas pagadas + solo interés.
             Se compara el interés cobrado en el mes con el salario mensual del cobrador. Haz clic en el salario para definirlo o cambiarlo.
           </p>
 
