@@ -31,7 +31,9 @@ public class ProgramadoCobradorDto
     public decimal InteresProgramado { get; set; }
     public decimal TotalProgramado { get; set; }
     public decimal Pagado { get; set; }           // Lo abonado a esas cuotas (en cualquier fecha)
-    public decimal Pendiente { get; set; }        // Lo que falta de esas cuotas
+    public decimal Pendiente { get; set; }        // Lo que falta, con la misma regla de Cobros (vencidas)
+    public decimal Terminados { get; set; }       // Sin pagar, pero de préstamos terminados (Cobros no las muestra)
+    public decimal SaldadoSinPago { get; set; }   // Marcadas pagadas sin abono registrado (p. ej. congelado liquidado)
 }
 
 public class InteresMensualPrestamoDto

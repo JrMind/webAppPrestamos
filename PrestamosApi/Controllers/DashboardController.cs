@@ -458,8 +458,17 @@ public class DashboardController : BaseApiController
             .GroupBy(c => c.Prestamo?.CobradorId)
             .Select(g =>
             {
-                var pagado = g.Sum(c => Math.Min(c.MontoPagado, c.MontoCuota));
-                var total  = g.Sum(c => c.MontoCuota);
+                static decimal PagadoDe(CuotaPrestamo c) => Math.Min(c.MontoPagado, c.MontoCuota);
+                static bool EsTerminado(CuotaPrestamo c) => c.Prestamo?.EstadoPrestamo == "Terminado";
+                // Misma regla que la pantalla de Cobros para contar una cuota como pendiente/vencida
+                static decimal PendienteDe(CuotaPrestamo c) =>
+                    !EsTerminado(c) && c.EstadoCuota != "Pagada" && (!c.Cobrado || c.SaldoPendiente > 0.01m)
+                        ? c.SaldoPendiente : 0m;
+                // Lo que no se pagó ni queda pendiente: cuotas de préstamos terminados, o cuotas
+                // dadas por saldadas sin abono (p. ej. congelado liquidado con abono a capital)
+                static decimal RestoDe(CuotaPrestamo c) => Math.Max(0m, c.MontoCuota - PagadoDe(c) - PendienteDe(c));
+
+                var total = g.Sum(c => c.MontoCuota);
                 return new ProgramadoCobradorDto
                 {
                     CobradorId        = g.Key,
@@ -470,8 +479,10 @@ public class DashboardController : BaseApiController
                     CapitalProgramado = Math.Round(g.Sum(c => c.MontoCuota - c.MontoInteres), 2),
                     InteresProgramado = Math.Round(g.Sum(c => c.MontoInteres), 2),
                     TotalProgramado   = Math.Round(total, 2),
-                    Pagado            = Math.Round(pagado, 2),
-                    Pendiente         = Math.Round(total - pagado, 2)
+                    Pagado            = Math.Round(g.Sum(PagadoDe), 2),
+                    Pendiente         = Math.Round(g.Sum(PendienteDe), 2),
+                    Terminados        = Math.Round(g.Where(EsTerminado).Sum(RestoDe), 2),
+                    SaldadoSinPago    = Math.Round(g.Where(c => !EsTerminado(c)).Sum(RestoDe), 2)
                 };
             })
             .OrderByDescending(x => x.TotalProgramado)

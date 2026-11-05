@@ -750,6 +750,8 @@ export interface ProgramadoCobrador {
   totalProgramado: number;
   pagado: number;
   pendiente: number;
+  terminados: number;
+  saldadoSinPago: number;
 }
 
 // Distribución de préstamos

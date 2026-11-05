@@ -435,12 +435,15 @@ export const MetricasCobradores = () => {
                   <th style={s.th}>Total programado</th>
                   <th style={s.th}>Pagado</th>
                   <th style={s.th}>Pendiente</th>
+                  <th style={s.th} title="Cuotas sin pagar de préstamos terminados: Cobros ya no las muestra">Terminados</th>
+                  <th style={s.th} title="Cuotas marcadas pagadas sin abono registrado, p. ej. congelado liquidado con abono a capital">Saldado sin pago</th>
                   <th style={s.th}>% Cumplimiento</th>
                 </tr>
               </thead>
               <tbody>
                 {programado.map((x, i) => {
-                  const pct = x.totalProgramado > 0 ? (x.pagado / x.totalProgramado) * 100 : 0;
+                  const cobrable = x.pagado + x.pendiente;
+                  const pct = cobrable > 0 ? (x.pagado / cobrable) * 100 : 0;
                   return (
                     <tr key={x.cobradorId ?? 'sin'} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
                       <td style={{ ...s.td, fontWeight: 600 }}>{x.cobradorNombre ?? 'Sin cobrador'}</td>
@@ -451,6 +454,8 @@ export const MetricasCobradores = () => {
                       <td style={{ ...s.td, fontWeight: 700 }}>{formatMoney(x.totalProgramado)}</td>
                       <td style={s.td}>{formatMoney(x.pagado)}</td>
                       <td style={{ ...s.td, fontWeight: 700, color: x.pendiente > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>{formatMoney(x.pendiente)}</td>
+                      <td style={{ ...s.td, color: 'var(--text-muted)' }}>{formatMoney(x.terminados)}</td>
+                      <td style={{ ...s.td, color: 'var(--text-muted)' }}>{formatMoney(x.saldadoSinPago)}</td>
                       <td style={s.td}>
                         <span style={s.badge(pct >= 90 ? 'rgba(16,185,129,0.35)' : pct >= 60 ? 'rgba(245,158,11,0.4)' : 'rgba(239,68,68,0.4)')}>
                           {formatPercent(pct)}
@@ -460,7 +465,7 @@ export const MetricasCobradores = () => {
                   );
                 })}
                 {programado.length === 0 && (
-                  <tr><td style={{ ...s.td, textAlign: 'center', color: 'var(--text-muted)' }} colSpan={9}>No había cuotas programadas en este mes</td></tr>
+                  <tr><td style={{ ...s.td, textAlign: 'center', color: 'var(--text-muted)' }} colSpan={11}>No había cuotas programadas en este mes</td></tr>
                 )}
               </tbody>
               {programado.length > 0 && (
@@ -474,8 +479,10 @@ export const MetricasCobradores = () => {
                     <td style={s.tdFoot}>{formatMoney(sumaProg(x => x.totalProgramado))}</td>
                     <td style={s.tdFoot}>{formatMoney(sumaProg(x => x.pagado))}</td>
                     <td style={s.tdFoot}>{formatMoney(sumaProg(x => x.pendiente))}</td>
+                    <td style={s.tdFoot}>{formatMoney(sumaProg(x => x.terminados))}</td>
+                    <td style={s.tdFoot}>{formatMoney(sumaProg(x => x.saldadoSinPago))}</td>
                     <td style={s.tdFoot}>
-                      {sumaProg(x => x.totalProgramado) > 0 ? formatPercent((sumaProg(x => x.pagado) / sumaProg(x => x.totalProgramado)) * 100) : '—'}
+                      {sumaProg(x => x.pagado + x.pendiente) > 0 ? formatPercent((sumaProg(x => x.pagado) / sumaProg(x => x.pagado + x.pendiente)) * 100) : '—'}
                     </td>
                   </tr>
                 </tfoot>
@@ -483,7 +490,10 @@ export const MetricasCobradores = () => {
             </table>
           </div>
           <p style={{ ...s.kpiSub, padding: '0.75rem 1.25rem 1rem' }}>
-            Suma de las cuotas cuya fecha de cobro cae en el mes, separadas en capital e interés. "Pagado" es lo abonado a esas cuotas hasta hoy (aunque se haya pagado en otro mes); "Pendiente" es lo que falta.
+            Suma de las cuotas cuya fecha de cobro cae en el mes, separadas en capital e interés. Total programado = Pagado + Pendiente + Terminados + Saldado sin pago.
+            "Pagado" es lo abonado a esas cuotas hasta hoy (aunque se haya pagado en otro mes). "Pendiente" usa la misma regla que Vencidas en Cobros.
+            "Terminados" son cuotas sin pagar de préstamos terminados y "Saldado sin pago" son cuotas marcadas pagadas sin abono (p. ej. congelado liquidado): ninguna de las dos aparece en Cobros.
+            % Cumplimiento = Pagado ÷ (Pagado + Pendiente).
           </p>
         </div>
       )}
