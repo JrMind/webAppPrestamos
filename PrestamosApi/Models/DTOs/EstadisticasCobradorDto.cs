@@ -16,6 +16,22 @@ public class InteresMensualDto
     public string Mes { get; set; } = string.Empty;
     public decimal InteresCobrado { get; set; }
     public List<InteresMensualPrestamoDto> Prestamos { get; set; } = new();
+    public List<ProgramadoCobradorDto> Programado { get; set; } = new();
+}
+
+// Cuotas con fecha de cobro dentro del mes (lo que estaba programado cobrar), por cobrador
+public class ProgramadoCobradorDto
+{
+    public int? CobradorId { get; set; }
+    public string? CobradorNombre { get; set; }
+    public int Prestamos { get; set; }
+    public int Cuotas { get; set; }
+    public int CuotasPagadas { get; set; }       // Cuotas del mes pagadas completas
+    public decimal CapitalProgramado { get; set; }
+    public decimal InteresProgramado { get; set; }
+    public decimal TotalProgramado { get; set; }
+    public decimal Pagado { get; set; }           // Lo abonado a esas cuotas (en cualquier fecha)
+    public decimal Pendiente { get; set; }        // Lo que falta de esas cuotas
 }
 
 public class InteresMensualPrestamoDto

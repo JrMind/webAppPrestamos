@@ -123,21 +123,23 @@ export const MetricasCobradores = () => {
   // Incluye cobradores activos sin cobros en el mes (no cubrieron) y los préstamos sin cobrador.
   const resumenCobradores = (() => {
     if (!detalleMes) return [];
-    const filas = new Map<string, { cobradorId: number | null; nombre: string; prestamos: number; cobrado: number; capital: number; interes: number; salario: number }>();
+    const filas = new Map<string, { cobradorId: number | null; nombre: string; prestamos: number; cobrado: number; interes: number; salario: number }>();
     for (const c of metricas.salariosCobradores ?? []) {
-      filas.set(String(c.cobradorId), { cobradorId: c.cobradorId, nombre: c.cobradorNombre, prestamos: 0, cobrado: 0, capital: 0, interes: 0, salario: c.salarioMensual });
+      filas.set(String(c.cobradorId), { cobradorId: c.cobradorId, nombre: c.cobradorNombre, prestamos: 0, cobrado: 0, interes: 0, salario: c.salarioMensual });
     }
     for (const p of detalleMes.prestamos) {
       const key = p.cobradorId != null ? String(p.cobradorId) : 'sin';
-      const fila = filas.get(key) ?? { cobradorId: p.cobradorId ?? null, nombre: p.cobradorNombre ?? 'Sin cobrador', prestamos: 0, cobrado: 0, capital: 0, interes: 0, salario: 0 };
+      const fila = filas.get(key) ?? { cobradorId: p.cobradorId ?? null, nombre: p.cobradorNombre ?? 'Sin cobrador', prestamos: 0, cobrado: 0, interes: 0, salario: 0 };
       fila.prestamos += 1;
       fila.cobrado += p.montoPagado;
-      fila.capital += p.capitalCobrado;
       fila.interes += p.interesCobrado;
       filas.set(key, fila);
     }
-    return [...filas.values()].sort((a, b) => b.cobrado - a.cobrado);
+    return [...filas.values()].sort((a, b) => b.interes - a.interes);
   })();
+
+  const programado = detalleMes?.programado ?? [];
+  const sumaProg = (f: (x: typeof programado[number]) => number) => programado.reduce((sum, x) => sum + f(x), 0);
 
   const vencidos = metricas.prestamosVencidos ?? [];
   const cobradoresVencidos = [...new Map(vencidos.map(v => [
@@ -347,7 +349,7 @@ export const MetricasCobradores = () => {
 
           {/* Resumen por cobrador: ¿los intereses que cobró cubren su salario? */}
           <div style={{ ...s.tableHeader, borderTop: '1px solid var(--border)' }}>
-            <span style={s.tableHeaderTitle}>💼 Lo que debe traer cada cobrador en {detalleMes.mes} (capital e interés) vs salario</span>
+            <span style={s.tableHeaderTitle}>💼 Cobrado por cobrador en {detalleMes.mes} vs salario</span>
           </div>
           {errorSalario && <div style={{ ...s.errorBox, margin: '0.75rem 1.25rem' }}>❌ {errorSalario}</div>}
           <div style={{ overflowX: 'auto' }}>
@@ -356,9 +358,8 @@ export const MetricasCobradores = () => {
                 <tr>
                   <th style={s.th}>Cobrador</th>
                   <th style={s.th}>Préstamos</th>
-                  <th style={s.th}>Capital</th>
+                  <th style={s.th}>Total Cobrado</th>
                   <th style={s.th}>Intereses</th>
-                  <th style={s.th}>Total a traer</th>
                   <th style={s.th}>Salario Mensual</th>
                   <th style={s.th}>Diferencia</th>
                   <th style={s.th}>¿Cubrió su salario?</th>
@@ -372,9 +373,8 @@ export const MetricasCobradores = () => {
                     <tr key={r.cobradorId ?? 'sin'} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
                       <td style={{ ...s.td, fontWeight: 600 }}>{r.nombre}</td>
                       <td style={s.td}>{r.prestamos}</td>
-                      <td style={{ ...s.td, fontWeight: 700, color: 'var(--accent-blue)' }}>{formatMoney(r.capital)}</td>
+                      <td style={s.td}>{formatMoney(r.cobrado)}</td>
                       <td style={{ ...s.td, fontWeight: 700, color: 'var(--accent-green)' }}>{formatMoney(r.interes)}</td>
-                      <td style={{ ...s.td, fontWeight: 700 }}>{formatMoney(r.cobrado)}</td>
                       <td style={s.td}>
                         {r.cobradorId == null ? '—' : editando ? (
                           <input
@@ -410,26 +410,80 @@ export const MetricasCobradores = () => {
                   );
                 })}
                 {resumenCobradores.length === 0 && (
-                  <tr><td style={{ ...s.td, textAlign: 'center', color: 'var(--text-muted)' }} colSpan={8}>No hay cobradores registrados</td></tr>
+                  <tr><td style={{ ...s.td, textAlign: 'center', color: 'var(--text-muted)' }} colSpan={7}>No hay cobradores registrados</td></tr>
                 )}
               </tbody>
-              {resumenCobradores.length > 0 && (
+            </table>
+          </div>
+          <p style={{ ...s.kpiSub, padding: '0.75rem 1.25rem 1rem' }}>
+            Se compara el interés cobrado en el mes con el salario mensual del cobrador. Haz clic en el salario para definirlo o cambiarlo.
+          </p>
+
+          {/* Programado del mes: cuotas con fecha de cobro en el mes, vs lo que se ha pagado de ellas */}
+          <div style={{ ...s.tableHeader, borderTop: '1px solid var(--border)' }}>
+            <span style={s.tableHeaderTitle}>📅 Programado para {detalleMes.mes} por cobrador (cuotas con fecha de cobro en el mes)</span>
+          </div>
+          <div style={{ overflowX: 'auto' }}>
+            <table style={s.table}>
+              <thead>
+                <tr>
+                  <th style={s.th}>Cobrador</th>
+                  <th style={s.th}>Préstamos</th>
+                  <th style={s.th}>Cuotas</th>
+                  <th style={s.th}>Capital</th>
+                  <th style={s.th}>Intereses</th>
+                  <th style={s.th}>Total programado</th>
+                  <th style={s.th}>Pagado</th>
+                  <th style={s.th}>Pendiente</th>
+                  <th style={s.th}>% Cumplimiento</th>
+                </tr>
+              </thead>
+              <tbody>
+                {programado.map((x, i) => {
+                  const pct = x.totalProgramado > 0 ? (x.pagado / x.totalProgramado) * 100 : 0;
+                  return (
+                    <tr key={x.cobradorId ?? 'sin'} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                      <td style={{ ...s.td, fontWeight: 600 }}>{x.cobradorNombre ?? 'Sin cobrador'}</td>
+                      <td style={s.td}>{x.prestamos}</td>
+                      <td style={s.td}>{x.cuotasPagadas}/{x.cuotas} pagadas</td>
+                      <td style={{ ...s.td, fontWeight: 700, color: 'var(--accent-blue)' }}>{formatMoney(x.capitalProgramado)}</td>
+                      <td style={{ ...s.td, fontWeight: 700, color: 'var(--accent-green)' }}>{formatMoney(x.interesProgramado)}</td>
+                      <td style={{ ...s.td, fontWeight: 700 }}>{formatMoney(x.totalProgramado)}</td>
+                      <td style={s.td}>{formatMoney(x.pagado)}</td>
+                      <td style={{ ...s.td, fontWeight: 700, color: x.pendiente > 0 ? 'var(--accent-red)' : 'var(--text-muted)' }}>{formatMoney(x.pendiente)}</td>
+                      <td style={s.td}>
+                        <span style={s.badge(pct >= 90 ? 'rgba(16,185,129,0.35)' : pct >= 60 ? 'rgba(245,158,11,0.4)' : 'rgba(239,68,68,0.4)')}>
+                          {formatPercent(pct)}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {programado.length === 0 && (
+                  <tr><td style={{ ...s.td, textAlign: 'center', color: 'var(--text-muted)' }} colSpan={9}>No había cuotas programadas en este mes</td></tr>
+                )}
+              </tbody>
+              {programado.length > 0 && (
                 <tfoot>
                   <tr>
                     <td style={s.tdFoot}>TOTAL</td>
-                    <td style={s.tdFoot}>{resumenCobradores.reduce((sum, r) => sum + r.prestamos, 0)}</td>
-                    <td style={s.tdFoot}>{formatMoney(resumenCobradores.reduce((sum, r) => sum + r.capital, 0))}</td>
-                    <td style={s.tdFoot}>{formatMoney(resumenCobradores.reduce((sum, r) => sum + r.interes, 0))}</td>
-                    <td style={s.tdFoot}>{formatMoney(resumenCobradores.reduce((sum, r) => sum + r.cobrado, 0))}</td>
-                    <td style={s.tdFoot} colSpan={3}></td>
+                    <td style={s.tdFoot}>{sumaProg(x => x.prestamos)}</td>
+                    <td style={s.tdFoot}>{sumaProg(x => x.cuotasPagadas)}/{sumaProg(x => x.cuotas)}</td>
+                    <td style={s.tdFoot}>{formatMoney(sumaProg(x => x.capitalProgramado))}</td>
+                    <td style={s.tdFoot}>{formatMoney(sumaProg(x => x.interesProgramado))}</td>
+                    <td style={s.tdFoot}>{formatMoney(sumaProg(x => x.totalProgramado))}</td>
+                    <td style={s.tdFoot}>{formatMoney(sumaProg(x => x.pagado))}</td>
+                    <td style={s.tdFoot}>{formatMoney(sumaProg(x => x.pendiente))}</td>
+                    <td style={s.tdFoot}>
+                      {sumaProg(x => x.totalProgramado) > 0 ? formatPercent((sumaProg(x => x.pagado) / sumaProg(x => x.totalProgramado)) * 100) : '—'}
+                    </td>
                   </tr>
                 </tfoot>
               )}
             </table>
           </div>
           <p style={{ ...s.kpiSub, padding: '0.75rem 1.25rem 1rem' }}>
-            Capital + Intereses = Total a traer: lo que el cobrador recibió en cuotas pagadas ese mes. Cada abono se reparte entre capital e interés en la misma proporción que la cuota.
-            Se compara el interés cobrado en el mes con el salario mensual del cobrador. Haz clic en el salario para definirlo o cambiarlo.
+            Suma de las cuotas cuya fecha de cobro cae en el mes, separadas en capital e interés. "Pagado" es lo abonado a esas cuotas hasta hoy (aunque se haya pagado en otro mes); "Pendiente" es lo que falta.
           </p>
         </div>
       )}

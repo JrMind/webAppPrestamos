@@ -405,6 +405,15 @@ public class DashboardController : BaseApiController
                         && (c.EstadoCuota == "Pagada" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida"))
                 .ToListAsync();
 
+            // Cuotas programadas (por fecha de cobro) en los mismos 12 meses, para comparar programado vs pagado
+            var mesFinBusqueda = DateTime.SpecifyKind(new DateTime(hoy.Year, hoy.Month, 1).AddMonths(1), DateTimeKind.Utc);
+            var cuotasProgramadasUltimosMeses = await ScopeCuotas(
+                _context.CuotasPrestamo
+                    .Include(c => c.Prestamo).ThenInclude(p => p!.Cobrador),
+                fechaScope, cobsScope)
+                .Where(c => c.FechaCobro >= mesInicioBusqueda && c.FechaCobro < mesFinBusqueda)
+                .ToListAsync();
+
             var interesesMensuales = new List<InteresMensualDto>();
             for (int i = 11; i >= 0; i--)
             {
@@ -444,11 +453,36 @@ public class DashboardController : BaseApiController
             .OrderByDescending(x => x.InteresCobrado)
             .ToList();
 
+        var programadoMes = cuotasProgramadasUltimosMeses
+            .Where(c => c.FechaCobro >= mesFoco && c.FechaCobro < mesFocoFin)
+            .GroupBy(c => c.Prestamo?.CobradorId)
+            .Select(g =>
+            {
+                var pagado = g.Sum(c => Math.Min(c.MontoPagado, c.MontoCuota));
+                var total  = g.Sum(c => c.MontoCuota);
+                return new ProgramadoCobradorDto
+                {
+                    CobradorId        = g.Key,
+                    CobradorNombre    = g.First().Prestamo?.Cobrador?.Nombre,
+                    Prestamos         = g.Select(c => c.PrestamoId).Distinct().Count(),
+                    Cuotas            = g.Count(),
+                    CuotasPagadas     = g.Count(c => c.MontoCuota > 0 && c.MontoPagado >= c.MontoCuota),
+                    CapitalProgramado = Math.Round(g.Sum(c => c.MontoCuota - c.MontoInteres), 2),
+                    InteresProgramado = Math.Round(g.Sum(c => c.MontoInteres), 2),
+                    TotalProgramado   = Math.Round(total, 2),
+                    Pagado            = Math.Round(pagado, 2),
+                    Pendiente         = Math.Round(total - pagado, 2)
+                };
+            })
+            .OrderByDescending(x => x.TotalProgramado)
+            .ToList();
+
         interesesMensuales.Add(new InteresMensualDto
         {
             Mes            = mesFoco.ToString("MMM yyyy"),
             InteresCobrado = Math.Round(cuotasMes.Sum(InteresDeCuota), 2),
-            Prestamos      = prestamosMes
+            Prestamos      = prestamosMes,
+            Programado     = programadoMes
         });
     }
             var resultado = new MetricasGeneralesDto

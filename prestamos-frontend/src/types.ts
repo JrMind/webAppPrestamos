@@ -735,6 +735,21 @@ export interface InteresMensual {
   mes: string;
   interesCobrado: number;
   prestamos: InteresMensualPrestamo[];
+  programado: ProgramadoCobrador[];
+}
+
+// Cuotas con fecha de cobro dentro del mes (lo programado), por cobrador
+export interface ProgramadoCobrador {
+  cobradorId: number | null;
+  cobradorNombre: string | null;
+  prestamos: number;
+  cuotas: number;
+  cuotasPagadas: number;
+  capitalProgramado: number;
+  interesProgramado: number;
+  totalProgramado: number;
+  pagado: number;
+  pendiente: number;
 }
 
 // Distribución de préstamos
