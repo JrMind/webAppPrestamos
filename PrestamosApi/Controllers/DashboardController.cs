@@ -351,6 +351,8 @@ public class DashboardController : BaseApiController
                 .Where(p => p.EstadoPrestamo == "Activo")
                 .ToListAsync();
 
+            var prestamosVencidos = await ObtenerPrestamosVencidosAsync(fechaScope, cobsScope);
+
             if (!prestamosActivos.Any())
             {
                 return Ok(new MetricasGeneralesDto
@@ -359,7 +361,8 @@ public class DashboardController : BaseApiController
                     CapitalFantasma = 0,
                     TotalPrestamosActivos = 0,
                     EstadisticasCobradores = new List<EstadisticasCobradorDto>(),
-                    SalariosCobradores = await ObtenerSalariosCobradoresAsync(cobsScope)
+                    SalariosCobradores = await ObtenerSalariosCobradoresAsync(cobsScope),
+                    PrestamosVencidos = prestamosVencidos
                 });
             }
 
@@ -432,10 +435,12 @@ public class DashboardController : BaseApiController
                     EsCongelado    = p?.EsCongelado == true,
                     CuotasPagadas  = g.Count(),
                     MontoPagado    = Math.Round(g.Sum(c => c.MontoPagado), 2),
+                    // Lo que no es interés es capital: capital + interés = lo que el cobrador debe entregar
+                    CapitalCobrado = Math.Round(g.Sum(c => c.MontoPagado) - g.Sum(InteresDeCuota), 2),
                     InteresCobrado = Math.Round(g.Sum(InteresDeCuota), 2)
                 };
             })
-            .Where(x => x.InteresCobrado > 0)
+            .Where(x => x.MontoPagado > 0)
             .OrderByDescending(x => x.InteresCobrado)
             .ToList();
 
@@ -453,7 +458,8 @@ public class DashboardController : BaseApiController
                 TotalPrestamosActivos = prestamosActivos.Count,
                 EstadisticasCobradores = cobradores,
                 InteresesMensuales = interesesMensuales,
-                SalariosCobradores = await ObtenerSalariosCobradoresAsync(cobsScope)
+                SalariosCobradores = await ObtenerSalariosCobradoresAsync(cobsScope),
+                PrestamosVencidos = prestamosVencidos
             };
 
             return Ok(resultado);
@@ -462,6 +468,54 @@ public class DashboardController : BaseApiController
         {
             return StatusCode(500, new { message = "Error calculando métricas de cobradores", error = ex.Message });
         }
+    }
+
+    // Préstamos vencidos: todas sus cuotas tenían fecha de cobro antes de este mes (no le queda
+    // ninguna cuota de este mes ni posterior) y todavía deben saldo de esas cuotas pasadas.
+    private async Task<List<PrestamoVencidoDto>> ObtenerPrestamosVencidosAsync(DateTime? fechaScope, List<int>? cobsScope)
+    {
+        var hoy = DateTime.UtcNow.Date;
+        var inicioMes = DateTime.SpecifyKind(new DateTime(hoy.Year, hoy.Month, 1), DateTimeKind.Utc);
+
+        var prestamos = await ScopePrestamos(
+                _context.Prestamos
+                    .Include(p => p.Cliente)
+                    .Include(p => p.Cobrador)
+                    .Include(p => p.Cuotas),
+                fechaScope, cobsScope)
+            .Where(p => p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido")
+            .Where(p => p.Cuotas.Any() && p.Cuotas.All(c => c.FechaCobro < inicioMes))
+            .Where(p => p.Cuotas.Any(c => c.SaldoPendiente > 0))
+            .ToListAsync();
+
+        return prestamos
+            .Select(p =>
+            {
+                var pendientes = p.Cuotas.Where(c => c.SaldoPendiente > 0).ToList();
+                // Parte del saldo pendiente que es interés, en la misma proporción que la cuota
+                decimal InteresPendiente(CuotaPrestamo c) =>
+                    c.MontoCuota > 0 ? c.MontoInteres * c.SaldoPendiente / c.MontoCuota : 0m;
+                var masAntigua = pendientes.Min(c => c.FechaCobro);
+                var saldo = pendientes.Sum(c => c.SaldoPendiente);
+                var interes = pendientes.Sum(InteresPendiente);
+                return new PrestamoVencidoDto
+                {
+                    PrestamoId              = p.Id,
+                    ClienteNombre           = p.Cliente?.Nombre ?? $"Préstamo #{p.Id}",
+                    CobradorId              = p.CobradorId,
+                    CobradorNombre          = p.Cobrador?.Nombre,
+                    EsCongelado             = p.EsCongelado,
+                    UltimaFechaCobro        = p.Cuotas.Max(c => c.FechaCobro),
+                    CuotaMasAntiguaSinPagar = masAntigua,
+                    DiasVencido             = Math.Max(0, (hoy - masAntigua.Date).Days),
+                    CuotasPendientes        = pendientes.Count,
+                    SaldoPendiente          = Math.Round(saldo, 2),
+                    CapitalPendiente        = Math.Round(saldo - interes, 2),
+                    InteresPendiente        = Math.Round(interes, 2)
+                };
+            })
+            .OrderByDescending(v => v.DiasVencido)
+            .ToList();
     }
 
     // Salario mensual de cada cobrador, guardado en ConfiguracionesSistema con la clave "SalarioCobrador:{id}"

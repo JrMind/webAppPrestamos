@@ -694,6 +694,23 @@ export interface MetricasGenerales {
   estadisticasCobradores: EstadisticasCobrador[];
   interesesMensuales: InteresMensual[];
   salariosCobradores: SalarioCobrador[];
+  prestamosVencidos: PrestamoVencido[];
+}
+
+// Préstamo cuyas cuotas eran todas de meses anteriores y todavía debe saldo
+export interface PrestamoVencido {
+  prestamoId: number;
+  clienteNombre: string;
+  cobradorId: number | null;
+  cobradorNombre: string | null;
+  esCongelado: boolean;
+  ultimaFechaCobro: string;
+  cuotaMasAntiguaSinPagar: string;
+  diasVencido: number;
+  cuotasPendientes: number;
+  saldoPendiente: number;
+  capitalPendiente: number;
+  interesPendiente: number;
 }
 
 export interface SalarioCobrador {
@@ -710,6 +727,7 @@ export interface InteresMensualPrestamo {
   esCongelado: boolean;
   cuotasPagadas: number;
   montoPagado: number;
+  capitalCobrado: number;
   interesCobrado: number;
 }
 

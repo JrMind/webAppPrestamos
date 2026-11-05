@@ -8,6 +8,9 @@ const formatMoney = (amount: number): string =>
 
 const formatPercent = (value: number): string => `${value.toFixed(2)}%`;
 
+const formatFecha = (iso: string): string =>
+  new Date(iso).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'UTC' });
+
 const s = {
   container: { padding: '1.5rem 0' } as React.CSSProperties,
   title: { fontSize: '1.25rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: '1.5rem' } as React.CSSProperties,
@@ -72,6 +75,7 @@ export const MetricasCobradores = () => {
   const [mesSeleccionado, setMesSeleccionado] = useState<string | null>(null);
   const [salarioEditando, setSalarioEditando] = useState<{ cobradorId: number; valor: string } | null>(null);
   const [errorSalario, setErrorSalario] = useState<string | null>(null);
+  const [filtroVencidos, setFiltroVencidos] = useState<string>('todos');
 
   const guardarSalario = async () => {
     if (!salarioEditando || !metricas) return;
@@ -92,7 +96,13 @@ export const MetricasCobradores = () => {
 
   useEffect(() => {
     dashboardApi.getMetricasCobradores()
-      .then(data => { setMetricas(data); setError(null); })
+      .then(data => {
+        setMetricas(data);
+        setError(null);
+        // Abrir de una vez el mes actual (último de la lista) para ver qué debe traer cada cobrador
+        const meses = data.interesesMensuales ?? [];
+        if (meses.length > 0) setMesSeleccionado(meses[meses.length - 1].mes);
+      })
       .catch(err => setError(err instanceof Error ? err.message : 'Error al cargar métricas'))
       .finally(() => setLoading(false));
   }, []);
@@ -113,20 +123,30 @@ export const MetricasCobradores = () => {
   // Incluye cobradores activos sin cobros en el mes (no cubrieron) y los préstamos sin cobrador.
   const resumenCobradores = (() => {
     if (!detalleMes) return [];
-    const filas = new Map<string, { cobradorId: number | null; nombre: string; prestamos: number; cobrado: number; interes: number; salario: number }>();
+    const filas = new Map<string, { cobradorId: number | null; nombre: string; prestamos: number; cobrado: number; capital: number; interes: number; salario: number }>();
     for (const c of metricas.salariosCobradores ?? []) {
-      filas.set(String(c.cobradorId), { cobradorId: c.cobradorId, nombre: c.cobradorNombre, prestamos: 0, cobrado: 0, interes: 0, salario: c.salarioMensual });
+      filas.set(String(c.cobradorId), { cobradorId: c.cobradorId, nombre: c.cobradorNombre, prestamos: 0, cobrado: 0, capital: 0, interes: 0, salario: c.salarioMensual });
     }
     for (const p of detalleMes.prestamos) {
       const key = p.cobradorId != null ? String(p.cobradorId) : 'sin';
-      const fila = filas.get(key) ?? { cobradorId: p.cobradorId ?? null, nombre: p.cobradorNombre ?? 'Sin cobrador', prestamos: 0, cobrado: 0, interes: 0, salario: 0 };
+      const fila = filas.get(key) ?? { cobradorId: p.cobradorId ?? null, nombre: p.cobradorNombre ?? 'Sin cobrador', prestamos: 0, cobrado: 0, capital: 0, interes: 0, salario: 0 };
       fila.prestamos += 1;
       fila.cobrado += p.montoPagado;
+      fila.capital += p.capitalCobrado;
       fila.interes += p.interesCobrado;
       filas.set(key, fila);
     }
-    return [...filas.values()].sort((a, b) => b.interes - a.interes);
+    return [...filas.values()].sort((a, b) => b.cobrado - a.cobrado);
   })();
+
+  const vencidos = metricas.prestamosVencidos ?? [];
+  const cobradoresVencidos = [...new Map(vencidos.map(v => [
+    v.cobradorId != null ? String(v.cobradorId) : 'sin',
+    v.cobradorNombre ?? 'Sin cobrador',
+  ])).entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  const vencidosFiltrados = filtroVencidos === 'todos'
+    ? vencidos
+    : vencidos.filter(v => (v.cobradorId != null ? String(v.cobradorId) : 'sin') === filtroVencidos);
 
   return (
     <div style={s.container}>
@@ -276,7 +296,7 @@ export const MetricasCobradores = () => {
             </button>
           </div>
           {detalleMes.prestamos.length === 0 ? (
-            <div style={s.center}>No hubo intereses cobrados en este mes.</div>
+            <div style={s.center}>No hubo cobros en este mes.</div>
           ) : (
             <div style={{ overflowX: 'auto' }}>
               <table style={s.table}>
@@ -287,6 +307,7 @@ export const MetricasCobradores = () => {
                     <th style={s.th}>Cobrador</th>
                     <th style={s.th}>Cuotas</th>
                     <th style={s.th}>Monto Pagado</th>
+                    <th style={s.th}>Capital</th>
                     <th style={s.th}>Interés</th>
                     <th style={s.th}>% del Mes</th>
                   </tr>
@@ -302,6 +323,7 @@ export const MetricasCobradores = () => {
                       <td style={s.td}>{p.cobradorNombre ?? '—'}</td>
                       <td style={s.td}>{p.cuotasPagadas}</td>
                       <td style={s.td}>{formatMoney(p.montoPagado)}</td>
+                      <td style={s.td}>{formatMoney(p.capitalCobrado)}</td>
                       <td style={{ ...s.td, fontWeight: 700, color: 'var(--accent-green)' }}>{formatMoney(p.interesCobrado)}</td>
                       <td style={s.td}>
                         {detalleMes.interesCobrado > 0 ? formatPercent((p.interesCobrado / detalleMes.interesCobrado) * 100) : '—'}
@@ -314,6 +336,7 @@ export const MetricasCobradores = () => {
                     <td style={s.tdFoot} colSpan={3}>TOTAL</td>
                     <td style={s.tdFoot}>{detalleMes.prestamos.reduce((sum, p) => sum + p.cuotasPagadas, 0)}</td>
                     <td style={s.tdFoot}>{formatMoney(detalleMes.prestamos.reduce((sum, p) => sum + p.montoPagado, 0))}</td>
+                    <td style={s.tdFoot}>{formatMoney(detalleMes.prestamos.reduce((sum, p) => sum + p.capitalCobrado, 0))}</td>
                     <td style={s.tdFoot}>{formatMoney(detalleMes.interesCobrado)}</td>
                     <td style={s.tdFoot}>100%</td>
                   </tr>
@@ -324,7 +347,7 @@ export const MetricasCobradores = () => {
 
           {/* Resumen por cobrador: ¿los intereses que cobró cubren su salario? */}
           <div style={{ ...s.tableHeader, borderTop: '1px solid var(--border)' }}>
-            <span style={s.tableHeaderTitle}>💼 Cobrado por cobrador en {detalleMes.mes} vs salario</span>
+            <span style={s.tableHeaderTitle}>💼 Lo que debe traer cada cobrador en {detalleMes.mes} (capital e interés) vs salario</span>
           </div>
           {errorSalario && <div style={{ ...s.errorBox, margin: '0.75rem 1.25rem' }}>❌ {errorSalario}</div>}
           <div style={{ overflowX: 'auto' }}>
@@ -333,8 +356,9 @@ export const MetricasCobradores = () => {
                 <tr>
                   <th style={s.th}>Cobrador</th>
                   <th style={s.th}>Préstamos</th>
-                  <th style={s.th}>Total Cobrado</th>
+                  <th style={s.th}>Capital</th>
                   <th style={s.th}>Intereses</th>
+                  <th style={s.th}>Total a traer</th>
                   <th style={s.th}>Salario Mensual</th>
                   <th style={s.th}>Diferencia</th>
                   <th style={s.th}>¿Cubrió su salario?</th>
@@ -348,8 +372,9 @@ export const MetricasCobradores = () => {
                     <tr key={r.cobradorId ?? 'sin'} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
                       <td style={{ ...s.td, fontWeight: 600 }}>{r.nombre}</td>
                       <td style={s.td}>{r.prestamos}</td>
-                      <td style={s.td}>{formatMoney(r.cobrado)}</td>
+                      <td style={{ ...s.td, fontWeight: 700, color: 'var(--accent-blue)' }}>{formatMoney(r.capital)}</td>
                       <td style={{ ...s.td, fontWeight: 700, color: 'var(--accent-green)' }}>{formatMoney(r.interes)}</td>
+                      <td style={{ ...s.td, fontWeight: 700 }}>{formatMoney(r.cobrado)}</td>
                       <td style={s.td}>
                         {r.cobradorId == null ? '—' : editando ? (
                           <input
@@ -385,16 +410,105 @@ export const MetricasCobradores = () => {
                   );
                 })}
                 {resumenCobradores.length === 0 && (
-                  <tr><td style={{ ...s.td, textAlign: 'center', color: 'var(--text-muted)' }} colSpan={7}>No hay cobradores registrados</td></tr>
+                  <tr><td style={{ ...s.td, textAlign: 'center', color: 'var(--text-muted)' }} colSpan={8}>No hay cobradores registrados</td></tr>
                 )}
               </tbody>
+              {resumenCobradores.length > 0 && (
+                <tfoot>
+                  <tr>
+                    <td style={s.tdFoot}>TOTAL</td>
+                    <td style={s.tdFoot}>{resumenCobradores.reduce((sum, r) => sum + r.prestamos, 0)}</td>
+                    <td style={s.tdFoot}>{formatMoney(resumenCobradores.reduce((sum, r) => sum + r.capital, 0))}</td>
+                    <td style={s.tdFoot}>{formatMoney(resumenCobradores.reduce((sum, r) => sum + r.interes, 0))}</td>
+                    <td style={s.tdFoot}>{formatMoney(resumenCobradores.reduce((sum, r) => sum + r.cobrado, 0))}</td>
+                    <td style={s.tdFoot} colSpan={3}></td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
           <p style={{ ...s.kpiSub, padding: '0.75rem 1.25rem 1rem' }}>
+            Capital + Intereses = Total a traer: lo que el cobrador recibió en cuotas pagadas ese mes. Cada abono se reparte entre capital e interés en la misma proporción que la cuota.
             Se compara el interés cobrado en el mes con el salario mensual del cobrador. Haz clic en el salario para definirlo o cambiarlo.
           </p>
         </div>
       )}
+
+      {/* Préstamos vencidos: ya no tienen cuotas este mes, deben cuotas de meses pasados */}
+      <div style={s.tableWrap}>
+        <div style={{ ...s.tableHeader, justifyContent: 'space-between', flexWrap: 'wrap' }}>
+          <span style={s.tableHeaderTitle}>
+            ⏰ Préstamos vencidos · {vencidosFiltrados.length} {vencidosFiltrados.length === 1 ? 'préstamo' : 'préstamos'} · {formatMoney(vencidosFiltrados.reduce((sum, v) => sum + v.saldoPendiente, 0))}
+          </span>
+          {cobradoresVencidos.length > 1 && (
+            <select
+              value={filtroVencidos}
+              onChange={e => setFiltroVencidos(e.target.value)}
+              style={{ padding: '0.3rem 0.5rem', background: 'var(--bg-secondary)', border: '1px solid var(--border)', borderRadius: 'var(--radius-sm)', color: 'var(--text-primary)' }}
+            >
+              <option value="todos">Todos los cobradores</option>
+              {cobradoresVencidos.map(([id, nombre]) => <option key={id} value={id}>{nombre}</option>)}
+            </select>
+          )}
+        </div>
+        {vencidosFiltrados.length === 0 ? (
+          <div style={s.center}>No hay préstamos vencidos 🎉</div>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={s.table}>
+              <thead>
+                <tr>
+                  <th style={s.th}>Préstamo</th>
+                  <th style={s.th}>Cliente</th>
+                  <th style={s.th}>Cobrador</th>
+                  <th style={s.th}>Última cuota</th>
+                  <th style={s.th}>Debe desde</th>
+                  <th style={s.th}>Días vencido</th>
+                  <th style={s.th}>Cuotas sin pagar</th>
+                  <th style={s.th}>Capital</th>
+                  <th style={s.th}>Interés</th>
+                  <th style={s.th}>Saldo</th>
+                </tr>
+              </thead>
+              <tbody>
+                {vencidosFiltrados.map((v, i) => (
+                  <tr key={v.prestamoId} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                    <td style={{ ...s.td, color: 'var(--text-muted)' }}>#{v.prestamoId}</td>
+                    <td style={{ ...s.td, fontWeight: 600 }}>
+                      {v.clienteNombre}
+                      {v.esCongelado && <span style={{ ...s.badge('rgba(139,92,246,0.35)'), marginLeft: '0.5rem' }}>Congelado</span>}
+                    </td>
+                    <td style={s.td}>{v.cobradorNombre ?? '—'}</td>
+                    <td style={s.td}>{formatFecha(v.ultimaFechaCobro)}</td>
+                    <td style={s.td}>{formatFecha(v.cuotaMasAntiguaSinPagar)}</td>
+                    <td style={s.td}>
+                      <span style={s.badge(v.diasVencido > 60 ? 'rgba(239,68,68,0.45)' : v.diasVencido > 30 ? 'rgba(249,115,22,0.45)' : 'rgba(245,158,11,0.4)')}>
+                        {v.diasVencido} días
+                      </span>
+                    </td>
+                    <td style={s.td}>{v.cuotasPendientes}</td>
+                    <td style={s.td}>{formatMoney(v.capitalPendiente)}</td>
+                    <td style={s.td}>{formatMoney(v.interesPendiente)}</td>
+                    <td style={{ ...s.td, fontWeight: 700, color: 'var(--accent-red)' }}>{formatMoney(v.saldoPendiente)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td style={s.tdFoot} colSpan={6}>TOTAL</td>
+                  <td style={s.tdFoot}>{vencidosFiltrados.reduce((sum, v) => sum + v.cuotasPendientes, 0)}</td>
+                  <td style={s.tdFoot}>{formatMoney(vencidosFiltrados.reduce((sum, v) => sum + v.capitalPendiente, 0))}</td>
+                  <td style={s.tdFoot}>{formatMoney(vencidosFiltrados.reduce((sum, v) => sum + v.interesPendiente, 0))}</td>
+                  <td style={s.tdFoot}>{formatMoney(vencidosFiltrados.reduce((sum, v) => sum + v.saldoPendiente, 0))}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+        <p style={{ ...s.kpiSub, padding: '0.75rem 1.25rem 1rem' }}>
+          Préstamos que ya no tienen cuotas en este mes (todas eran de meses anteriores) y todavía deben saldo. Ordenados del más atrasado al más reciente.
+        </p>
+      </div>
 
       {/* Info */}
       <div style={s.infoBox}>
