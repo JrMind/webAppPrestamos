@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { dashboardApi } from '../api';
-import { ComposicionCapital, MetricasGenerales } from '../types';
+import { ComposicionCapital, MetricasGenerales, PrestamoSinSaldo } from '../types';
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const formatMoney = (amount: number): string =>
@@ -74,6 +74,8 @@ export const MetricasCobradores = () => {
   const [salarioEditando, setSalarioEditando] = useState<{ cobradorId: number; valor: string } | null>(null);
   const [errorSalario, setErrorSalario] = useState<string | null>(null);
   const [composicion, setComposicion] = useState<ComposicionCapital[] | null>(null);
+  const [sinSaldo, setSinSaldo] = useState<PrestamoSinSaldo[] | null>(null);
+  const [verSinSaldo, setVerSinSaldo] = useState(false);
 
   const guardarSalario = async () => {
     if (!salarioEditando || !metricas) return;
@@ -94,6 +96,7 @@ export const MetricasCobradores = () => {
 
   useEffect(() => {
     dashboardApi.getComposicionCapital().then(setComposicion).catch(() => setComposicion(null));
+    dashboardApi.getPrestamosSinSaldo().then(setSinSaldo).catch(() => setSinSaldo(null));
   }, []);
 
   useEffect(() => {
@@ -277,6 +280,11 @@ export const MetricasCobradores = () => {
                             + {x.vencidosSinSaldo} sin saldo (no se cuentan)
                           </div>
                         )}
+                        {x.sinCuotas > 0 && (
+                          <div style={{ fontSize: '0.72rem', color: 'var(--accent-red)' }} title="Préstamos activos/vencidos sin ninguna cuota: revisarlos a mano. No se cuentan.">
+                            + {x.sinCuotas} sin cuotas (revisar)
+                          </div>
+                        )}
                       </td>
                       <td style={{ ...s.td, fontWeight: 700 }}>{formatMoney(x.capitalPrestado)}</td>
                       {cols.map(c => (
@@ -305,6 +313,54 @@ export const MetricasCobradores = () => {
               "Atrasado" es el capital de cuotas de meses anteriores que no se ha pagado. En los congelados la cuota es solo interés,
               así que su capital no está en ninguna cuota: se muestra aparte (y lo abonado a capital cuenta como recuperado).
             </p>
+
+            {/* Lista para revisar los préstamos sin saldo / sin cuotas antes de corregir su estado */}
+            {sinSaldo && sinSaldo.length > 0 && (
+              <div style={{ borderTop: '1px solid var(--border)' }}>
+                <div style={{ ...s.tableHeader, justifyContent: 'space-between', cursor: 'pointer' }} onClick={() => setVerSinSaldo(v => !v)}>
+                  <span style={s.tableHeaderTitle}>
+                    🔍 Préstamos marcados activos/vencidos que no deben nada · {sinSaldo.filter(x => x.tipo === 'SinSaldo').length} sin saldo
+                    {sinSaldo.some(x => x.tipo === 'SinCuotas') && ` · ${sinSaldo.filter(x => x.tipo === 'SinCuotas').length} sin cuotas`}
+                  </span>
+                  <span style={{ color: 'var(--text-muted)' }}>{verSinSaldo ? '▾ Ocultar' : '▸ Ver lista'}</span>
+                </div>
+                {verSinSaldo && (
+                  <div style={{ overflowX: 'auto', maxHeight: 420, overflowY: 'auto' }}>
+                    <table style={s.table}>
+                      <thead>
+                        <tr>
+                          {['Préstamo', 'Cliente', 'Cobrador', 'Estado guardado', 'Prestado', 'Vence', 'Cuotas (pagadas / existen / dice)', 'Saldo 0 en otro estado', 'Pagado', 'Saldo'].map(h =>
+                            <th key={h} style={{ ...s.th, position: 'sticky', top: 0 }}>{h}</th>)}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sinSaldo.map((x, i) => (
+                          <tr key={x.prestamoId} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                            <td style={{ ...s.td, color: 'var(--text-muted)' }}>#{x.prestamoId}</td>
+                            <td style={{ ...s.td, fontWeight: 600 }}>
+                              {x.clienteNombre}
+                              {x.tipo === 'SinCuotas' && <span style={{ ...s.badge('rgba(239,68,68,0.4)'), marginLeft: '0.5rem' }}>Sin cuotas</span>}
+                            </td>
+                            <td style={s.td}>{x.cobradorNombre ?? '—'}</td>
+                            <td style={s.td}>{x.estadoGuardado}</td>
+                            <td style={s.td}>{formatMoney(x.montoPrestado)}</td>
+                            <td style={s.td}>{new Date(x.fechaVencimiento).toLocaleDateString('es-CO', { timeZone: 'UTC' })}</td>
+                            <td style={s.td}>{x.cuotasPagadas} / {x.cuotasRegistradas} / {x.numeroCuotas}</td>
+                            <td style={s.td}>{x.cuotasSaldoCeroOtroEstado > 0 ? x.estadosOtrasCuotas : '—'}</td>
+                            <td style={s.td}>{formatMoney(x.totalPagado)}</td>
+                            <td style={s.td}>{formatMoney(x.saldoPendiente)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                <p style={{ ...s.kpiSub, padding: '0.5rem 1.25rem 1rem' }}>
+                  Solo lectura. "Cuotas (pagadas / existen / dice)": cuántas tienen estado Pagada, cuántas cuotas existen y cuántas dice el préstamo que tiene.
+                  En la lista de Préstamos estos pueden verse como "Pagado" aunque guardados sigan como Activo/Vencido.
+                </p>
+              </div>
+            )}
           </div>
         );
       })()}

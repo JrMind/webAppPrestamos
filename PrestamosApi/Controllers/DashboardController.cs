@@ -659,14 +659,15 @@ public class DashboardController : BaseApiController
 
         // Un préstamo normal sin nada pendiente ya está pagado aunque siga marcado Activo/Vencido:
         // no se cuenta (solo inflaría "Ya recuperado"), pero se informa cuántos hay.
-        static bool SinSaldo(Prestamo p) => !p.EsCongelado && p.Cuotas.All(c => c.SaldoPendiente <= 0.01m);
+        static bool SinCuotas(Prestamo p) => !p.EsCongelado && p.Cuotas.Count == 0;
+        static bool SinSaldo(Prestamo p) => !p.EsCongelado && p.Cuotas.Count > 0 && p.Cuotas.All(c => c.SaldoPendiente <= 0.01m);
 
         var filas = prestamos
             .GroupBy(p => new { p.CobradorId, Nombre = p.Cobrador != null ? p.Cobrador.Nombre : "Sin cobrador" })
             .Select(g =>
             {
                 decimal recuperado = 0, atrasado = 0, esteMes = 0, futuros = 0, congelados = 0;
-                var vivos = g.Where(p => !SinSaldo(p)).ToList();
+                var vivos = g.Where(p => !SinSaldo(p) && !SinCuotas(p)).ToList();
                 foreach (var p in vivos)
                 {
                     if (p.EsCongelado)
@@ -698,6 +699,7 @@ public class DashboardController : BaseApiController
                     Activos = vivos.Count(p => p.EstadoPrestamo == "Activo"),
                     Vencidos = vivos.Count(p => p.EstadoPrestamo == "Vencido"),
                     VencidosSinSaldo = g.Count(p => SinSaldo(p)),
+                    SinCuotas = g.Count(p => SinCuotas(p)),
                     Recuperado = Math.Round(recuperado, 0),
                     AtrasadoMesesPasados = Math.Round(atrasado, 0),
                     PendienteEsteMes = Math.Round(esteMes, 0),
@@ -711,6 +713,52 @@ public class DashboardController : BaseApiController
             .ToList();
 
         return Ok(filas);
+    }
+
+    /// <summary>
+    /// Préstamos normales marcados Activo/Vencido que no deben nada (o no tienen cuotas).
+    /// Solo lectura: sirve para revisarlos antes de corregir su estado.
+    /// </summary>
+    [HttpGet("prestamos-sin-saldo")]
+    [AuthorizeRoles(RolUsuario.Socio, RolUsuario.Admin, RolUsuario.Administrador)]
+    public async Task<ActionResult<List<PrestamoSinSaldoDto>>> GetPrestamosSinSaldo()
+    {
+        var fechaScope = IsAdministrador() ? GetFechaInicioAcceso() : null;
+        var cobsScope  = IsAdministrador() ? GetCobradorIdsPermitidos() : null;
+
+        var prestamos = await ScopePrestamos(
+                _context.Prestamos.Include(p => p.Cliente).Include(p => p.Cobrador).Include(p => p.Cuotas),
+                fechaScope, cobsScope)
+            .Where(p => (p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido") && !p.EsCongelado)
+            .Where(p => !p.Cuotas.Any() || p.Cuotas.All(c => c.SaldoPendiente <= 0.01m))
+            .ToListAsync();
+
+        return Ok(prestamos
+            .Select(p =>
+            {
+                var otras = p.Cuotas.Where(c => c.EstadoCuota != "Pagada").ToList();
+                return new PrestamoSinSaldoDto
+                {
+                    PrestamoId = p.Id,
+                    ClienteNombre = p.Cliente?.Nombre ?? $"Préstamo #{p.Id}",
+                    CobradorNombre = p.Cobrador?.Nombre,
+                    EstadoGuardado = p.EstadoPrestamo,
+                    Tipo = p.Cuotas.Count == 0 ? "SinCuotas" : "SinSaldo",
+                    MontoPrestado = p.MontoPrestado,
+                    FechaPrestamo = p.FechaPrestamo,
+                    FechaVencimiento = p.FechaVencimiento,
+                    NumeroCuotas = p.NumeroCuotas,
+                    CuotasRegistradas = p.Cuotas.Count,
+                    CuotasPagadas = p.Cuotas.Count(c => c.EstadoCuota == "Pagada"),
+                    CuotasSaldoCeroOtroEstado = otras.Count,
+                    EstadosOtrasCuotas = string.Join(", ", otras.GroupBy(c => c.EstadoCuota).Select(g => $"{g.Key} ×{g.Count()}")),
+                    TotalPagado = Math.Round(p.Cuotas.Sum(c => c.MontoPagado), 0),
+                    SaldoPendiente = Math.Round(p.Cuotas.Sum(c => c.SaldoPendiente), 0)
+                };
+            })
+            .OrderBy(x => x.CobradorNombre ?? "~")
+            .ThenBy(x => x.PrestamoId)
+            .ToList());
     }
 
     /// <summary>

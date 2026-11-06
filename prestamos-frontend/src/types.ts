@@ -709,6 +709,25 @@ export interface BalanceEconomico {
   };
 }
 
+// Préstamo marcado Activo/Vencido sin nada pendiente (o sin cuotas)
+export interface PrestamoSinSaldo {
+  prestamoId: number;
+  clienteNombre: string;
+  cobradorNombre: string | null;
+  estadoGuardado: string;
+  tipo: 'SinSaldo' | 'SinCuotas';
+  montoPrestado: number;
+  fechaPrestamo: string;
+  fechaVencimiento: string;
+  numeroCuotas: number;
+  cuotasRegistradas: number;
+  cuotasPagadas: number;
+  cuotasSaldoCeroOtroEstado: number;
+  estadosOtrasCuotas: string;
+  totalPagado: number;
+  saldoPendiente: number;
+}
+
 // Dónde está el capital de cada cobrador, a hoy
 export interface ComposicionCapital {
   cobradorId: number | null;
@@ -717,6 +736,7 @@ export interface ComposicionCapital {
   activos: number;
   vencidos: number;
   vencidosSinSaldo: number;
+  sinCuotas: number;
   capitalPrestado: number;
   recuperado: number;
   atrasadoMesesPasados: number;

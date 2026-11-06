@@ -108,13 +108,34 @@ public class ComposicionCapitalDto
     public int Prestamos { get; set; }             // Préstamos que todavía deben algo (los que se cuentan)
     public int Activos { get; set; }
     public int Vencidos { get; set; }
-    public int VencidosSinSaldo { get; set; }      // Marcados Vencido pero sin nada pendiente: deberían estar Pagado (no se cuentan)
+    public int VencidosSinSaldo { get; set; }      // Marcados Activo/Vencido pero sin nada pendiente: deberían estar Pagado (no se cuentan)
+    public int SinCuotas { get; set; }             // Préstamos Activo/Vencido sin ninguna cuota: revisar a mano (no se cuentan)
     public decimal CapitalPrestado { get; set; }   // Suma de las partes
     public decimal Recuperado { get; set; }        // Capital de cuotas ya pagadas (y abonos a capital en congelados)
     public decimal AtrasadoMesesPasados { get; set; } // Capital sin pagar de cuotas de meses anteriores
     public decimal PendienteEsteMes { get; set; }  // Capital sin pagar de cuotas de este mes
     public decimal MesesFuturos { get; set; }      // Capital de cuotas de meses siguientes
     public decimal Congelados { get; set; }        // Capital de congelados (sus cuotas son solo interés)
+}
+
+// Préstamo marcado Activo/Vencido que no debe nada (o no tiene cuotas): para revisar antes de corregir su estado
+public class PrestamoSinSaldoDto
+{
+    public int PrestamoId { get; set; }
+    public string ClienteNombre { get; set; } = string.Empty;
+    public string? CobradorNombre { get; set; }
+    public string EstadoGuardado { get; set; } = string.Empty;  // Lo que dice la base de datos
+    public string Tipo { get; set; } = string.Empty;            // SinSaldo | SinCuotas
+    public decimal MontoPrestado { get; set; }
+    public DateTime FechaPrestamo { get; set; }
+    public DateTime FechaVencimiento { get; set; }
+    public int NumeroCuotas { get; set; }                       // Lo que dice el préstamo
+    public int CuotasRegistradas { get; set; }                  // Cuotas que existen
+    public int CuotasPagadas { get; set; }                      // Con estado "Pagada"
+    public int CuotasSaldoCeroOtroEstado { get; set; }          // Saldo 0 pero estado distinto de "Pagada"
+    public string EstadosOtrasCuotas { get; set; } = string.Empty; // Ej: "Parcial ×2, Vencida ×1"
+    public decimal TotalPagado { get; set; }
+    public decimal SaldoPendiente { get; set; }
 }
 
 // Fondos: Sistema, Papelería, Renovación, Cobro de intereses y Cobro de mora
