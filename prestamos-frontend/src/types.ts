@@ -709,6 +709,19 @@ export interface BalanceEconomico {
   };
 }
 
+// Dónde está el capital de cada cobrador, a hoy
+export interface ComposicionCapital {
+  cobradorId: number | null;
+  cobradorNombre: string;
+  prestamos: number;
+  capitalPrestado: number;
+  recuperado: number;
+  atrasadoMesesPasados: number;
+  pendienteEsteMes: number;
+  mesesFuturos: number;
+  congelados: number;
+}
+
 // Fondos: Sistema, Papelería, Renovación, Cobro de intereses y Cobro de mora
 export interface MovimientoFondo {
   fecha: string;

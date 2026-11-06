@@ -2,7 +2,7 @@ import {
     Cliente, CreateClienteDto, CreatePagoDto, CreatePrestamoDto,
     Cuota, DashboardMetricas, Pago, Prestamo, LoginDto, AuthResponse,
     Usuario, Cobrador, BalanceSocio, CobrosHoy, MovimientoCapital, Aporte,
-    MetricasGenerales, MoraPrestamo, Fondo, PrestamoVencido, BalanceEconomico
+    MetricasGenerales, MoraPrestamo, Fondo, PrestamoVencido, BalanceEconomico, ComposicionCapital
 } from './types';
 
 const API_URL = import.meta.env.DEV
@@ -504,6 +504,11 @@ export const dashboardApi = {
         const response = await fetch(`${API_URL}/dashboard/metricas`, { headers: getHeaders() });
         return handleResponse<DashboardMetricas>(response);
     },
+    getComposicionCapital: async (): Promise<ComposicionCapital[]> => {
+        const response = await fetch(`${API_URL}/dashboard/composicion-capital`, { headers: getHeaders() });
+        return handleResponse<ComposicionCapital[]>(response);
+    },
+
     getPrestamosVencidos: async (): Promise<PrestamoVencido[]> => {
         const response = await fetch(`${API_URL}/dashboard/prestamos-vencidos`, { headers: getHeaders() });
         return handleResponse<PrestamoVencido[]>(response);

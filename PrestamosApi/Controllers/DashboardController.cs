@@ -636,6 +636,76 @@ public class DashboardController : BaseApiController
     }
 
     /// <summary>
+    /// Reparte el capital prestado de cada cobrador en: ya recuperado, atrasado de meses pasados,
+    /// pendiente de este mes, meses futuros y congelados. Préstamos activos y vencidos, a hoy.
+    /// </summary>
+    [HttpGet("composicion-capital")]
+    [AuthorizeRoles(RolUsuario.Socio, RolUsuario.Admin, RolUsuario.Administrador)]
+    public async Task<ActionResult<List<ComposicionCapitalDto>>> GetComposicionCapital()
+    {
+        var fechaScope = IsAdministrador() ? GetFechaInicioAcceso() : null;
+        var cobsScope  = IsAdministrador() ? GetCobradorIdsPermitidos() : null;
+
+        var hoy = DateTime.UtcNow.Date;
+        var inicioMes = DateTime.SpecifyKind(new DateTime(hoy.Year, hoy.Month, 1), DateTimeKind.Utc);
+        var finMes = inicioMes.AddMonths(1);
+
+        var prestamos = await ScopePrestamos(
+                _context.Prestamos.Include(p => p.Cobrador).Include(p => p.Cuotas)
+                    .Include(p => p.Pagos.Where(pg => pg.TipoPago == TiposPago.AbonoCapital)),
+                fechaScope, cobsScope)
+            .Where(p => p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido")
+            .ToListAsync();
+
+        var filas = prestamos
+            .GroupBy(p => new { p.CobradorId, Nombre = p.Cobrador != null ? p.Cobrador.Nombre : "Sin cobrador" })
+            .Select(g =>
+            {
+                decimal recuperado = 0, atrasado = 0, esteMes = 0, futuros = 0, congelados = 0;
+                foreach (var p in g)
+                {
+                    if (p.EsCongelado)
+                    {
+                        congelados += p.MontoPrestado;                       // Capital actual
+                        recuperado += p.Pagos.Sum(pg => pg.MontoPago);      // Abonos a capital
+                        continue;
+                    }
+                    foreach (var c in p.Cuotas)
+                    {
+                        // Cuota pagada (o dada por saldada): todo su capital está recuperado.
+                        // Si no, se recupera en proporción a lo abonado y el resto queda pendiente.
+                        var pagadoCapital = c.EstadoCuota == "Pagada"
+                            ? c.MontoCapital
+                            : c.MontoCuota > 0 ? c.MontoCapital * Math.Min(c.MontoPagado / c.MontoCuota, 1m) : 0m;
+                        var pendienteCapital = c.MontoCapital - pagadoCapital;
+                        recuperado += pagadoCapital;
+                        if (pendienteCapital <= 0) continue;
+                        if (c.FechaCobro < inicioMes) atrasado += pendienteCapital;
+                        else if (c.FechaCobro < finMes) esteMes += pendienteCapital;
+                        else futuros += pendienteCapital;
+                    }
+                }
+                return new ComposicionCapitalDto
+                {
+                    CobradorId = g.Key.CobradorId,
+                    CobradorNombre = g.Key.Nombre,
+                    Prestamos = g.Count(),
+                    Recuperado = Math.Round(recuperado, 0),
+                    AtrasadoMesesPasados = Math.Round(atrasado, 0),
+                    PendienteEsteMes = Math.Round(esteMes, 0),
+                    MesesFuturos = Math.Round(futuros, 0),
+                    Congelados = Math.Round(congelados, 0),
+                    CapitalPrestado = Math.Round(recuperado + atrasado + esteMes + futuros + congelados, 0)
+                };
+            })
+            .OrderBy(f => f.CobradorId == null)
+            .ThenByDescending(f => f.CapitalPrestado)
+            .ToList();
+
+        return Ok(filas);
+    }
+
+    /// <summary>
     /// Préstamos vencidos (se muestran en Cobros): sin cuotas este mes ni posteriores y con saldo de meses pasados.
     /// </summary>
     [HttpGet("prestamos-vencidos")]

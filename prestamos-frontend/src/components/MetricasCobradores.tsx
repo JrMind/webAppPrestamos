@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { dashboardApi } from '../api';
-import { MetricasGenerales } from '../types';
+import { ComposicionCapital, MetricasGenerales } from '../types';
 import { BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const formatMoney = (amount: number): string =>
@@ -73,6 +73,7 @@ export const MetricasCobradores = () => {
   const [mesSeleccionado, setMesSeleccionado] = useState<string | null>(null);
   const [salarioEditando, setSalarioEditando] = useState<{ cobradorId: number; valor: string } | null>(null);
   const [errorSalario, setErrorSalario] = useState<string | null>(null);
+  const [composicion, setComposicion] = useState<ComposicionCapital[] | null>(null);
 
   const guardarSalario = async () => {
     if (!salarioEditando || !metricas) return;
@@ -90,6 +91,10 @@ export const MetricasCobradores = () => {
       setErrorSalario(err instanceof Error ? err.message : 'Error al guardar el salario');
     }
   };
+
+  useEffect(() => {
+    dashboardApi.getComposicionCapital().then(setComposicion).catch(() => setComposicion(null));
+  }, []);
 
   useEffect(() => {
     dashboardApi.getMetricasCobradores()
@@ -234,6 +239,65 @@ export const MetricasCobradores = () => {
           </table>
         </div>
       </div>
+
+      {/* Dónde está el capital de cada cobrador */}
+      {composicion && composicion.length > 0 && (() => {
+        const suma = (f: (x: ComposicionCapital) => number) => composicion.reduce((t, x) => t + f(x), 0);
+        const cols: { label: string; f: (x: ComposicionCapital) => number; color?: string }[] = [
+          { label: 'Ya recuperado', f: x => x.recuperado, color: 'var(--accent-green)' },
+          { label: 'Atrasado (meses pasados)', f: x => x.atrasadoMesesPasados, color: 'var(--accent-red)' },
+          { label: 'Pendiente este mes', f: x => x.pendienteEsteMes, color: 'var(--accent-blue)' },
+          { label: 'Meses futuros', f: x => x.mesesFuturos },
+          { label: 'Congelados', f: x => x.congelados, color: 'var(--accent-purple)' },
+        ];
+        return (
+          <div style={s.tableWrap}>
+            <div style={s.tableHeader}>
+              <span style={s.tableHeaderTitle}>🧭 ¿Dónde está el capital de cada cobrador? (a hoy)</span>
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={s.table}>
+                <thead>
+                  <tr>
+                    <th style={s.th}>Cobrador</th>
+                    <th style={s.th}>Préstamos</th>
+                    <th style={s.th}>Capital prestado</th>
+                    {cols.map(c => <th key={c.label} style={s.th}>{c.label}</th>)}
+                  </tr>
+                </thead>
+                <tbody>
+                  {composicion.map((x, i) => (
+                    <tr key={x.cobradorId ?? 'sin'} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
+                      <td style={{ ...s.td, fontWeight: 600 }}>{x.cobradorNombre}</td>
+                      <td style={s.td}>{x.prestamos}</td>
+                      <td style={{ ...s.td, fontWeight: 700 }}>{formatMoney(x.capitalPrestado)}</td>
+                      {cols.map(c => (
+                        <td key={c.label} style={{ ...s.td, color: c.color, fontWeight: c.color ? 700 : 400 }}>
+                          {formatMoney(c.f(x))}
+                          {x.capitalPrestado > 0 && <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', fontWeight: 400 }}>{formatPercent(c.f(x) / x.capitalPrestado * 100)}</div>}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr>
+                    <td style={s.tdFoot}>TOTAL</td>
+                    <td style={s.tdFoot}>{suma(x => x.prestamos)}</td>
+                    <td style={s.tdFoot}>{formatMoney(suma(x => x.capitalPrestado))}</td>
+                    {cols.map(c => <td key={c.label} style={s.tdFoot}>{formatMoney(suma(c.f))}</td>)}
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+            <p style={{ ...s.kpiSub, padding: '0.75rem 1.25rem 1rem' }}>
+              Capital prestado = Ya recuperado + Atrasado + Pendiente este mes + Meses futuros + Congelados. Incluye préstamos activos y vencidos.
+              "Atrasado" es el capital de cuotas de meses anteriores que no se ha pagado. En los congelados la cuota es solo interés,
+              así que su capital no está en ninguna cuota: se muestra aparte (y lo abonado a capital cuenta como recuperado).
+            </p>
+          </div>
+        );
+      })()}
 
       {/* Gráfico de Intereses Mensuales */}
       {metricas.interesesMensuales && metricas.interesesMensuales.length > 0 && (

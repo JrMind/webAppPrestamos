@@ -100,6 +100,20 @@ public class ActualizarSalarioCobradorDto
     public decimal SalarioMensual { get; set; }
 }
 
+// Dónde está el capital prestado de cada cobrador (préstamos activos y vencidos), a hoy
+public class ComposicionCapitalDto
+{
+    public int? CobradorId { get; set; }
+    public string CobradorNombre { get; set; } = string.Empty;
+    public int Prestamos { get; set; }
+    public decimal CapitalPrestado { get; set; }   // Suma de las partes
+    public decimal Recuperado { get; set; }        // Capital de cuotas ya pagadas (y abonos a capital en congelados)
+    public decimal AtrasadoMesesPasados { get; set; } // Capital sin pagar de cuotas de meses anteriores
+    public decimal PendienteEsteMes { get; set; }  // Capital sin pagar de cuotas de este mes
+    public decimal MesesFuturos { get; set; }      // Capital de cuotas de meses siguientes
+    public decimal Congelados { get; set; }        // Capital de congelados (sus cuotas son solo interés)
+}
+
 // Fondos: Sistema, Papelería, Renovación, Cobro de intereses y Cobro de mora
 public class FondoDto
 {
