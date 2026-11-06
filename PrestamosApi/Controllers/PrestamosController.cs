@@ -111,7 +111,7 @@ public class PrestamosController : BaseApiController
                 p.MontoCuota,
                 p.EstadoPrestamo,
                 p.Descripcion,
-                p.Pagos.Sum(pg => pg.MontoPago),
+                p.Pagos.Where(pg => !TiposPago.Cargos.Contains(pg.TipoPago)).Sum(pg => pg.MontoPago),
                 p.Cuotas.Sum(c => c.SaldoPendiente),
                 p.Cuotas.Count(c => c.EstadoCuota == "Pagada"),
                 p.Cuotas
@@ -248,7 +248,7 @@ public class PrestamosController : BaseApiController
                 p.MontoCuota,
                 p.EstadoPrestamo,
                 p.Descripcion,
-                p.Pagos.Sum(pg => pg.MontoPago),
+                p.Pagos.Where(pg => !TiposPago.Cargos.Contains(pg.TipoPago)).Sum(pg => pg.MontoPago),
                 p.Cuotas.Sum(c => c.SaldoPendiente),
                 p.Cuotas.Count(c => c.EstadoCuota == "Pagada"),
                 p.Cuotas
@@ -375,7 +375,7 @@ public class PrestamosController : BaseApiController
                 p.MontoCuota,
                 p.EstadoPrestamo,
                 p.Descripcion,
-                p.Pagos.Sum(pg => pg.MontoPago),
+                p.Pagos.Where(pg => !TiposPago.Cargos.Contains(pg.TipoPago)).Sum(pg => pg.MontoPago),
                 p.Cuotas.Sum(c => c.SaldoPendiente),
                 p.Cuotas.Count(c => c.EstadoCuota == "Pagada"),
                 p.Cuotas
@@ -411,6 +411,10 @@ public class PrestamosController : BaseApiController
         // Validar monto mínimo
         if (dto.MontoPrestado < 50)
             return BadRequest(new { message = "El monto mínimo del préstamo es 50$" });
+
+        var errorCargos = ValidarCargos(dto.MontoPrestado, dto.ValorSistema, dto.ValorPapeleria, dto.ValorRenovacion);
+        if (errorCargos != null)
+            return BadRequest(new { message = errorCargos });
 
         // Calcular préstamo (con soporte para congelado y cuotas directas)
         var (montoTotal, montoIntereses, montoCuota, numeroCuotas, fechaVencimiento) = 
@@ -489,6 +493,10 @@ public class PrestamosController : BaseApiController
             });
         }
 
+        // Cargos descontados del desembolso (la fuente automática sale de la reserva en efectivo)
+        await RegistrarCargosDesembolsoAsync(prestamo, dto.ValorSistema, dto.ValorPapeleria, dto.ValorRenovacion,
+            "Efectivo", fechaPrestamoUtc);
+
         // Generar cuotas (Fecha del préstamo se usa como fecha base para primera cuota)
         var cuotas = _prestamoService.GenerarCuotas(prestamo, fechaPrestamoUtc);
         _context.CuotasPrestamo.AddRange(cuotas);
@@ -534,6 +542,10 @@ public class PrestamosController : BaseApiController
         if (dto.MontoPrestado < 50)
             return BadRequest(new { message = "El monto mínimo del préstamo es 50$" });
 
+        var errorCargos = ValidarCargos(dto.MontoPrestado, dto.ValorSistema, dto.ValorPapeleria, dto.ValorRenovacion);
+        if (errorCargos != null)
+            return BadRequest(new { message = errorCargos });
+
         // Validar que el total de fuentes coincida con el monto prestado
         var totalFuentes = dto.FuentesCapital?.Sum(f => f.MontoAportado) ?? 0;
         if (totalFuentes != dto.MontoPrestado)
@@ -543,7 +555,7 @@ public class PrestamosController : BaseApiController
         var fuentesReserva = dto.FuentesCapital?.Where(f => f.Tipo == "Reserva").Sum(f => f.MontoAportado) ?? 0;
         if (fuentesReserva > 0)
         {
-            var totalCobrado = await _context.Pagos.SumAsync(p => p.MontoPago);
+            var totalCobrado = await _context.Pagos.Where(p => !TiposPago.Cargos.Contains(p.TipoPago)).SumAsync(p => p.MontoPago);
             var capitalUsadoDeReserva = await _context.FuentesCapitalPrestamo
                 .Include(f => f.Prestamo)
                 .Where(f => f.Tipo == "Reserva" && f.Prestamo!.EstadoPrestamo == "Activo")
@@ -645,6 +657,14 @@ public class PrestamosController : BaseApiController
                 await _gananciasService.ActualizarReservaAsync(-totalReservaUsada, $"Préstamo #{prestamo.Id} - ${totalReservaUsada:N0}");
             }
         }
+
+        // Cargos descontados del desembolso: quedan en el medio de la fuente principal
+        var medioDesembolso = dto.FuentesCapital?
+            .OrderByDescending(f => f.MontoAportado)
+            .Select(f => f.MedioPago)
+            .FirstOrDefault() ?? "Efectivo";
+        await RegistrarCargosDesembolsoAsync(prestamo, dto.ValorSistema, dto.ValorPapeleria, dto.ValorRenovacion,
+            medioDesembolso, fechaPrestamoUtc);
 
         // Generar cuotas (Fecha del préstamo se usa como fecha base para primera cuota, igual que CreatePrestamo)
         var cuotas = _prestamoService.GenerarCuotas(prestamo, fechaPrestamoUtc);
@@ -782,7 +802,9 @@ public class PrestamosController : BaseApiController
                 .OrderBy(c => c.FechaPago ?? c.FechaCobro)
                 .Select(c => (Monto: c.MontoPagado, Fecha: c.FechaPago ?? c.FechaCobro))
                 .ToList();
-            var pagosTabla = prestamo.Pagos.Where(p => p.TipoPago != "Mora" && p.TipoPago != "SoloInteres").ToList();
+            var pagosTabla = prestamo.Pagos
+                .Where(p => p.TipoPago != TiposPago.Mora && p.TipoPago != TiposPago.SoloInteres && !TiposPago.Cargos.Contains(p.TipoPago))
+                .ToList();
             decimal sinAplicar = pagosTabla.Sum(p => p.MontoPago) - pagosAmortizan.Sum(x => x.Monto);
             if (sinAplicar > 0.01m)
                 pagosAmortizan.Add((sinAplicar, pagosTabla.Max(p => p.FechaPago)));
@@ -1000,6 +1022,57 @@ public class PrestamosController : BaseApiController
         catch (Exception ex)
         {
            return BadRequest(new { message = "Error recalculando distribuciones", error = ex.Message });
+        }
+    }
+
+    private static string? ValidarCargos(decimal monto, decimal sistema, decimal papeleria, decimal renovacion)
+    {
+        if (sistema < 0 || papeleria < 0 || renovacion < 0)
+            return "Los cargos de Sistema, Papelería y Renovación no pueden ser negativos";
+        if (sistema + papeleria + renovacion >= monto)
+            return "Los cargos no pueden ser iguales o mayores al monto prestado";
+        return null;
+    }
+
+    /// <summary>
+    /// Registra Sistema, Papelería y Renovación descontados del desembolso: el cliente recibe
+    /// el monto menos los cargos. Cada cargo queda como Pago de su tipo (entra a caja en el medio
+    /// del desembolso y a su fondo) y suma a la reserva, porque ese dinero nunca salió.
+    /// </summary>
+    private async Task RegistrarCargosDesembolsoAsync(Prestamo prestamo, decimal sistema, decimal papeleria,
+        decimal renovacion, string? medioPago, DateTime fecha)
+    {
+        var medio = string.IsNullOrWhiteSpace(medioPago) ? "Efectivo" : medioPago;
+        var cargos = new (string Tipo, decimal Monto, string Nombre)[]
+        {
+            (TiposPago.Sistema, sistema, "Sistema"),
+            (TiposPago.Papeleria, papeleria, "Papelería"),
+            (TiposPago.Renovacion, renovacion, "Renovación"),
+        };
+
+        decimal total = 0;
+        foreach (var (tipo, monto, nombre) in cargos.Where(c => c.Monto > 0))
+        {
+            _context.Pagos.Add(new Pago
+            {
+                PrestamoId = prestamo.Id,
+                CuotaId = null,
+                MontoPago = monto,
+                FechaPago = fecha,
+                MetodoPago = medio,
+                TipoPago = tipo,
+                Observaciones = $"{nombre} descontado al desembolsar"
+            });
+            total += monto;
+        }
+
+        if (sistema > 0) { prestamo.SistemaCobrado = true; prestamo.FechaSistemaCobrado = fecha; }
+        if (renovacion > 0) { prestamo.RenovacionCobrada = true; prestamo.FechaRenovacionCobrada = fecha; }
+
+        if (total > 0)
+        {
+            await _context.SaveChangesAsync();
+            await _gananciasService.ActualizarReservaAsync(total, $"Cargos descontados préstamo #{prestamo.Id}");
         }
     }
 

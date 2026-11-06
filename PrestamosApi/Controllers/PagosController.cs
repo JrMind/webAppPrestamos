@@ -500,8 +500,20 @@ public class PagosController : BaseApiController
             }
         }
 
-        // Mora y solo-interés no amortizan nada: solo hay que devolver el dinero de caja
-        var esCobroSinAmortizacion = pago.TipoPago == "Mora" || pago.TipoPago == "SoloInteres";
+        // Mora, solo-interés y cargos de desembolso no amortizan nada: solo hay que devolver el dinero de caja
+        var esCobroSinAmortizacion = pago.TipoPago == TiposPago.Mora || pago.TipoPago == TiposPago.SoloInteres
+            || TiposPago.Cargos.Contains(pago.TipoPago);
+
+        if (prestamo != null && pago.TipoPago == TiposPago.Sistema)
+        {
+            prestamo.SistemaCobrado = false;
+            prestamo.FechaSistemaCobrado = null;
+        }
+        else if (prestamo != null && pago.TipoPago == TiposPago.Renovacion)
+        {
+            prestamo.RenovacionCobrada = false;
+            prestamo.FechaRenovacionCobrada = null;
+        }
 
         // Actualizar estado del préstamo si estaba pagado
         if (!esCobroSinAmortizacion && prestamo != null && prestamo.EstadoPrestamo == "Pagado")
@@ -614,6 +626,85 @@ public class PagosController : BaseApiController
             nuevoCapital = prestamo.MontoPrestado,
             nuevaCuota = prestamo.MontoCuota,
             estadoPrestamo = prestamo.EstadoPrestamo
+        });
+    }
+
+    /// <summary>
+    /// Pago del interés mensual de un préstamo (no congelado): monto = valor prestado × tasa mensual.
+    /// El dinero va al fondo "Cobro de intereses" (TipoPago SoloInteres) y, si CorrerFechas, todas las
+    /// cuotas pendientes y el vencimiento se corren un mes, al mismo día.
+    /// </summary>
+    [HttpPost("interes-mensual/{prestamoId}")]
+    public async Task<IActionResult> PagoInteresMensual(int prestamoId, [FromBody] PagoInteresMensualDto dto)
+    {
+        var prestamo = await _context.Prestamos
+            .Include(p => p.Cuotas)
+            .FirstOrDefaultAsync(p => p.Id == prestamoId);
+        if (prestamo == null)
+            return NotFound(new { message = "Préstamo no encontrado" });
+
+        if (prestamo.EsCongelado)
+            return BadRequest(new { message = "En préstamos congelados la cuota ya es el interés del mes: registre el pago de la cuota." });
+
+        if (prestamo.EstadoPrestamo != "Activo" && prestamo.EstadoPrestamo != "Vencido")
+            return BadRequest(new { message = $"El préstamo está {prestamo.EstadoPrestamo}: no se puede cobrar interés mensual." });
+
+        var interesCalculado = Math.Round(prestamo.MontoPrestado * (prestamo.TasaInteres / 100m), 0);
+        var monto = dto.Monto ?? interesCalculado;
+        if (monto <= 0)
+            return BadRequest(new { message = "El monto debe ser mayor a 0" });
+
+        var metodoPago = string.IsNullOrWhiteSpace(dto.MetodoPago) ? "Efectivo" : dto.MetodoPago;
+        var fechaPago = dto.FechaPago.HasValue
+            ? DateTime.SpecifyKind(dto.FechaPago.Value, DateTimeKind.Utc)
+            : DateTime.UtcNow;
+
+        // Correr todas las cuotas que faltan por pagar (incluye parciales) un mes, mismo día
+        var cuotasCorridas = 0;
+        if (dto.CorrerFechas)
+        {
+            var hoy = DateTime.UtcNow.Date;
+            foreach (var c in prestamo.Cuotas.Where(c => c.EstadoCuota != "Pagada" && c.SaldoPendiente > 0))
+            {
+                c.FechaCobro = DateTime.SpecifyKind(c.FechaCobro.AddMonths(1), DateTimeKind.Utc);
+                if (c.EstadoCuota == "Vencida" && c.FechaCobro.Date >= hoy)
+                    c.EstadoCuota = "Pendiente";
+                cuotasCorridas++;
+            }
+            prestamo.FechaVencimiento = DateTime.SpecifyKind(prestamo.FechaVencimiento.AddMonths(1), DateTimeKind.Utc);
+            if (prestamo.EstadoPrestamo == "Vencido" && prestamo.Cuotas.All(c => c.EstadoCuota != "Vencida"))
+                prestamo.EstadoPrestamo = "Activo";
+        }
+
+        var pago = new Pago
+        {
+            PrestamoId = prestamoId,
+            CuotaId = null,
+            MontoPago = monto,
+            FechaPago = fechaPago,
+            MetodoPago = metodoPago,
+            TipoPago = TiposPago.SoloInteres,
+            Observaciones = dto.CorrerFechas
+                ? $"Interés mensual ({prestamo.TasaInteres:0.##}% de {prestamo.MontoPrestado:N0}). {cuotasCorridas} cuota(s) corridas un mes"
+                : $"Interés mensual ({prestamo.TasaInteres:0.##}% de {prestamo.MontoPrestado:N0})"
+        };
+        _context.Pagos.Add(pago);
+        await _context.SaveChangesAsync();
+
+        await _gananciasService.ActualizarReservaAsync(monto, $"Interés mensual préstamo #{prestamoId}");
+
+        _logger.LogInformation("Interés mensual préstamo #{PrestamoId}: ${Monto} por {Medio}, {Cuotas} cuotas corridas",
+            prestamoId, monto, metodoPago, cuotasCorridas);
+
+        return Ok(new
+        {
+            message = dto.CorrerFechas
+                ? $"Interés de ${monto:N0} registrado. {cuotasCorridas} cuota(s) corridas un mes."
+                : $"Interés de ${monto:N0} registrado.",
+            pagoId = pago.Id,
+            interesCalculado,
+            cuotasCorridas,
+            nuevaFechaVencimiento = prestamo.FechaVencimiento
         });
     }
 

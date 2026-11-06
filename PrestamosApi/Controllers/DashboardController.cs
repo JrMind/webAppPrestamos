@@ -97,6 +97,7 @@ public class DashboardController : BaseApiController
 
             // Flujo de Capital
             var totalCobrado = await ScopePagos(_context.Pagos.Include(p => p.Prestamo), fechaScope, cobsScope)
+                .Where(p => !TiposPago.Cargos.Contains(p.TipoPago))
                 .SumAsync(p => p.MontoPago);
 
             // Capital de préstamos activos que aún no se ha recuperado
@@ -169,7 +170,7 @@ public class DashboardController : BaseApiController
                 .ToListAsync();
 
             var pagosEvolucion = await ScopePagos(_context.Pagos.Include(p => p.Prestamo), fechaScope, cobsScope)
-                .Where(p => p.FechaPago >= hace12Meses)
+                .Where(p => p.FechaPago >= hace12Meses && !TiposPago.Cargos.Contains(p.TipoPago))
                 .GroupBy(p => new { p.FechaPago.Year, p.FechaPago.Month })
                 .Select(g => new
                 {
@@ -225,7 +226,7 @@ public class DashboardController : BaseApiController
                 var mesFin = mesInicio.AddMonths(1);
                 
                 var pagosDelMes = await ScopePagos(_context.Pagos.Include(p => p.Cuota).Include(p => p.Prestamo), fechaScope, cobsScope)
-                    .Where(p => p.FechaPago >= mesInicio && p.FechaPago < mesFin)
+                    .Where(p => p.FechaPago >= mesInicio && p.FechaPago < mesFin && !TiposPago.Cargos.Contains(p.TipoPago))
                     .ToListAsync();
 
                 // Simplificación: dividir proporcionalmente entre capital e intereses
@@ -538,6 +539,103 @@ public class DashboardController : BaseApiController
         {
             return StatusCode(500, new { message = "Error calculando métricas de cobradores", error = ex.Message });
         }
+    }
+
+    /// <summary>
+    /// Fondos acumulados: Sistema, Papelería y Renovación (descontados al desembolsar),
+    /// Cobro de intereses (pagos de interés mensual / solo interés) y Cobro de mora.
+    /// </summary>
+    [HttpGet("fondos")]
+    [AuthorizeRoles(RolUsuario.Socio, RolUsuario.Admin, RolUsuario.Administrador)]
+    public async Task<ActionResult<List<FondoDto>>> GetFondos()
+    {
+        var fechaScope = IsAdministrador() ? GetFechaInicioAcceso() : null;
+        var cobsScope  = IsAdministrador() ? GetCobradorIdsPermitidos() : null;
+
+        var hoy = DateTime.UtcNow.Date;
+        var inicioMes = DateTime.SpecifyKind(new DateTime(hoy.Year, hoy.Month, 1), DateTimeKind.Utc);
+
+        var tipos = new[] { TiposPago.Sistema, TiposPago.Papeleria, TiposPago.Renovacion, TiposPago.SoloInteres, TiposPago.Mora };
+        var pagos = await ScopePagos(
+                _context.Pagos
+                    .Include(p => p.Prestamo).ThenInclude(p => p!.Cliente)
+                    .Include(p => p.Prestamo).ThenInclude(p => p!.Cobrador),
+                fechaScope, cobsScope)
+            .Where(p => tipos.Contains(p.TipoPago))
+            .ToListAsync();
+
+        MovimientoFondoDto Movimiento(Pago p) => new()
+        {
+            Fecha          = p.FechaPago,
+            PrestamoId     = p.PrestamoId,
+            ClienteNombre  = p.Prestamo?.Cliente?.Nombre ?? $"Préstamo #{p.PrestamoId}",
+            CobradorNombre = p.Prestamo?.Cobrador?.Nombre,
+            Monto          = p.MontoPago,
+            MedioPago      = p.MetodoPago,
+            Observaciones  = p.Observaciones
+        };
+
+        var movimientos = tipos.ToDictionary(t => t, t => pagos.Where(p => p.TipoPago == t).Select(Movimiento).ToList());
+
+        // Préstamos anteriores a este cambio: Sistema/Renovación marcados como cobrados sin Pago registrado
+        var prestamosConCargoSinPago = await ScopePrestamos(
+                _context.Prestamos.Include(p => p.Cliente).Include(p => p.Cobrador),
+                fechaScope, cobsScope)
+            .Where(p => (p.ValorSistema > 0 && p.SistemaCobrado
+                            && !p.Pagos.Any(pg => pg.TipoPago == TiposPago.Sistema))
+                     || (p.ValorRenovacion > 0 && p.RenovacionCobrada
+                            && !p.Pagos.Any(pg => pg.TipoPago == TiposPago.Renovacion)))
+            .Select(p => new
+            {
+                p.Id, p.ValorSistema, p.SistemaCobrado, p.FechaSistemaCobrado,
+                p.ValorRenovacion, p.RenovacionCobrada, p.FechaRenovacionCobrada, p.FechaPrestamo,
+                Cliente = p.Cliente != null ? p.Cliente.Nombre : null,
+                Cobrador = p.Cobrador != null ? p.Cobrador.Nombre : null,
+                TienePagoSistema = p.Pagos.Any(pg => pg.TipoPago == TiposPago.Sistema),
+                TienePagoRenovacion = p.Pagos.Any(pg => pg.TipoPago == TiposPago.Renovacion)
+            })
+            .ToListAsync();
+
+        foreach (var p in prestamosConCargoSinPago)
+        {
+            if (p.ValorSistema > 0 && p.SistemaCobrado && !p.TienePagoSistema)
+                movimientos[TiposPago.Sistema].Add(new MovimientoFondoDto
+                {
+                    Fecha = p.FechaSistemaCobrado ?? p.FechaPrestamo, PrestamoId = p.Id,
+                    ClienteNombre = p.Cliente ?? $"Préstamo #{p.Id}", CobradorNombre = p.Cobrador,
+                    Monto = p.ValorSistema, Observaciones = "Registro anterior (marcado como cobrado)"
+                });
+            if (p.ValorRenovacion > 0 && p.RenovacionCobrada && !p.TienePagoRenovacion)
+                movimientos[TiposPago.Renovacion].Add(new MovimientoFondoDto
+                {
+                    Fecha = p.FechaRenovacionCobrada ?? p.FechaPrestamo, PrestamoId = p.Id,
+                    ClienteNombre = p.Cliente ?? $"Préstamo #{p.Id}", CobradorNombre = p.Cobrador,
+                    Monto = p.ValorRenovacion, Observaciones = "Registro anterior (marcado como cobrado)"
+                });
+        }
+
+        FondoDto Fondo(string clave, string nombre, string tipo)
+        {
+            var lista = movimientos[tipo];
+            return new FondoDto
+            {
+                Clave = clave,
+                Nombre = nombre,
+                Total = Math.Round(lista.Sum(m => m.Monto), 2),
+                EsteMes = Math.Round(lista.Where(m => m.Fecha >= inicioMes).Sum(m => m.Monto), 2),
+                CantidadMovimientos = lista.Count,
+                Movimientos = lista.OrderByDescending(m => m.Fecha).Take(200).ToList()
+            };
+        }
+
+        return Ok(new List<FondoDto>
+        {
+            Fondo("Sistema", "Sistema", TiposPago.Sistema),
+            Fondo("Papeleria", "Papelería", TiposPago.Papeleria),
+            Fondo("Renovacion", "Renovación", TiposPago.Renovacion),
+            Fondo("Intereses", "Cobro de intereses", TiposPago.SoloInteres),
+            Fondo("Mora", "Cobro de mora", TiposPago.Mora),
+        });
     }
 
     // Préstamos vencidos: todas sus cuotas tenían fecha de cobro antes de este mes (no le queda

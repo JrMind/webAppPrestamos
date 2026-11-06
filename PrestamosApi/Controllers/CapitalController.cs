@@ -26,7 +26,7 @@ public class CapitalController : ControllerBase
     public async Task<ActionResult<BalanceCapitalDto>> GetBalance()
     {
         // Total cobrado
-        var totalCobrado = await _context.Pagos.SumAsync(p => p.MontoPago);
+        var totalCobrado = await _context.Pagos.Where(p => !TiposPago.Cargos.Contains(p.TipoPago)).SumAsync(p => p.MontoPago);
         
         // Capital usado de la reserva para préstamos activos
         var capitalUsadoDeReserva = await _context.FuentesCapitalPrestamo

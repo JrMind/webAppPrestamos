@@ -323,7 +323,7 @@ public class GananciasController : ControllerBase
         var cuotasPendientes = todasCuotas.Where(c => c.EstadoCuota != "Pagada").ToList();
         
         // 7. Total COBRADO históricamente
-        var totalCobrado = await _context.Pagos.SumAsync(p => p.MontoPago);
+        var totalCobrado = await _context.Pagos.Where(p => !TiposPago.Cargos.Contains(p.TipoPago)).SumAsync(p => p.MontoPago);
         
         // 8. Préstamos SIN fuente de capital asignada
         var prestamosSinFuente = await _context.Prestamos
@@ -397,8 +397,8 @@ public class GananciasController : ControllerBase
     public async Task<ActionResult<object>> AuditPagosConsistency()
     {
         // 1. Total de pagos según tabla Pagos
-        var totalPagosRegistrados = await _context.Pagos.SumAsync(p => p.MontoPago);
-        var cantidadPagos = await _context.Pagos.CountAsync();
+        var totalPagosRegistrados = await _context.Pagos.Where(p => !TiposPago.Cargos.Contains(p.TipoPago)).SumAsync(p => p.MontoPago);
+        var cantidadPagos = await _context.Pagos.CountAsync(p => !TiposPago.Cargos.Contains(p.TipoPago));
         
         // 2. Total pagado según CuotasPrestamo.MontoPagado
         var totalPagadoEnCuotas = await _context.CuotasPrestamo.SumAsync(c => c.MontoPagado);
@@ -453,7 +453,7 @@ public class GananciasController : ControllerBase
             .Select(p => new {
                 PrestamoId = p.Id,
                 ClienteNombre = p.Cliente != null ? p.Cliente.Nombre : "N/A",
-                TotalPagosTabla = p.Pagos.Sum(pa => pa.MontoPago),
+                TotalPagosTabla = p.Pagos.Where(pa => !TiposPago.Cargos.Contains(pa.TipoPago)).Sum(pa => pa.MontoPago),
                 TotalPagadoCuotas = p.Cuotas.Sum(c => c.MontoPagado),
                 CuotasPagadas = p.Cuotas.Count(c => c.EstadoCuota == "Pagada"),
                 CuotasTotales = p.Cuotas.Count(),

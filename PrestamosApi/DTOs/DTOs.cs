@@ -89,9 +89,10 @@ public record CreatePrestamoDto(
     string? DiaSemana = null, // Para Semanal: Lunes, Martes, etc.
     bool EsCongelado = false, // Préstamo congelado: solo intereses
     int? NumeroCuotasDirecto = null, // Override: usar X cuotas en vez de calcular
-    // Cargos adicionales
+    // Cargos adicionales: se descuentan del desembolso y van a su fondo
     decimal ValorSistema = 0,
-    decimal ValorRenovacion = 0
+    decimal ValorRenovacion = 0,
+    decimal ValorPapeleria = 0
 );
 
 public record UpdatePrestamoDto(
@@ -182,6 +183,15 @@ public record RegistrarSoloInteresDto(
     DateTime? FechaPago = null,
     string? MetodoPago = null,
     string? Observaciones = null
+);
+
+// Pago del interés mensual: si Monto es null se calcula como MontoPrestado × tasa mensual.
+// CorrerFechas mueve todas las cuotas pendientes (y el vencimiento) un mes adelante, mismo día.
+public record PagoInteresMensualDto(
+    decimal? Monto = null,
+    DateTime? FechaPago = null,
+    string? MetodoPago = null,
+    bool CorrerFechas = true
 );
 
 public record TasaMoraDto(decimal TasaMoraMensual);
@@ -324,9 +334,10 @@ public record CreatePrestamoConFuentesDto(
     bool EsCongelado = false,
     string? DiaSemana = null, // Para Semanal: Lunes, Martes, etc.
     int? NumeroCuotasDirecto = null, // Override: usar X cuotas
-    // Cargos adicionales
+    // Cargos adicionales: se descuentan del desembolso y van a su fondo
     decimal ValorSistema = 0,
-    decimal ValorRenovacion = 0
+    decimal ValorRenovacion = 0,
+    decimal ValorPapeleria = 0
 );
 
 // Socio/Inversor interno DTOs

@@ -185,6 +185,10 @@ export interface CreatePrestamoDto {
   porcentajeCobrador: number;
   diaSemana?: string; // Para frecuencia Semanal: Lunes, Martes, etc.
   esCongelado?: boolean; // Préstamo congelado: solo intereses
+  // Cargos descontados del desembolso (van a su fondo)
+  valorSistema?: number;
+  valorPapeleria?: number;
+  valorRenovacion?: number;
 }
 
 export interface Cuota {
@@ -388,6 +392,7 @@ export interface CreatePrestamoConFuentesDto {
   // Cargos adicionales
   valorSistema?: number;
   valorRenovacion?: number;
+  valorPapeleria?: number;
 }
 
 // Liquidación de comisiones de cobrador
@@ -695,6 +700,26 @@ export interface MetricasGenerales {
   interesesMensuales: InteresMensual[];
   salariosCobradores: SalarioCobrador[];
   prestamosVencidos: PrestamoVencido[];
+}
+
+// Fondos: Sistema, Papelería, Renovación, Cobro de intereses y Cobro de mora
+export interface MovimientoFondo {
+  fecha: string;
+  prestamoId: number;
+  clienteNombre: string;
+  cobradorNombre: string | null;
+  monto: number;
+  medioPago: string | null;
+  observaciones: string | null;
+}
+
+export interface Fondo {
+  clave: 'Sistema' | 'Papeleria' | 'Renovacion' | 'Intereses' | 'Mora';
+  nombre: string;
+  total: number;
+  esteMes: number;
+  cantidadMovimientos: number;
+  movimientos: MovimientoFondo[];
 }
 
 // Préstamo cuyas cuotas eran todas de meses anteriores y todavía debe saldo

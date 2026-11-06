@@ -2,7 +2,7 @@ import {
     Cliente, CreateClienteDto, CreatePagoDto, CreatePrestamoDto,
     Cuota, DashboardMetricas, Pago, Prestamo, LoginDto, AuthResponse,
     Usuario, Cobrador, BalanceSocio, CobrosHoy, MovimientoCapital, Aporte,
-    MetricasGenerales, DistribucionPrestamos, MoraPrestamo
+    MetricasGenerales, DistribucionPrestamos, MoraPrestamo, Fondo
 } from './types';
 
 const API_URL = import.meta.env.DEV
@@ -456,6 +456,23 @@ export const pagosApi = {
         return handleResponse(response);
     },
 
+    // Pago del interés mensual (monto prestado × tasa mensual). Si correrFechas, las cuotas pendientes
+    // y el vencimiento pasan al mes siguiente, mismo día. Va al fondo "Cobro de intereses".
+    interesMensual: async (prestamoId: number, data: { monto?: number; metodoPago?: string; fechaPago?: string; correrFechas: boolean }): Promise<{
+        message: string;
+        pagoId: number;
+        interesCalculado: number;
+        cuotasCorridas: number;
+        nuevaFechaVencimiento: string;
+    }> => {
+        const response = await fetch(`${API_URL}/pagos/interes-mensual/${prestamoId}`, {
+            method: 'POST',
+            headers: getHeaders(),
+            body: JSON.stringify(data),
+        });
+        return handleResponse(response);
+    },
+
     // Pago de solo interés: no amortiza capital, entra a caja
     soloInteres: async (prestamoId: number, monto: number, metodoPago?: string, fechaPago?: string): Promise<{
         message: string;
@@ -506,6 +523,11 @@ export const dashboardApi = {
         const response = await fetch(`${API_URL}/dashboard/metricas`, { headers: getHeaders() });
         return handleResponse<DashboardMetricas>(response);
     },
+    getFondos: async (): Promise<Fondo[]> => {
+        const response = await fetch(`${API_URL}/dashboard/fondos`, { headers: getHeaders() });
+        return handleResponse<Fondo[]>(response);
+    },
+
     getMetricasCobradores: async (): Promise<MetricasGenerales> => {
         const response = await fetch(`${API_URL}/dashboard/metricas-cobradores`, { headers: getHeaders() });
         return handleResponse<MetricasGenerales>(response);

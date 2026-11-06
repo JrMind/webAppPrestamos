@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
 import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi, saldosApi, distribucionApi, moraApi } from './api';
-import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MorososResponse, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto, DistribucionPrestamos, MoraPrestamo } from './types';
+import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MorososResponse, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto, DistribucionPrestamos, MoraPrestamo, Fondo } from './types';
 import { MetricasCobradores } from './components/MetricasCobradores';
 import { calcularFechasCuotas } from './calendarioCuotas';
 import './App.css';
@@ -425,8 +425,8 @@ function App() {
   const [cuotasDetalle, setCuotasDetalle] = useState<Cuota[]>([]);
   const [pagosDetalle, setPagosDetalle] = useState<Pago[]>([]);
   const [moraDetalle, setMoraDetalle] = useState<MoraPrestamo | null>(null);
-  const [showCobroExtraModal, setShowCobroExtraModal] = useState<null | 'Mora' | 'SoloInteres'>(null);
-  const [cobroExtraForm, setCobroExtraForm] = useState({ monto: 0, fechaPago: '', metodoPago: 'Efectivo' });
+  const [showCobroExtraModal, setShowCobroExtraModal] = useState<null | 'Mora' | 'SoloInteres' | 'InteresMensual'>(null);
+  const [cobroExtraForm, setCobroExtraForm] = useState({ monto: 0, fechaPago: '', metodoPago: 'Efectivo', correrFechas: true });
   const [selectedCuota, setSelectedCuota] = useState<Cuota | null>(null);
 
   // Client search state
@@ -486,8 +486,13 @@ function App() {
   const [loadingCobros, setLoadingCobros] = useState(false);
   const [loadingPrestamosDelDia, setLoadingPrestamosDelDia] = useState(false);
 
+  // Fondos de Sistema, Papelería, Renovación, intereses y mora (solo roles con acceso; si falla, no se muestran)
+  const [fondos, setFondos] = useState<Fondo[] | null>(null);
+  const [fondoAbierto, setFondoAbierto] = useState<Fondo | null>(null);
+
   const loadData = useCallback(async () => {
     if (!isAuthenticated) { setLoading(false); return; }
+    dashboardApi.getFondos().then(setFondos).catch(() => setFondos(null));
     try {
       const [metricasData, prestamosData] = await Promise.all([
         dashboardApi.getMetricas(),
@@ -908,7 +913,10 @@ function App() {
       descripcion: '',
       porcentajeCobrador: 0,
       diaSemana: undefined,
-      esCongelado: false
+      esCongelado: false,
+      valorSistema: 0,
+      valorPapeleria: 0,
+      valorRenovacion: 0
     });
     setFuentesCapital([]);
     clearClienteSelection();
@@ -1218,7 +1226,10 @@ function App() {
             diaSemana: prestamoForm.diaSemana,
             esCongelado: prestamoForm.esCongelado || false,
             numeroCuotasDirecto: (prestamoForm as any).numeroCuotasDirecto,
-            fuentesCapital: fuentesCapital
+            fuentesCapital: fuentesCapital,
+            valorSistema: prestamoForm.valorSistema || 0,
+            valorPapeleria: prestamoForm.valorPapeleria || 0,
+            valorRenovacion: prestamoForm.valorRenovacion || 0
           });
         } else {
           // Sin fuentes, usar el endpoint normal
@@ -1269,19 +1280,28 @@ function App() {
     } catch { showToast('Error al cargar detalles', 'error'); }
   };
 
-  const openCobroExtraModal = (tipo: 'Mora' | 'SoloInteres') => {
-    const sugerido = tipo === 'Mora' ? Math.max(0, Math.round(moraDetalle?.moraSaldo ?? 0)) : 0;
-    setCobroExtraForm({ monto: sugerido, fechaPago: formatDateInput(new Date()), metodoPago: 'Efectivo' });
+  // Interés del mes: valor prestado × tasa mensual del préstamo
+  const interesMensualDe = (p: { montoPrestado: number; tasaInteres: number }) =>
+    Math.round(p.montoPrestado * (p.tasaInteres / 100));
+
+  const openCobroExtraModal = (tipo: 'Mora' | 'SoloInteres' | 'InteresMensual') => {
+    const sugerido = tipo === 'Mora' ? Math.max(0, Math.round(moraDetalle?.moraSaldo ?? 0))
+      : tipo === 'InteresMensual' && selectedPrestamo ? interesMensualDe(selectedPrestamo)
+      : 0;
+    setCobroExtraForm({ monto: sugerido, fechaPago: formatDateInput(new Date()), metodoPago: 'Efectivo', correrFechas: true });
     setShowCobroExtraModal(tipo);
   };
 
   const handleCobroExtra = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPrestamo || !showCobroExtraModal) return;
-    const { monto, metodoPago, fechaPago } = cobroExtraForm;
+    const { monto, metodoPago, fechaPago, correrFechas } = cobroExtraForm;
     if (monto <= 0) { showToast('Ingrese un monto válido', 'warning'); return; }
     try {
-      if (showCobroExtraModal === 'Mora') {
+      if (showCobroExtraModal === 'InteresMensual') {
+        const r = await pagosApi.interesMensual(selectedPrestamo.id, { monto, metodoPago, fechaPago, correrFechas });
+        showToast(r.message, 'success');
+      } else if (showCobroExtraModal === 'Mora') {
         await moraApi.registrarPago(selectedPrestamo.id, monto, metodoPago, fechaPago);
         showToast(`Cobro de mora de ${formatMoney(monto)} registrado`, 'success');
       } else {
@@ -1592,6 +1612,71 @@ function App() {
             <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>Préstamos activos pendientes</span>
           </div>
         </div>
+
+        {/* Fondos: cargos al desembolsar, cobro de intereses y de mora */}
+        {fondos && fondos.length > 0 && (
+          <div className="kpi-grid" style={{ marginTop: '1rem' }}>
+            {fondos.map(f => {
+              const meta = {
+                Sistema: { icono: '🖥️', color: '#3b82f6' },
+                Papeleria: { icono: '📄', color: '#8b5cf6' },
+                Renovacion: { icono: '🔁', color: '#06b6d4' },
+                Intereses: { icono: '📅', color: '#10b981' },
+                Mora: { icono: '⏰', color: '#ef4444' },
+              }[f.clave] ?? { icono: '💼', color: '#888' };
+              return (
+                <div key={f.clave} className="kpi-card" style={{ borderLeft: `4px solid ${meta.color}`, cursor: 'pointer' }}
+                  onClick={() => setFondoAbierto(f)} title="Ver movimientos">
+                  <div className="kpi-header"><span className="kpi-title">{meta.icono} {f.nombre}</span></div>
+                  <span className="kpi-value" style={{ color: meta.color }}>{formatMoney(f.total)}</span>
+                  <span className="kpi-sub" style={{ marginTop: '0.5rem', color: '#999' }}>
+                    Este mes: {formatMoney(f.esteMes)} · {f.cantidadMovimientos} {f.cantidadMovimientos === 1 ? 'movimiento' : 'movimientos'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {fondoAbierto && (
+          <div className="modal-overlay" onClick={() => setFondoAbierto(null)}>
+            <div className="modal" style={{ maxWidth: '900px' }} onClick={e => e.stopPropagation()}>
+              <div className="modal-header">
+                <h2>Fondo: {fondoAbierto.nombre} · {formatMoney(fondoAbierto.total)}</h2>
+                <button className="modal-close" onClick={() => setFondoAbierto(null)}>×</button>
+              </div>
+              <div className="modal-body">
+                {fondoAbierto.movimientos.length === 0 ? (
+                  <p style={{ color: '#888', textAlign: 'center' }}>Todavía no hay movimientos en este fondo.</p>
+                ) : (
+                  <div className="table-container">
+                    <table>
+                      <thead><tr><th>Fecha</th><th>Préstamo</th><th>Cliente</th><th>Cobrador</th><th>Medio</th><th>Monto</th><th>Detalle</th></tr></thead>
+                      <tbody>
+                        {fondoAbierto.movimientos.map((m, i) => (
+                          <tr key={`${m.prestamoId}-${m.fecha}-${i}`}>
+                            <td>{formatDate(m.fecha)}</td>
+                            <td style={{ color: '#888' }}>#{m.prestamoId}</td>
+                            <td>{m.clienteNombre}</td>
+                            <td>{m.cobradorNombre ?? '—'}</td>
+                            <td>{m.medioPago ?? '—'}</td>
+                            <td className="money" style={{ fontWeight: 700 }}>{formatMoney(m.monto)}</td>
+                            <td style={{ fontSize: '0.8rem', color: '#888' }}>{m.observaciones ?? ''}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+                {fondoAbierto.cantidadMovimientos > fondoAbierto.movimientos.length && (
+                  <p style={{ fontSize: '0.8rem', color: '#888', marginTop: '0.5rem' }}>
+                    Se muestran los {fondoAbierto.movimientos.length} más recientes de {fondoAbierto.cantidadMovimientos}.
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Charts */}
         <div className="charts-grid">
@@ -2912,6 +2997,40 @@ function App() {
 
                 </div>
 
+                {/* Cargos descontados del desembolso: Sistema, Papelería, Renovación */}
+                {!editMode && (() => {
+                  const totalCargos = (prestamoForm.valorSistema || 0) + (prestamoForm.valorPapeleria || 0) + (prestamoForm.valorRenovacion || 0);
+                  const campos: { key: 'valorSistema' | 'valorPapeleria' | 'valorRenovacion'; label: string }[] = [
+                    { key: 'valorSistema', label: 'Sistema' },
+                    { key: 'valorPapeleria', label: 'Papelería' },
+                    { key: 'valorRenovacion', label: 'Renovación' },
+                  ];
+                  return (
+                    <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--background)', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                      <h4 style={{ margin: '0 0 0.75rem' }}>🧾 Cargos (se descuentan al desembolsar)</h4>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '0.75rem' }}>
+                        {campos.map(c => (
+                          <div className="form-group" key={c.key} style={{ margin: 0 }}>
+                            <label>{c.label}</label>
+                            <input
+                              type="number" min="0" step="1000"
+                              value={prestamoForm[c.key] || ''}
+                              placeholder="0"
+                              onChange={e => setPrestamoForm({ ...prestamoForm, [c.key]: Math.max(0, Number(e.target.value) || 0) })}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      {totalCargos > 0 && prestamoForm.montoPrestado > 0 && (
+                        <div style={{ marginTop: '0.75rem', fontSize: '0.875rem', color: totalCargos >= prestamoForm.montoPrestado ? '#ef4444' : 'var(--text-secondary)' }}>
+                          Cargos: <strong>{formatMoney(totalCargos)}</strong> · El cliente recibe: <strong style={{ color: '#10b981' }}>{formatMoney(prestamoForm.montoPrestado - totalCargos)}</strong>
+                          {totalCargos >= prestamoForm.montoPrestado && ' — los cargos no pueden ser iguales o mayores al monto'}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Sección de Fuentes de Capital */}
                 {prestamoForm.montoPrestado > 0 && (
                   <div style={{ marginTop: '1rem', padding: '1rem', background: 'var(--background)', borderRadius: '8px', border: '1px solid var(--border)' }}>
@@ -3245,8 +3364,14 @@ function App() {
                   </div>
                 )}
 
-                <div style={{ marginTop: '1rem', gridColumn: '1 / -1', display: 'flex', gap: '0.5rem' }}>
+                <div style={{ marginTop: '1rem', gridColumn: '1 / -1', display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                   <button className="btn btn-primary btn-sm" onClick={() => { setShowDetalleModal(false); openEditPrestamo(selectedPrestamo); }}>✏️ Editar Préstamo</button>
+                  {!selectedPrestamo.esCongelado && (selectedPrestamo.estadoPrestamo === 'Activo' || selectedPrestamo.estadoPrestamo === 'Vencido') && (
+                    <button className="btn btn-sm" style={{ background: '#10b981', color: '#fff' }} onClick={() => openCobroExtraModal('InteresMensual')}
+                      title="Cobra el interés del mes y corre las cuotas pendientes un mes">
+                      📅 Pago de interés mensual ({formatMoney(interesMensualDe(selectedPrestamo))})
+                    </button>
+                  )}
                   <button className="btn btn-secondary btn-sm" onClick={async () => {
                     try {
                       await cobrosApi.enviarBalanceSms(selectedPrestamo.id);
@@ -3384,12 +3509,19 @@ function App() {
         <div className="modal-overlay" onClick={() => setShowCobroExtraModal(null)}>
           <div className="modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h2>{showCobroExtraModal === 'Mora' ? 'Registrar Cobro de Mora' : 'Registrar Pago de Solo Interés'}</h2>
+              <h2>{showCobroExtraModal === 'Mora' ? 'Registrar Cobro de Mora'
+                : showCobroExtraModal === 'InteresMensual' ? 'Pago de Interés Mensual'
+                : 'Registrar Pago de Solo Interés'}</h2>
               <button className="modal-close" onClick={() => setShowCobroExtraModal(null)}>×</button>
             </div>
             <form onSubmit={handleCobroExtra}>
               <div className="modal-body">
-                {showCobroExtraModal === 'Mora' ? (
+                {showCobroExtraModal === 'InteresMensual' ? (
+                  <div className="form-group">
+                    <label>Interés del mes ({selectedPrestamo.tasaInteres}% de {formatMoney(selectedPrestamo.montoPrestado)})</label>
+                    <div className="money" style={{ fontSize: '1.5rem', color: '#10b981' }}>{formatMoney(interesMensualDe(selectedPrestamo))}</div>
+                  </div>
+                ) : showCobroExtraModal === 'Mora' ? (
                   <div className="form-group">
                     <label>Saldo de Mora</label>
                     <div className="money" style={{ fontSize: '1.5rem', color: '#ef4444' }}>{formatMoney(moraDetalle?.moraSaldo ?? 0)}</div>
@@ -3425,8 +3557,20 @@ function App() {
                   💡 Este cobro entra a <strong>{cobroExtraForm.metodoPago}</strong> y a la reserva disponible.
                   {showCobroExtraModal === 'Mora'
                     ? ' Puede registrar un abono parcial de la mora.'
-                    : ' No amortiza capital: el préstamo mantiene su saldo.'}
+                    : showCobroExtraModal === 'InteresMensual'
+                      ? ' Va al fondo de Cobro de intereses. No amortiza capital.'
+                      : ' No amortiza capital: el préstamo mantiene su saldo.'}
                 </div>
+                {showCobroExtraModal === 'InteresMensual' && (
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '0.75rem', fontSize: '0.9rem', cursor: 'pointer' }}>
+                    <input type="checkbox" checked={cobroExtraForm.correrFechas}
+                      onChange={e => setCobroExtraForm({ ...cobroExtraForm, correrFechas: e.target.checked })} />
+                    Correr todas las cuotas pendientes un mes (mismo día)
+                    {selectedPrestamo.fechaVencimiento && cobroExtraForm.correrFechas && (
+                      <span style={{ color: '#888' }}>· vencimiento pasa a {formatDate((() => { const d = new Date(selectedPrestamo.fechaVencimiento); d.setUTCMonth(d.getUTCMonth() + 1); return d.toISOString(); })())}</span>
+                    )}
+                  </label>
+                )}
               </div>
               <div className="modal-footer">
                 <button type="button" className="btn btn-secondary" onClick={() => setShowCobroExtraModal(null)}>Cancelar</button>

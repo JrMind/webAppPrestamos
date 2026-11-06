@@ -100,3 +100,25 @@ public class ActualizarSalarioCobradorDto
 {
     public decimal SalarioMensual { get; set; }
 }
+
+// Fondos: Sistema, Papelería, Renovación, Cobro de intereses y Cobro de mora
+public class FondoDto
+{
+    public string Clave { get; set; } = string.Empty;   // Sistema | Papeleria | Renovacion | Intereses | Mora
+    public string Nombre { get; set; } = string.Empty;
+    public decimal Total { get; set; }
+    public decimal EsteMes { get; set; }
+    public int CantidadMovimientos { get; set; }
+    public List<MovimientoFondoDto> Movimientos { get; set; } = new(); // Los más recientes
+}
+
+public class MovimientoFondoDto
+{
+    public DateTime Fecha { get; set; }
+    public int PrestamoId { get; set; }
+    public string ClienteNombre { get; set; } = string.Empty;
+    public string? CobradorNombre { get; set; }
+    public decimal Monto { get; set; }
+    public string? MedioPago { get; set; }
+    public string? Observaciones { get; set; }
+}
