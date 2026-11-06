@@ -39,7 +39,6 @@ public class GananciasController : ControllerBase
         // --- 0. PRE-CÁLCULO GLOBALES MENSUALES ---
         decimal globalInteresMes = 0;
         decimal globalFlujoMes = 0; // Cobros esperados (Capital + Interés)
-        decimal globalGananciaCobradoresMes = 0;
 
         foreach (var p in prestamosActivos)
         {
@@ -55,13 +54,6 @@ public class GananciasController : ControllerBase
 
             globalFlujoMes += flujoPrestamoMes;
             globalInteresMes += interesPrestamoMes;
-
-            // Parte Cobrador
-            if (p.CobradorId.HasValue && p.TasaInteres > 0)
-            {
-                var factor = p.PorcentajeCobrador / p.TasaInteres;
-                globalGananciaCobradoresMes += interesPrestamoMes * factor;
-            }
         }
 
 
@@ -98,49 +90,10 @@ public class GananciasController : ControllerBase
             .Where(c => c.Frecuencia == "Quincenal")
             .Sum(c => c.Monto * 2); // x2 para mensualizar
 
-        var costosTotalesMes = costosMensuales + costosQuincenales;
+        // Los intereses de los aportadores externos son un costo operativo automático
+        var costosTotalesMes = costosMensuales + costosQuincenales + gastoMensualAportadores;
 
 
-        // --- 2. COBRADORES (Agrupados) ---
-        var cobradoresAgrupados = prestamosActivos
-            .Where(p => p.CobradorId.HasValue)
-            .GroupBy(p => new { p.CobradorId, CobradorNombre = p.Cobrador?.Nombre ?? "Sin nombre" })
-            .Select(g => {
-                // Ganancia Total Proyectada
-                var gananciaProyectadaTotal = g.Sum(p => {
-                    if (p.TasaInteres == 0) return 0;
-                    var factor = p.PorcentajeCobrador / p.TasaInteres;
-                    return p.MontoIntereses * factor;
-                });
-
-                // Ganancia Mes Proyectada
-                var gananciaInteresMes = g.Sum(p => {
-                    var cuotasMes = p.Cuotas.Where(c => c.FechaCobro >= startOfMonth && c.FechaCobro <= endOfMonth).ToList();
-                    if (cuotasMes.Count == 0 || p.MontoTotal <= 0 || p.TasaInteres == 0) return 0;
-                    
-                    decimal ratioInteres = p.MontoIntereses / p.MontoTotal;
-                    decimal interesMes = cuotasMes.Sum(c => c.MontoCuota * ratioInteres);
-                    decimal factor = p.PorcentajeCobrador / p.TasaInteres;
-                    return interesMes * factor;
-                });
-
-                var gananciaRealizadaTotal = 0m; 
-
-                return new
-                {
-                    CobradorId = g.Key.CobradorId,
-                    Nombre = g.Key.CobradorNombre,
-                    PrestamosAsignados = g.Count(),
-                    GananciaProyectada = gananciaProyectadaTotal,
-                    GananciaInteresMes = gananciaInteresMes, // Nuevo
-                    GananciaRealizada = gananciaRealizadaTotal,
-                    Detalle = g.Select(p => new { 
-                        p.Id, 
-                        p.MontoIntereses, 
-                        p.PorcentajeCobrador
-                    }).ToList()
-                };
-            }).ToList();
 
 
         // --- 3. SOCIOS (Fórmula: (Interés - 3% Aportador) / 3 Socios) ---
@@ -150,8 +103,6 @@ public class GananciasController : ControllerBase
         // Descuento mensual aportadores
         var descuentoAportador = gastoMensualAportadores;
         
-        // Ganancia proyectada de cobradores
-        var gananciaCobradoresTotal = cobradoresAgrupados.Sum(c => c.GananciaProyectada);
         
         // Ganancia de interés por socio = (InterésTotal - Aportadores - Cobradores) / 3
         var gananciaInteresPorSocio = totalInteresesGenerados / NUM_SOCIOS; // Full interest per socio
@@ -176,7 +127,7 @@ public class GananciasController : ControllerBase
             .ToListAsync();
         
         // Ganancia neta mensual por socio = (Flujo Total - Aportadores - Cobradores) / 3
-        var gananciaTotalMesPorSocio = (globalFlujoMes - gastoMensualAportadores - globalGananciaCobradoresMes) / NUM_SOCIOS;
+        var gananciaTotalMesPorSocio = (globalFlujoMes - gastoMensualAportadores) / NUM_SOCIOS;
         
         var sociosResumen = socios.Select(s => new
         {
@@ -223,18 +174,16 @@ public class GananciasController : ControllerBase
             ProyeccionInteresesMesActual = Math.Round(globalInteresMes, 0), // Interés bruto SIN descuentos
             FlujoTotalMes = Math.Round(globalFlujoMes, 0), // Capital + Intereses del mes
 
-            TotalGananciaCobradores = Math.Round(cobradoresAgrupados.Sum(c => c.GananciaProyectada), 0),
             GastoMensualAportadores = Math.Round(gastoMensualAportadores, 0),
             CostosTotalesMes = Math.Round(costosTotalesMes, 0),
-            // Ganancia Interés Neta = Intereses - Cobradores - Costos (aportadores ya están en costos)
-            GananciaInteresNeta = Math.Round(globalInteresMes - globalGananciaCobradoresMes - costosTotalesMes, 0),
+            // Ganancia Interés Neta = Intereses - Costos (los costos ya incluyen a los aportadores externos)
+            GananciaInteresNeta = Math.Round(globalInteresMes - costosTotalesMes, 0),
             NumeroSociosFijo = NUM_SOCIOS
         };
 
         return Ok(new
         {
             aportadores = aportadoresResumen,
-            cobradores = cobradoresAgrupados,
             socios = sociosResumen,
             resumen
         });

@@ -86,7 +86,6 @@ public class MetricasGeneralesDto
     public List<EstadisticasCobradorDto> EstadisticasCobradores { get; set; } = new();
     public List<InteresMensualDto> InteresesMensuales { get; set; } = new();
     public List<SalarioCobradorDto> SalariosCobradores { get; set; } = new();
-    public List<PrestamoVencidoDto> PrestamosVencidos { get; set; } = new();
 }
 
 public class SalarioCobradorDto

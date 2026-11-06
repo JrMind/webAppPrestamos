@@ -2,7 +2,7 @@ import {
     Cliente, CreateClienteDto, CreatePagoDto, CreatePrestamoDto,
     Cuota, DashboardMetricas, Pago, Prestamo, LoginDto, AuthResponse,
     Usuario, Cobrador, BalanceSocio, CobrosHoy, MovimientoCapital, Aporte,
-    MetricasGenerales, DistribucionPrestamos, MoraPrestamo, Fondo
+    MetricasGenerales, MoraPrestamo, Fondo, PrestamoVencido, BalanceEconomico
 } from './types';
 
 const API_URL = import.meta.env.DEV
@@ -205,25 +205,6 @@ export const cobrosApi = {
         const response = await fetch(`${API_URL}/cobros/${prestamoId}/enviar-balance`, {
             method: 'POST',
             headers: getHeaders(),
-        });
-        return handleResponse(response);
-    },
-
-    getComisiones: async (incluirParciales = false): Promise<import('./types').LiquidacionCobrador[]> => {
-        const response = await fetch(`${API_URL}/cobros/comisiones?incluirParciales=${incluirParciales}`, { headers: getHeaders() });
-        return handleResponse(response);
-    },
-
-    getComisionCobrador: async (cobradorId: number, incluirParciales = false): Promise<import('./types').LiquidacionCobrador> => {
-        const response = await fetch(`${API_URL}/cobros/comisiones/${cobradorId}?incluirParciales=${incluirParciales}`, { headers: getHeaders() });
-        return handleResponse(response);
-    },
-
-    liquidarCobrador: async (data: { cobradorId: number; monto: number; observaciones?: string }): Promise<{ message: string; liquidacionId: number }> => {
-        const response = await fetch(`${API_URL}/cobros/liquidar`, {
-            method: 'POST',
-            headers: getHeaders(),
-            body: JSON.stringify(data),
         });
         return handleResponse(response);
     },
@@ -523,6 +504,11 @@ export const dashboardApi = {
         const response = await fetch(`${API_URL}/dashboard/metricas`, { headers: getHeaders() });
         return handleResponse<DashboardMetricas>(response);
     },
+    getPrestamosVencidos: async (): Promise<PrestamoVencido[]> => {
+        const response = await fetch(`${API_URL}/dashboard/prestamos-vencidos`, { headers: getHeaders() });
+        return handleResponse<PrestamoVencido[]>(response);
+    },
+
     getFondos: async (): Promise<Fondo[]> => {
         const response = await fetch(`${API_URL}/dashboard/fondos`, { headers: getHeaders() });
         return handleResponse<Fondo[]>(response);
@@ -779,20 +765,6 @@ export interface ResumenParticipacion {
         gananciaMensual: number;
         estado: string;
     }>;
-    cobradores: Array<{
-        cobradorId: number;
-        nombre: string;
-        prestamosAsignados: number;
-        gananciaProyectada: number;
-        gananciaInteresMes: number; // Nuevo
-        gananciaRealizada: number;
-        detalle: Array<{
-            id: number;
-            montoIntereses: number;
-            porcentajeCobrador: number;
-            proyeccion: number;
-        }>;
-    }>;
     socios: Array<{
         id: number;
         nombre: string;
@@ -812,15 +784,41 @@ export interface ResumenParticipacion {
         totalInteresesProyectados: number;
         proyeccionInteresesMesActual: number;
         flujoTotalMes: number;
-        totalGananciaCobradores: number;
         totalGananciaSociosBruta: number;
         gastoMensualAportadores: number;
         costosTotalesMes: number;           // Nuevo: Costos operativos
-        gananciaInteresNeta: number;        // Nuevo: Intereses - Cobradores - Aportadores - Costos
+        gananciaInteresNeta: number;        // Intereses - Costos (incluye aportadores externos)
         sumaPartes: number;
         diferencia: number;
     };
 }
+
+// Balance económico (pestaña Balance económico)
+export const balanceEconomicoApi = {
+    get: async (anio?: number, mes?: number): Promise<BalanceEconomico> => {
+        const qs = anio && mes ? `?anio=${anio}&mes=${mes}` : '';
+        const response = await fetch(`${API_URL}/balance-economico${qs}`, { headers: getHeaders() });
+        return handleResponse<BalanceEconomico>(response);
+    },
+    actualizarCostoRuta: async (valor: number): Promise<void> => {
+        const response = await fetch(`${API_URL}/balance-economico/costo-ruta`, {
+            method: 'PUT', headers: getHeaders(), body: JSON.stringify({ valor }),
+        });
+        await handleResponse(response);
+    },
+    actualizarMoto: async (cobradorId: number, valor: number | null): Promise<void> => {
+        const response = await fetch(`${API_URL}/balance-economico/cobradores/${cobradorId}/moto`, {
+            method: 'PUT', headers: getHeaders(), body: JSON.stringify({ valor }),
+        });
+        await handleResponse(response);
+    },
+    actualizarPrestamo: async (cobradorId: number, prestamoId: number | null): Promise<void> => {
+        const response = await fetch(`${API_URL}/balance-economico/cobradores/${cobradorId}/prestamo`, {
+            method: 'PUT', headers: getHeaders(), body: JSON.stringify({ prestamoId }),
+        });
+        await handleResponse(response);
+    },
+};
 
 export const gananciasApi = {
     getResumenParticipacion: async (): Promise<ResumenParticipacion> => {
@@ -930,14 +928,6 @@ export const transferenciasApi = {
             headers: getHeaders(),
         });
         if (!response.ok) throw new Error('Error al eliminar transferencia');
-    },
-};
-
-// Distribución de préstamos
-export const distribucionApi = {
-    get: async (): Promise<DistribucionPrestamos> => {
-        const response = await fetch(`${API_URL}/prestamos/distribucion`, { headers: getHeaders() });
-        return handleResponse<import('./types').DistribucionPrestamos>(response);
     },
 };
 

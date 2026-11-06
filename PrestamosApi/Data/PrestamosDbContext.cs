@@ -28,7 +28,6 @@ public class PrestamosDbContext : DbContext
     public DbSet<PagoCosto> PagosCostos => Set<PagoCosto>();
     public DbSet<ConfiguracionSistema> ConfiguracionesSistema => Set<ConfiguracionSistema>();
     public DbSet<NotaPrestamo> NotasPrestamo => Set<NotaPrestamo>();
-    public DbSet<LiquidacionCobrador> LiquidacionesCobrador => Set<LiquidacionCobrador>();
     public DbSet<Gasto> Gastos => Set<Gasto>();
     public DbSet<Transferencia> Transferencias => Set<Transferencia>();
 
@@ -421,31 +420,6 @@ public class PrestamosDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasIndex(e => e.PrestamoId).HasDatabaseName("idx_notas_prestamo");
-        });
-
-        // LiquidacionCobrador
-        modelBuilder.Entity<LiquidacionCobrador>(entity =>
-        {
-            entity.ToTable("liquidacionescobrador");
-            entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.CobradorId).HasColumnName("cobradorid");
-            entity.Property(e => e.MontoLiquidado).HasColumnName("montoliquidado").HasColumnType("decimal(18,2)");
-            entity.Property(e => e.FechaLiquidacion).HasColumnName("fechaliquidacion").HasDefaultValueSql("NOW()");
-            entity.Property(e => e.Observaciones).HasColumnName("observaciones");
-            entity.Property(e => e.RealizadoPor).HasColumnName("realizadopor");
-
-            entity.HasOne(e => e.Cobrador)
-                .WithMany()
-                .HasForeignKey(e => e.CobradorId)
-                .OnDelete(DeleteBehavior.Cascade);
-
-            entity.HasOne(e => e.RealizadoPorUsuario)
-                .WithMany()
-                .HasForeignKey(e => e.RealizadoPor)
-                .OnDelete(DeleteBehavior.SetNull);
-
-            entity.HasIndex(e => e.CobradorId).HasDatabaseName("idx_liquidaciones_cobrador");
-            entity.HasIndex(e => e.FechaLiquidacion).HasDatabaseName("idx_liquidaciones_fecha");
         });
 
         // Transferencia

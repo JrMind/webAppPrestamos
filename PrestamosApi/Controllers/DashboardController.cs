@@ -352,8 +352,6 @@ public class DashboardController : BaseApiController
                 .Where(p => p.EstadoPrestamo == "Activo")
                 .ToListAsync();
 
-            var prestamosVencidos = await ObtenerPrestamosVencidosAsync(fechaScope, cobsScope);
-
             if (!prestamosActivos.Any())
             {
                 return Ok(new MetricasGeneralesDto
@@ -362,8 +360,7 @@ public class DashboardController : BaseApiController
                     CapitalFantasma = 0,
                     TotalPrestamosActivos = 0,
                     EstadisticasCobradores = new List<EstadisticasCobradorDto>(),
-                    SalariosCobradores = await ObtenerSalariosCobradoresAsync(cobsScope),
-                    PrestamosVencidos = prestamosVencidos
+                    SalariosCobradores = await ObtenerSalariosCobradoresAsync(cobsScope)
                 });
             }
 
@@ -529,8 +526,7 @@ public class DashboardController : BaseApiController
                 TotalPrestamosActivos = prestamosActivos.Count,
                 EstadisticasCobradores = cobradores,
                 InteresesMensuales = interesesMensuales,
-                SalariosCobradores = await ObtenerSalariosCobradoresAsync(cobsScope),
-                PrestamosVencidos = prestamosVencidos
+                SalariosCobradores = await ObtenerSalariosCobradoresAsync(cobsScope)
             };
 
             return Ok(resultado);
@@ -636,6 +632,18 @@ public class DashboardController : BaseApiController
             Fondo("Intereses", "Cobro de intereses", TiposPago.SoloInteres),
             Fondo("Mora", "Cobro de mora", TiposPago.Mora),
         });
+    }
+
+    /// <summary>
+    /// Préstamos vencidos (se muestran en Cobros): sin cuotas este mes ni posteriores y con saldo de meses pasados.
+    /// </summary>
+    [HttpGet("prestamos-vencidos")]
+    [AuthorizeRoles(RolUsuario.Socio, RolUsuario.Admin, RolUsuario.Administrador)]
+    public async Task<ActionResult<List<PrestamoVencidoDto>>> GetPrestamosVencidos()
+    {
+        var fechaScope = IsAdministrador() ? GetFechaInicioAcceso() : null;
+        var cobsScope  = IsAdministrador() ? GetCobradorIdsPermitidos() : null;
+        return Ok(await ObtenerPrestamosVencidosAsync(fechaScope, cobsScope));
     }
 
     // Préstamos vencidos: todas sus cuotas tenían fecha de cobro antes de este mes (no le queda

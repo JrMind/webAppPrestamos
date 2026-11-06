@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi, saldosApi, distribucionApi, moraApi } from './api';
-import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MorososResponse, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, LiquidacionCobrador, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto, DistribucionPrestamos, MoraPrestamo, Fondo } from './types';
+import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi, saldosApi, moraApi } from './api';
+import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MorososResponse, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto, MoraPrestamo, Fondo } from './types';
 import { MetricasCobradores } from './components/MetricasCobradores';
+import { CuotasVencidasPorCliente } from './components/CuotasVencidasPorCliente';
+import { PrestamosVencidos } from './components/PrestamosVencidos';
+import { BalanceEconomico } from './components/BalanceEconomico';
 import { calcularFechasCuotas } from './calendarioCuotas';
 import './App.css';
 
@@ -53,7 +56,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(getStoredUser);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'prestamosdia' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias' | 'metricas' | 'comisiones' | 'distribucion'>('prestamos');
+  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'prestamosdia' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias' | 'metricas'>('prestamos');
 
   // Data states
   const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
@@ -125,53 +128,6 @@ function App() {
     frecuencia: 'Mensual',
     descripcion: ''
   });
-
-  // Estado para Distribución de Préstamos
-  const [distribucionData, setDistribucionData] = useState<DistribucionPrestamos | null>(null);
-  const [loadingDistribucion, setLoadingDistribucion] = useState(false);
-
-  const recalcularGrupoDistribucion = (numero: number, prestamos: DistribucionPrestamos['grupos'][0]['prestamos']): DistribucionPrestamos['grupos'][0] => {
-    const totalCapital = prestamos.reduce((s, p) => s + p.capitalRestante, 0);
-    const totalIntereses = prestamos.reduce((s, p) => s + p.montoIntereses, 0);
-    const totalMontoCuota = prestamos.reduce((s, p) => s + p.montoCuota, 0);
-    // Tasa ponderada por capital
-    const tasaPonderadaCapital = totalCapital > 0
-      ? Math.round(prestamos.reduce((s, p) => s + p.capitalRestante * p.tasaInteres, 0) / totalCapital * 100) / 100
-      : 0;
-    // % capital en mora
-    const capitalEnMora = prestamos.filter(p => p.enMora).reduce((s, p) => s + p.capitalRestante, 0);
-    const porcentajeCapitalEnMora = totalCapital > 0
-      ? Math.round(capitalEnMora / totalCapital * 1000) / 10
-      : 0;
-    // Días promedio en mora
-    const conMora = prestamos.filter(p => p.enMora && p.diasEnMora > 0);
-    const diasPromedioMora = conMora.length > 0
-      ? Math.round(conMora.reduce((s, p) => s + p.diasEnMora, 0) / conMora.length)
-      : 0;
-    return { numero, prestamos, totalCapital, totalIntereses, totalMontoCuota, tasaPonderadaCapital, porcentajeCapitalEnMora, diasPromedioMora };
-  };
-
-  const handleMoverPrestamo = (prestamoId: number, fromNumero: number, toNumero: number) => {
-    if (!distribucionData) return;
-    const fromGrupo = distribucionData.grupos.find(g => g.numero === fromNumero)!;
-    const prestamo = fromGrupo.prestamos.find(p => p.id === prestamoId)!;
-    const newGrupos = distribucionData.grupos.map(g => {
-      if (g.numero === fromNumero) return recalcularGrupoDistribucion(g.numero, g.prestamos.filter(p => p.id !== prestamoId));
-      if (g.numero === toNumero)   return recalcularGrupoDistribucion(g.numero, [...g.prestamos, prestamo]);
-      return g;
-    });
-    setDistribucionData({ ...distribucionData, grupos: newGrupos, totalCapitalDistribuido: newGrupos.reduce((s, g) => s + g.totalCapital, 0) });
-  };
-
-  // Estados de Comisiones / Liquidación
-  const [comisiones, setComisiones] = useState<LiquidacionCobrador[]>([]);
-  const [loadingComisiones, setLoadingComisiones] = useState(false);
-  const [showLiquidarModal, setShowLiquidarModal] = useState(false);
-  const [liquidarCobradorId, setLiquidarCobradorId] = useState<number | null>(null);
-  const [liquidarCobradorNombre, setLiquidarCobradorNombre] = useState('');
-  const [liquidarMonto, setLiquidarMonto] = useState('');
-  const [liquidarObservaciones, setLiquidarObservaciones] = useState('');
-  const [liquidarSaldoPendiente, setLiquidarSaldoPendiente] = useState(0);
 
   // Estado para Pagos por Día
   const [pagosPorDiaData, setPagosPorDiaData] = useState<{
@@ -557,13 +513,6 @@ function App() {
   useEffect(() => { if (activeTab === 'sms') loadSmsCampaigns(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'smshistory') loadSmsHistory(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'balance') loadMiBalance(); }, [activeTab]);
-  useEffect(() => { if (activeTab === 'comisiones') loadComisiones(); }, [activeTab]);
-  useEffect(() => {
-    if (activeTab === 'distribucion' && !distribucionData) {
-      setLoadingDistribucion(true);
-      distribucionApi.get().then(setDistribucionData).catch(console.error).finally(() => setLoadingDistribucion(false));
-    }
-  }, [activeTab]);
 
   // New feature loaders
   const loadSmsCampaigns = async () => {
@@ -638,47 +587,6 @@ function App() {
       const data = await gananciasApi.getResumenParticipacion();
       setResumenParticipacion(data);
     } catch (error) { console.error('Error loading resumen participacion:', error); }
-  };
-
-  const loadComisiones = async () => {
-    setLoadingComisiones(true);
-    try {
-      const data = await cobrosApi.getComisiones(true);
-      setComisiones(data);
-    } catch (error) {
-      console.error('Error loading comisiones:', error);
-      showToast('Error al cargar comisiones', 'error');
-    } finally {
-      setLoadingComisiones(false);
-    }
-  };
-
-  const handleAbrirLiquidar = (cobrador: LiquidacionCobrador) => {
-    setLiquidarCobradorId(cobrador.cobradorId);
-    setLiquidarCobradorNombre(cobrador.cobradorNombre);
-    setLiquidarSaldoPendiente(cobrador.saldoPendiente);
-    setLiquidarMonto(cobrador.saldoPendiente > 0 ? cobrador.saldoPendiente.toFixed(0) : '');
-    setLiquidarObservaciones('');
-    setShowLiquidarModal(true);
-  };
-
-  const handleRegistrarLiquidacion = async () => {
-    if (!liquidarCobradorId || !liquidarMonto || Number(liquidarMonto) <= 0) {
-      showToast('Ingrese un monto válido', 'error');
-      return;
-    }
-    try {
-      await cobrosApi.liquidarCobrador({
-        cobradorId: liquidarCobradorId,
-        monto: Number(liquidarMonto),
-        observaciones: liquidarObservaciones || undefined
-      });
-      showToast(`Liquidación registrada para ${liquidarCobradorNombre}`, 'success');
-      setShowLiquidarModal(false);
-      loadComisiones();
-    } catch (error: unknown) {
-      showToast(error instanceof Error ? error.message : 'Error al registrar', 'error');
-    }
   };
 
   const handleCreateSmsCampaign = async (e: React.FormEvent) => {
@@ -1729,10 +1637,8 @@ function App() {
             <button className={`tab ${activeTab === 'smshistory' ? 'active' : ''}`} onClick={() => setActiveTab('smshistory')}>📨 Historial</button>
             {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'usuarios' ? 'active' : ''}`} onClick={() => setActiveTab('usuarios')}>👤 Usuarios</button>}
             {currentUser?.rol !== 'Administrador' && <button className={`tab ${activeTab === 'aportadores' ? 'active' : ''}`} onClick={() => setActiveTab('aportadores')}>Aportadores</button>}
-            {currentUser?.rol !== 'Administrador' && <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); loadCostos(); loadGastos(); loadTransferencias(); }}>📊 Ganancias</button>}
-            {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'comisiones' ? 'active' : ''}`} onClick={() => setActiveTab('comisiones')}>💳 Comisiones</button>}
+            {currentUser?.rol !== 'Administrador' && <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); loadCostos(); loadGastos(); loadTransferencias(); }}>⚖️ Balance económico</button>}
             {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'metricas' ? 'active' : ''}`} onClick={() => setActiveTab('metricas')}>📈 Métricas</button>}
-            {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'distribucion' ? 'active' : ''}`} onClick={() => setActiveTab('distribucion')}>⚖️ Distribución</button>}
           </div>
 
           {/* Prestamos Tab */}
@@ -1982,36 +1888,24 @@ function App() {
 
                   {cobrosDelMes.cuotasVencidas.length > 0 && (
                     <>
-                      <h4 style={{ color: '#ef4444', margin: '1rem 0 0.5rem' }}>⚠️ Cuotas Vencidas</h4>
-                      <div className="table-container">
-                        <table><thead><tr><th>✓</th><th>Cliente</th><th>Fecha</th><th>Días</th><th>Monto</th><th>Cobrador</th><th>Acciones</th></tr></thead>
-                          <tbody>{cobrosDelMes.cuotasVencidas.map(c => (
-                            <tr key={c.id} style={{ background: 'rgba(239,68,68,0.1)' }}>
-                              <td><input type="checkbox" checked={c.cobrado} onChange={e => handleMarcarCobrado(c.id, e.target.checked)} disabled={currentUser?.rol !== 'Socio'} /></td>
-                              <td><strong>{c.clienteNombre}</strong><div style={{ fontSize: '0.75rem' }}>{c.clienteTelefono}</div></td>
-                              <td style={{ color: '#ef4444' }}>{formatDate(c.fechaCobro)}</td>
-                              <td><span className="badge badge-red">{Math.abs(c.diasParaVencer)}d</span></td>
-                              <td className="money">{formatMoney(c.saldoPendiente)}</td>
-                              <td>{c.cobradorNombre || '-'}</td>
-                              <td>
-                                <div className="actions">
-                                  <button className="btn btn-secondary btn-sm" onClick={async () => {
-                                    const p = await prestamosApi.getById(c.prestamoId);
-                                    openDetalle(p);
-                                  }}>Ver</button>
-                                  <button className="btn btn-danger btn-sm" title="Enviar SMS recordatorio" onClick={async () => {
-                                    try {
-                                      await cobrosApi.enviarRecordatorio(c.id);
-                                      showToast('SMS recordatorio enviado', 'success');
-                                    } catch (e: any) { showToast(e.message || 'Error', 'error'); }
-                                  }}>📱 Cobrar</button>
-                                </div>
-                              </td>
-                            </tr>
-                          ))}</tbody>
-                        </table>
-                      </div>
+                      <h4 style={{ color: '#ef4444', margin: '1rem 0 0.5rem' }}>⚠️ Cuotas Vencidas por cliente</h4>
+                      <CuotasVencidasPorCliente
+                        cuotas={cobrosDelMes.cuotasVencidas}
+                        puedeMarcar={currentUser?.rol === 'Socio'}
+                        onMarcarCobrado={handleMarcarCobrado}
+                        onVerPrestamo={async prestamoId => { const p = await prestamosApi.getById(prestamoId); openDetalle(p); }}
+                        onRecordar={async cuotaId => {
+                          try {
+                            await cobrosApi.enviarRecordatorio(cuotaId);
+                            showToast('SMS recordatorio enviado', 'success');
+                          } catch (e: any) { showToast(e.message || 'Error', 'error'); }
+                        }}
+                      />
                     </>
+                  )}
+
+                  {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin' || currentUser?.rol === 'Administrador') && (
+                    <PrestamosVencidos onVerPrestamo={async prestamoId => { const p = await prestamosApi.getById(prestamoId); openDetalle(p); }} />
                   )}
                 </>
               ) : null}
@@ -2353,9 +2247,10 @@ function App() {
             </div>
           )}
 
-          {/* Ganancias Tab */}
+          {/* Balance económico (antes Ganancias) */}
           {activeTab === 'ganancias' && resumenParticipacion && (
             <div>
+              <BalanceEconomico />
 
               {/* Aportadores Externos */}
               <h4 style={{ margin: '1.5rem 0 0.5rem' }}>💵 Aportadores Externos ({resumenParticipacion.aportadores.length})</h4>
@@ -2402,26 +2297,6 @@ function App() {
                       </tr>
                     ))}
                     {resumenParticipacion.aportadores.length === 0 && <tr><td colSpan={5} className="empty-state">No hay aportadores externos</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-
-              {/* Cobradores */}
-              <h4 style={{ margin: '1.5rem 0 0.5rem' }}>🏃 Cobradores ({resumenParticipacion.cobradores.length})</h4>
-              <div className="table-container" style={{ marginBottom: '1.5rem' }}>
-                <table>
-                  <thead><tr><th>Cobrador</th><th>Préstamos</th><th>Comisión Proyectada Total</th><th>📅 Interés Mes</th><th>Comisión Realizada</th></tr></thead>
-                  <tbody>
-                    {resumenParticipacion.cobradores.map(c => (
-                      <tr key={c.cobradorId}>
-                        <td><strong>{c.nombre}</strong></td>
-                        <td>{c.prestamosAsignados}</td>
-                        <td className="money" style={{ color: '#f59e0b' }}>{formatMoney(c.gananciaProyectada)}</td>
-                        <td className="money" style={{ color: '#3b82f6' }}>{formatMoney(c.gananciaInteresMes)}</td>
-                        <td className="money" style={{ color: '#10b981' }}>{formatMoney(c.gananciaRealizada)}</td>
-                      </tr>
-                    ))}
-                    {resumenParticipacion.cobradores.length === 0 && <tr><td colSpan={4} className="empty-state">No hay cobradores con préstamos asignados</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -2475,7 +2350,7 @@ function App() {
 
               {/* Costos Operativos */}
               <h4 style={{ margin: '1.5rem 0 0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span>📋 Costos Operativos ({costos.length})</span>
+                <span>📋 Costos Operativos ({costos.length + resumenParticipacion.aportadores.length})</span>
                 <button onClick={() => handleOpenCostoModal()} className="btn btn-primary" style={{ fontSize: '0.85rem', padding: '0.5rem 1rem' }}>
                   + Nuevo Costo
                 </button>
@@ -2493,6 +2368,16 @@ function App() {
                     </tr>
                   </thead>
                   <tbody>
+                    {resumenParticipacion.aportadores.map(a => (
+                      <tr key={`aportador-${a.id}`}>
+                        <td><strong>Intereses {a.nombre}</strong></td>
+                        <td className="money" style={{ color: '#ef4444' }}>{formatMoney(a.gananciaMensual)}</td>
+                        <td><span className="badge badge-blue">Mensual</span></td>
+                        <td style={{ fontSize: '0.8rem', color: '#888' }}>{a.tasaInteres}% de {formatMoney(a.capitalAportado)} · aportador externo</td>
+                        <td><span className="badge badge-gray" title="Se calcula solo a partir del aportador externo">⚙️ Automático</span></td>
+                        <td></td>
+                      </tr>
+                    ))}
                     {costos.map(c => (
                       <tr key={c.id} style={{ opacity: c.activo ? 1 : 0.5 }}>
                         <td><strong>{c.nombre}</strong></td>
@@ -2619,163 +2504,8 @@ function App() {
             </div>
           )}
 
-          {/* Comisiones Tab */}
-          {activeTab === 'comisiones' && (currentUser?.rol === 'Admin' || currentUser?.rol === 'Socio') && (
-            <div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.5rem' }}>
-                <h3 style={{ margin: 0 }}>💳 Gestión de Comisiones</h3>
-                <button className="btn btn-secondary" onClick={loadComisiones} disabled={loadingComisiones}>
-                  {loadingComisiones ? 'Cargando...' : '🔄 Actualizar'}
-                </button>
-              </div>
-
-              {loadingComisiones ? (
-                <div className="loading"><div className="spinner"></div></div>
-              ) : comisiones.length === 0 ? (
-                <div className="empty-state">No hay cobradores con comisiones activas.</div>
-              ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(360px, 1fr))', gap: '1.5rem' }}>
-                  {comisiones.map(c => {
-                    const pct = c.totalComisionGeneral > 0
-                      ? Math.min(100, (c.totalLiquidado / c.totalComisionGeneral) * 100)
-                      : 0;
-                    const saldoColor = c.saldoPendiente > 0 ? '#f59e0b' : '#10b981';
-                    return (
-                      <div key={c.cobradorId} style={{ background: 'var(--surface)', borderRadius: '12px', padding: '1.25rem', border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: '1rem' }}>
-                        {/* Header del card */}
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <strong style={{ fontSize: '1.05rem' }}>{c.cobradorNombre}</strong>
-                            {c.cobradorTelefono && <div style={{ color: '#888', fontSize: '0.8rem' }}>{c.cobradorTelefono}</div>}
-                          </div>
-                          <span style={{ background: c.saldoPendiente > 0 ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)', color: saldoColor, borderRadius: '20px', padding: '0.3rem 0.8rem', fontSize: '0.85rem', fontWeight: 600 }}>
-                            {c.saldoPendiente > 0 ? 'Pendiente' : '✓ Al día'}
-                          </span>
-                        </div>
-
-                        {/* Métricas principales */}
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                          <div style={{ background: 'var(--background)', borderRadius: '8px', padding: '0.75rem' }}>
-                            <div style={{ color: '#888', fontSize: '0.75rem', marginBottom: '2px' }}>Comisión ganada</div>
-                            <div style={{ fontWeight: 700, color: '#3b82f6' }}>{formatMoney(c.totalComisionGeneral)}</div>
-                          </div>
-                          <div style={{ background: 'var(--background)', borderRadius: '8px', padding: '0.75rem' }}>
-                            <div style={{ color: '#888', fontSize: '0.75rem', marginBottom: '2px' }}>Total liquidado</div>
-                            <div style={{ fontWeight: 700, color: '#10b981' }}>{formatMoney(c.totalLiquidado)}</div>
-                          </div>
-                          <div style={{ background: 'var(--background)', borderRadius: '8px', padding: '0.75rem', gridColumn: '1 / -1' }}>
-                            <div style={{ color: '#888', fontSize: '0.75rem', marginBottom: '2px' }}>Saldo pendiente</div>
-                            <div style={{ fontWeight: 700, fontSize: '1.1rem', color: saldoColor }}>{formatMoney(c.saldoPendiente)}</div>
-                          </div>
-                        </div>
-
-                        {/* Barra de progreso */}
-                        <div>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.75rem', color: '#888', marginBottom: '4px' }}>
-                            <span>Liquidado</span>
-                            <span>{pct.toFixed(0)}%</span>
-                          </div>
-                          <div style={{ background: 'var(--border)', borderRadius: '999px', height: '6px' }}>
-                            <div style={{ background: pct >= 100 ? '#10b981' : '#3b82f6', width: `${pct}%`, height: '100%', borderRadius: '999px', transition: 'width 0.3s' }} />
-                          </div>
-                        </div>
-
-                        {/* Información adicional */}
-                        <div style={{ display: 'flex', gap: '1rem', fontSize: '0.8rem', color: '#888' }}>
-                          <span>📋 {c.totalPrestamos} préstamos</span>
-                          <span>✅ {c.totalCuotasPagadas} cuotas cobradas</span>
-                        </div>
-
-                        {/* Historial de liquidaciones */}
-                        {c.historialLiquidaciones && c.historialLiquidaciones.length > 0 && (
-                          <details style={{ fontSize: '0.8rem' }}>
-                            <summary style={{ cursor: 'pointer', color: '#888', marginBottom: '0.5rem' }}>
-                              Historial ({c.historialLiquidaciones.length} pagos)
-                            </summary>
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem', maxHeight: '160px', overflowY: 'auto' }}>
-                              {c.historialLiquidaciones.map(h => (
-                                <div key={h.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.4rem 0.6rem', background: 'var(--background)', borderRadius: '6px' }}>
-                                  <div>
-                                    <strong style={{ color: '#10b981' }}>{formatMoney(h.montoLiquidado)}</strong>
-                                    {h.observaciones && <span style={{ marginLeft: '0.4rem', color: '#888' }}>— {h.observaciones}</span>}
-                                  </div>
-                                  <span style={{ color: '#666' }}>{new Date(h.fechaLiquidacion).toLocaleDateString('es-CO')}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </details>
-                        )}
-
-                        {/* Botón liquidar */}
-                        <button
-                          className="btn btn-primary"
-                          style={{ width: '100%', opacity: c.saldoPendiente <= 0 ? 0.5 : 1 }}
-                          onClick={() => handleAbrirLiquidar(c)}
-                        >
-                          💳 {c.saldoPendiente > 0 ? 'Registrar Pago' : 'Registrar Abono'}
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-
         </div>
       </main>
-
-      {/* ─── Modal Liquidar ─── */}
-      {showLiquidarModal && (
-        <div className="modal-overlay" onClick={() => setShowLiquidarModal(false)}>
-          <div className="modal" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
-            <div className="modal-header">
-              <h2>💳 Liquidar a {liquidarCobradorNombre}</h2>
-              <button className="modal-close" onClick={() => setShowLiquidarModal(false)}>×</button>
-            </div>
-            <div className="modal-body">
-              <div style={{ background: 'rgba(59,130,246,0.08)', borderRadius: '8px', padding: '1rem', marginBottom: '1rem' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                  <span style={{ color: '#888' }}>Saldo pendiente:</span>
-                  <strong style={{ color: liquidarSaldoPendiente > 0 ? '#10b981' : '#666', fontSize: '1.1rem' }}>{formatMoney(liquidarSaldoPendiente)}</strong>
-                </div>
-              </div>
-              <div className="form-group">
-                <label>Monto a pagar *</label>
-                <input
-                  type="number"
-                  min="1"
-                  max={liquidarSaldoPendiente > 0 ? liquidarSaldoPendiente : undefined}
-                  value={liquidarMonto}
-                  onChange={e => setLiquidarMonto(e.target.value)}
-                  placeholder="Ingrese el monto"
-                  autoFocus
-                />
-                {liquidarSaldoPendiente > 0 && (
-                  <small style={{ color: '#888', marginTop: '4px', display: 'block' }}>
-                    Máximo recomendado: {formatMoney(liquidarSaldoPendiente)}
-                  </small>
-                )}
-              </div>
-              <div className="form-group">
-                <label>Observaciones</label>
-                <input
-                  type="text"
-                  value={liquidarObservaciones}
-                  onChange={e => setLiquidarObservaciones(e.target.value)}
-                  placeholder="Opcional..."
-                />
-              </div>
-            </div>
-            <div className="modal-footer">
-              <button className="btn btn-secondary" onClick={() => setShowLiquidarModal(false)}>Cancelar</button>
-              <button className="btn btn-primary" onClick={handleRegistrarLiquidacion}>
-                ✅ Registrar Liquidación
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Modals */}
       {showClienteModal && (
@@ -3792,262 +3522,6 @@ function App() {
       {activeTab === 'metricas' && (
         <div className="section">
           <MetricasCobradores />
-        </div>
-      )}
-
-      {/* Distribución de Préstamos Tab */}
-      {activeTab === 'distribucion' && (currentUser?.rol === 'Admin' || currentUser?.rol === 'Socio') && (
-        <div className="section">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-            <h3 style={{ margin: 0 }}>⚖️ Distribución equitativa de préstamos activos</h3>
-            <button className="btn btn-secondary" onClick={() => {
-              setLoadingDistribucion(true);
-              distribucionApi.get().then(setDistribucionData).catch(console.error).finally(() => setLoadingDistribucion(false));
-            }}>🔄 Recalcular</button>
-          </div>
-
-          {loadingDistribucion && <p style={{ color: '#6b7280' }}>Calculando distribución...</p>}
-
-          {distribucionData && !loadingDistribucion && (
-            <>
-              {/* Resumen general */}
-              <div className="kpi-grid" style={{ marginBottom: '1.5rem' }}>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #10b981' }}>
-                  <span className="kpi-title">Distribuidos (3 partes)</span>
-                  <span className="kpi-value" style={{ color: '#10b981' }}>{distribucionData.totalPrestamosDistribuidos}</span>
-                  <span className="kpi-sub">{formatMoney(distribucionData.totalCapitalDistribuido)} capital restante</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #ef4444' }}>
-                  <span className="kpi-title">Excluidos (&gt;4M)</span>
-                  <span className="kpi-value" style={{ color: '#ef4444' }}>{distribucionData.totalPrestamosExcluidos}</span>
-                  <span className="kpi-sub">{formatMoney(distribucionData.totalCapitalExcluido)} capital restante</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #f59e0b' }}>
-                  <span className="kpi-title">Congelados</span>
-                  <span className="kpi-value" style={{ color: '#f59e0b' }}>{distribucionData.totalPrestamosCongelados}</span>
-                  <span className="kpi-sub">{formatMoney(distribucionData.totalCapitalCongelado)} capital fijo</span>
-                </div>
-                <div className="kpi-card" style={{ borderLeft: '4px solid #6366f1' }}>
-                  <span className="kpi-title">Total en calle</span>
-                  <span className="kpi-value" style={{ color: '#6366f1' }}>
-                    {distribucionData.totalPrestamosDistribuidos + distribucionData.totalPrestamosExcluidos + distribucionData.totalPrestamosCongelados}
-                  </span>
-                  <span className="kpi-sub">{formatMoney(distribucionData.totalCapitalDistribuido + distribucionData.totalCapitalExcluido + distribucionData.totalCapitalCongelado)}</span>
-                </div>
-              </div>
-
-              {/* Las 3 partes */}
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-                {distribucionData.grupos.map(grupo => (
-                  <div key={grupo.numero} style={{ border: '2px solid #e5e7eb', borderRadius: '12px', overflow: 'hidden', background: '#fff' }}>
-                    {/* Encabezado del grupo */}
-                    <div style={{ background: grupo.numero === 1 ? '#3b82f6' : grupo.numero === 2 ? '#10b981' : '#8b5cf6', color: '#fff', padding: '0.75rem 1rem' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <strong style={{ fontSize: '1.1rem' }}>Parte {grupo.numero}</strong>
-                        <span style={{ fontSize: '0.85rem', opacity: 0.9 }}>{grupo.prestamos.length} préstamos</span>
-                      </div>
-                    </div>
-                    {/* KPIs del grupo */}
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '0.5rem', padding: '0.75rem', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase' }}>Capital</div>
-                        <div style={{ fontWeight: 700, color: '#111', fontSize: '0.95rem' }}>{formatMoney(grupo.totalCapital)}</div>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase' }}>Intereses totales</div>
-                        <div style={{ fontWeight: 700, color: '#10b981', fontSize: '0.95rem' }}>{formatMoney(grupo.totalIntereses)}</div>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase' }}>Cuota total/período</div>
-                        <div style={{ fontWeight: 700, color: '#3b82f6', fontSize: '0.95rem' }}>{formatMoney(grupo.totalMontoCuota)}</div>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase' }}>Tasa pond. capital</div>
-                        <div style={{ fontWeight: 700, color: '#f59e0b', fontSize: '0.95rem' }}>{grupo.tasaPonderadaCapital}%</div>
-                      </div>
-                      <div style={{ textAlign: 'center' }}>
-                        <div style={{ fontSize: '0.7rem', color: '#6b7280', textTransform: 'uppercase' }}>Capital en mora</div>
-                        <div style={{ fontWeight: 700, fontSize: '0.95rem' }}>
-                          <span style={{ color: grupo.porcentajeCapitalEnMora > 20 ? '#ef4444' : '#10b981' }}>
-                            {grupo.porcentajeCapitalEnMora}%
-                          </span>
-                          {grupo.diasPromedioMora > 0 && (
-                            <span style={{ color: '#6b7280', marginLeft: '0.4rem', fontSize: '0.75rem' }}>
-                              · {grupo.diasPromedioMora}d prom.
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    {/* Lista de préstamos */}
-                    <div style={{ maxHeight: '280px', overflowY: 'auto' }}>
-                      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.8rem' }}>
-                        <thead>
-                          <tr style={{ background: '#f3f4f6', position: 'sticky', top: 0 }}>
-                            <th style={{ padding: '0.4rem 0.5rem', textAlign: 'left', fontWeight: 600, color: '#374151' }}>Cliente</th>
-                            <th style={{ padding: '0.4rem 0.5rem', textAlign: 'right', fontWeight: 600, color: '#374151' }}>Capital</th>
-                            <th style={{ padding: '0.4rem 0.5rem', textAlign: 'right', fontWeight: 600, color: '#374151' }}>Cuota</th>
-                            <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', fontWeight: 600, color: '#374151' }}>Estado</th>
-                            <th style={{ padding: '0.4rem 0.5rem', textAlign: 'center', fontWeight: 600, color: '#374151' }}>Mover</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {grupo.prestamos.map(p => (
-                            <tr key={p.id} style={{ borderBottom: '1px solid #f3f4f6' }}>
-                              <td style={{ padding: '0.35rem 0.5rem' }}>
-                                <div style={{ fontWeight: 600, color: '#111' }}>{p.clienteNombre}</div>
-                                <div style={{ fontSize: '0.7rem', color: '#9ca3af' }}>{p.tasaInteres}% · {p.frecuenciaPago}</div>
-                              </td>
-                              <td style={{ padding: '0.35rem 0.5rem', textAlign: 'right', color: '#374151' }}>{formatMoney(p.capitalRestante)}</td>
-                              <td style={{ padding: '0.35rem 0.5rem', textAlign: 'right', color: '#3b82f6' }}>{formatMoney(p.montoCuota)}</td>
-                              <td style={{ padding: '0.35rem 0.5rem', textAlign: 'center' }}>
-                                {p.enMora
-                                  ? <span style={{ background: '#fee2e2', color: '#dc2626', borderRadius: '4px', padding: '1px 5px', fontSize: '0.7rem' }}>Mora</span>
-                                  : <span style={{ background: '#d1fae5', color: '#065f46', borderRadius: '4px', padding: '1px 5px', fontSize: '0.7rem' }}>OK</span>
-                                }
-                              </td>
-                              <td style={{ padding: '0.35rem 0.5rem', textAlign: 'center', whiteSpace: 'nowrap' }}>
-                                {([1, 2, 3] as const).filter(n => n !== grupo.numero).map(n => (
-                                  <button
-                                    key={n}
-                                    onClick={() => handleMoverPrestamo(p.id, grupo.numero, n)}
-                                    title={`Mover a Parte ${n}`}
-                                    style={{ fontSize: '0.65rem', padding: '2px 6px', margin: '1px', background: n === 1 ? '#3b82f6' : n === 2 ? '#10b981' : '#8b5cf6', color: '#fff', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 700 }}
-                                  >→P{n}</button>
-                                ))}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Préstamos excluidos */}
-              {distribucionData.prestamosExcluidos.length > 0 && (
-                <div style={{ marginTop: '1rem' }}>
-                  <h4 style={{ marginBottom: '0.75rem', color: '#dc2626' }}>
-                    🚫 Préstamos excluidos (capital &gt; $4.000.000) — {distribucionData.prestamosExcluidos.length} préstamos
-                  </h4>
-                  <p style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '0.75rem' }}>
-                    Si estos préstamos se dividieran entre las 3 partes, cada parte recibiría por cuota:
-                  </p>
-                  <div className="table-container">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Cliente</th>
-                          <th>Capital</th>
-                          <th>Tasa</th>
-                          <th>Frecuencia</th>
-                          <th>Cuotas</th>
-                          <th>Cuota total</th>
-                          <th>Estado</th>
-                          <th style={{ color: '#3b82f6' }}>Parte 1 x cuota</th>
-                          <th style={{ color: '#10b981' }}>Parte 2 x cuota</th>
-                          <th style={{ color: '#8b5cf6' }}>Parte 3 x cuota</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {distribucionData.prestamosExcluidos.map(p => (
-                          <tr key={p.id}>
-                            <td>
-                              <strong>{p.clienteNombre}</strong>
-                              <div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>{p.clienteCedula}</div>
-                            </td>
-                            <td className="money">{formatMoney(p.montoPrestado)}</td>
-                            <td>{p.tasaInteres}%</td>
-                            <td>{p.frecuenciaPago}</td>
-                            <td>{p.numeroCuotas}</td>
-                            <td className="money">{formatMoney(p.montoCuota)}</td>
-                            <td>
-                              {p.enMora
-                                ? <span className="badge badge-red">Mora</span>
-                                : <span className="badge badge-green">Al día</span>
-                              }
-                            </td>
-                            <td className="money" style={{ color: '#3b82f6', fontWeight: 600 }}>{formatMoney(p.aportePorParteCuota)}</td>
-                            <td className="money" style={{ color: '#10b981', fontWeight: 600 }}>{formatMoney(p.aportePorParteCuota)}</td>
-                            <td className="money" style={{ color: '#8b5cf6', fontWeight: 600 }}>{formatMoney(p.aportePorParteCuota)}</td>
-                          </tr>
-                        ))}
-                        {/* Fila de totales */}
-                        <tr style={{ fontWeight: 700, background: '#f9fafb', borderTop: '2px solid #e5e7eb' }}>
-                          <td colSpan={5}><strong>Total por cuota (si se distribuyeran)</strong></td>
-                          <td className="money">{formatMoney(distribucionData.prestamosExcluidos.reduce((s, p) => s + p.montoCuota, 0))}</td>
-                          <td></td>
-                          <td className="money" style={{ color: '#3b82f6' }}>
-                            {formatMoney(distribucionData.prestamosExcluidos.reduce((s, p) => s + p.aportePorParteCuota, 0))}
-                          </td>
-                          <td className="money" style={{ color: '#10b981' }}>
-                            {formatMoney(distribucionData.prestamosExcluidos.reduce((s, p) => s + p.aportePorParteCuota, 0))}
-                          </td>
-                          <td className="money" style={{ color: '#8b5cf6' }}>
-                            {formatMoney(distribucionData.prestamosExcluidos.reduce((s, p) => s + p.aportePorParteCuota, 0))}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
-              {distribucionData.prestamosExcluidos.length === 0 && (
-                <p style={{ color: '#10b981', fontSize: '0.9rem' }}>No hay préstamos con capital mayor a $4.000.000.</p>
-              )}
-
-              {/* Préstamos congelados */}
-              {distribucionData.prestamosCongelados.length > 0 && (
-                <div style={{ marginTop: '1.5rem' }}>
-                  <h4 style={{ marginBottom: '0.75rem', color: '#d97706' }}>
-                    🧊 Préstamos congelados (capital fijo) — {distribucionData.prestamosCongelados.length} préstamos · {formatMoney(distribucionData.totalCapitalCongelado)}
-                  </h4>
-                  <p style={{ fontSize: '0.85rem', color: '#6b7280', marginBottom: '0.75rem' }}>
-                    Solo pagan intereses. El capital no se reduce. Si se distribuyeran, cada parte recibiría por cuota:
-                  </p>
-                  <div className="table-container">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Cliente</th>
-                          <th>Capital fijo</th>
-                          <th>Tasa</th>
-                          <th>Frecuencia</th>
-                          <th>Estado</th>
-                          <th style={{ color: '#3b82f6' }}>Parte 1 x cuota</th>
-                          <th style={{ color: '#10b981' }}>Parte 2 x cuota</th>
-                          <th style={{ color: '#8b5cf6' }}>Parte 3 x cuota</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {distribucionData.prestamosCongelados.map(p => (
-                          <tr key={p.id}>
-                            <td><strong>{p.clienteNombre}</strong><div style={{ fontSize: '0.75rem', color: '#9ca3af' }}>{p.clienteCedula}</div></td>
-                            <td className="money" style={{ color: '#d97706', fontWeight: 700 }}>{formatMoney(p.montoPrestado)}</td>
-                            <td>{p.tasaInteres}%</td>
-                            <td>{p.frecuenciaPago}</td>
-                            <td>{p.enMora ? <span className="badge badge-red">Mora</span> : <span className="badge badge-green">Al día</span>}</td>
-                            <td className="money" style={{ color: '#3b82f6', fontWeight: 600 }}>{formatMoney(p.aportePorParteCuota)}</td>
-                            <td className="money" style={{ color: '#10b981', fontWeight: 600 }}>{formatMoney(p.aportePorParteCuota)}</td>
-                            <td className="money" style={{ color: '#8b5cf6', fontWeight: 600 }}>{formatMoney(p.aportePorParteCuota)}</td>
-                          </tr>
-                        ))}
-                        <tr style={{ fontWeight: 700, background: '#fef3c7', borderTop: '2px solid #fcd34d' }}>
-                          <td colSpan={4}><strong>Total cuota congelados (si se distribuyeran)</strong></td>
-                          <td></td>
-                          <td className="money" style={{ color: '#3b82f6' }}>{formatMoney(distribucionData.prestamosCongelados.reduce((s, p) => s + p.aportePorParteCuota, 0))}</td>
-                          <td className="money" style={{ color: '#10b981' }}>{formatMoney(distribucionData.prestamosCongelados.reduce((s, p) => s + p.aportePorParteCuota, 0))}</td>
-                          <td className="money" style={{ color: '#8b5cf6' }}>{formatMoney(distribucionData.prestamosCongelados.reduce((s, p) => s + p.aportePorParteCuota, 0))}</td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-            </>
-          )}
         </div>
       )}
 

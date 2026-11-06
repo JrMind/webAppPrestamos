@@ -123,7 +123,8 @@ public class CobrosController : BaseApiController
                 c.SaldoPendiente,
                 c.EstadoCuota,
                 c.Cobrado,
-                ClienteNombre = c.Prestamo!.Cliente!.Nombre,
+                ClienteId = c.Prestamo!.ClienteId,
+                ClienteNombre = c.Prestamo.Cliente!.Nombre,
                 ClienteTelefono = c.Prestamo.Cliente.Telefono,
                 CobradorNombre = c.Prestamo.Cobrador != null ? c.Prestamo.Cobrador.Nombre : null,
                 Vencido = false
@@ -146,7 +147,8 @@ public class CobrosController : BaseApiController
                 c.SaldoPendiente,
                 c.EstadoCuota,
                 c.Cobrado,
-                ClienteNombre = c.Prestamo!.Cliente!.Nombre,
+                ClienteId = c.Prestamo!.ClienteId,
+                ClienteNombre = c.Prestamo.Cliente!.Nombre,
                 ClienteTelefono = c.Prestamo.Cliente.Telefono,
                 CobradorNombre = c.Prestamo.Cobrador != null ? c.Prestamo.Cobrador.Nombre : null,
                 Vencido = true
@@ -403,7 +405,8 @@ public class CobrosController : BaseApiController
                 c.SaldoPendiente,
                 c.EstadoCuota,
                 c.Cobrado,
-                ClienteNombre = c.Prestamo!.Cliente!.Nombre,
+                ClienteId = c.Prestamo!.ClienteId,
+                ClienteNombre = c.Prestamo.Cliente!.Nombre,
                 ClienteTelefono = c.Prestamo.Cliente.Telefono,
                 CobradorNombre = c.Prestamo.Cobrador != null ? c.Prestamo.Cobrador.Nombre : null,
                 DiasParaVencer = 0
@@ -427,7 +430,8 @@ public class CobrosController : BaseApiController
                 c.SaldoPendiente,
                 c.EstadoCuota,
                 c.Cobrado,
-                ClienteNombre = c.Prestamo!.Cliente!.Nombre,
+                ClienteId = c.Prestamo!.ClienteId,
+                ClienteNombre = c.Prestamo.Cliente!.Nombre,
                 ClienteTelefono = c.Prestamo.Cliente.Telefono,
                 CobradorNombre = c.Prestamo.Cobrador != null ? c.Prestamo.Cobrador.Nombre : null,
                 DiasParaVencer = (int)(today - c.FechaCobro.Date).TotalDays * -1
@@ -450,7 +454,8 @@ public class CobrosController : BaseApiController
                 c.SaldoPendiente,
                 c.EstadoCuota,
                 c.Cobrado,
-                ClienteNombre = c.Prestamo!.Cliente!.Nombre,
+                ClienteId = c.Prestamo!.ClienteId,
+                ClienteNombre = c.Prestamo.Cliente!.Nombre,
                 ClienteTelefono = c.Prestamo.Cliente.Telefono,
                 CobradorNombre = c.Prestamo.Cobrador != null ? c.Prestamo.Cobrador.Nombre : null,
                 DiasParaVencer = (int)(c.FechaCobro.Date - today).TotalDays
@@ -763,211 +768,6 @@ public class CobrosController : BaseApiController
             montoAbonado = dto.Monto - montoRestante,
             montoRestante = montoRestante, // Si el abono excedió la deuda total
             cuotasAfectadas
-        });
-    }
-    // ──────────────────────────────────────────────────────────────
-    // LIQUIDACIÓN / COMISIONES DE COBRADORES
-    // ──────────────────────────────────────────────────────────────
-
-    /// <summary>
-    /// Devuelve la liquidación acumulada de TODOS los cobradores.
-    /// Solo Admin y Socio pueden acceder.
-    /// GET /api/cobros/comisiones
-    /// GET /api/cobros/comisiones?incluirParciales=true
-    /// </summary>
-    [HttpGet("comisiones")]
-    [AuthorizeRoles(RolUsuario.Admin, RolUsuario.Socio)]
-    public async Task<ActionResult<List<LiquidacionCobradorDto>>> GetComisionesTodosCobradores(
-        [FromQuery] bool incluirParciales = false)
-    {
-        var liquidaciones = await BuildLiquidaciones(cobradorId: null, incluirParciales);
-        return Ok(liquidaciones);
-    }
-
-    /// <summary>
-    /// Devuelve la liquidación acumulada de UN cobrador específico.
-    /// El propio cobrador también puede consultar la suya.
-    /// GET /api/cobros/comisiones/{cobradorId}
-    /// GET /api/cobros/comisiones/{cobradorId}?incluirParciales=true
-    /// </summary>
-    [HttpGet("comisiones/{cobradorId:int}")]
-    public async Task<ActionResult<LiquidacionCobradorDto>> GetComisionCobrador(
-        int cobradorId,
-        [FromQuery] bool incluirParciales = false)
-    {
-        // Un cobrador solo puede ver la suya propia; admin/socio pueden ver cualquiera
-        var currentUserId = GetCurrentUserId();
-        if (IsCobrador() && currentUserId != cobradorId)
-            return Forbid();
-
-        var liquidaciones = await BuildLiquidaciones(cobradorId, incluirParciales);
-
-        if (!liquidaciones.Any())
-            return NotFound(new { message = "Cobrador no encontrado o sin préstamos asignados" });
-
-        return Ok(liquidaciones.First());
-    }
-
-    // ── Método privado compartido por los dos endpoints ──────────
-    private async Task<List<LiquidacionCobradorDto>> BuildLiquidaciones(
-        int? cobradorId, bool incluirParciales)
-    {
-        // Traer cobradores con sus préstamos y cuotas en una sola consulta
-        var cobradores = await _context.Usuarios
-            .Where(u => u.Rol == RolUsuario.Cobrador && u.Activo
-                        && (cobradorId == null || u.Id == cobradorId))
-            .Include(u => u.PrestamosComoCobrador)
-                .ThenInclude(p => p.Cliente)
-            .Include(u => u.PrestamosComoCobrador)
-                .ThenInclude(p => p.Cuotas)
-            .AsNoTracking()
-            .ToListAsync();
-
-        // Traer todas las liquidaciones de esos cobradores de una vez
-        var cobradorIds = cobradores.Select(c => c.Id).ToList();
-        var liquidacionesPorCobrador = await _context.LiquidacionesCobrador
-            .Include(l => l.RealizadoPorUsuario)
-            .Where(l => cobradorIds.Contains(l.CobradorId))
-            .OrderByDescending(l => l.FechaLiquidacion)
-            .AsNoTracking()
-            .ToListAsync();
-
-        var resultado = new List<LiquidacionCobradorDto>();
-
-        foreach (var cobrador in cobradores)
-        {
-            var prestamosDto = new List<ComisionPrestamoDto>();
-
-            foreach (var prestamo in cobrador.PrestamosComoCobrador)
-            {
-                var pct = prestamo.PorcentajeCobrador;
-
-                // Cuotas completamente pagadas o abonadas
-                var cuotasPagadas = prestamo.Cuotas
-                    .Where(c => c.EstadoCuota == "Pagada" || c.EstadoCuota == "Abonada")
-                    .ToList();
-
-                // Cuotas con abono parcial (decisión del admin si incluirlas)
-                var cuotasParciales = incluirParciales
-                    ? prestamo.Cuotas.Where(c => c.EstadoCuota == "Parcial" && c.MontoPagado > 0).ToList()
-                    : new();
-
-                // Detalle de cuotas pagadas
-                var detallePagadas = cuotasPagadas.Select(c => new ComisionCuotaDto(
-                    CuotaId          : c.Id,
-                    NumeroCuota      : c.NumeroCuota,
-                    FechaPago        : c.FechaPago,
-                    MontoCuota       : Math.Round(c.MontoCuota, 2),
-                    MontoPagado      : Math.Round(c.MontoPagado, 2),
-                    MontoCapital     : Math.Round(c.MontoCapital, 2),
-                    MontoInteres     : Math.Round(c.MontoInteres, 2),
-                    PorcentajeCobrador: pct,
-                    ComisionCuota    : Math.Round(c.MontoPagado * pct / 100m, 2)
-                )).OrderBy(c => c.NumeroCuota).ToList();
-
-                var totalRecaudado  = cuotasPagadas.Sum(c => c.MontoPagado);
-                var comisionPrestamo = Math.Round(totalRecaudado * pct / 100m, 2);
-
-                var totalParcial    = cuotasParciales.Sum(c => c.MontoPagado);
-                var comisionParcial = Math.Round(totalParcial * pct / 100m, 2);
-
-                prestamosDto.Add(new ComisionPrestamoDto(
-                    PrestamoId          : prestamo.Id,
-                    ClienteNombre       : prestamo.Cliente?.Nombre ?? "—",
-                    ClienteCedula       : prestamo.Cliente?.Cedula ?? "—",
-                    MontoPrestado       : prestamo.MontoPrestado,
-                    EstadoPrestamo      : prestamo.EstadoPrestamo,
-                    PorcentajeCobrador  : pct,
-                    CuotasTotales       : prestamo.Cuotas.Count,
-                    CuotasPagadas       : cuotasPagadas.Count,
-                    CuotasParciales     : cuotasParciales.Count,
-                    TotalRecaudado      : Math.Round(totalRecaudado, 2),
-                    TotalRecaudadoParcial: Math.Round(totalParcial, 2),
-                    ComisionPrestamo    : comisionPrestamo,
-                    ComisionParcial     : comisionParcial,
-                    CuotasPagadasDetalle: detallePagadas
-                ));
-            }
-
-            var totalRec         = prestamosDto.Sum(p => p.TotalRecaudado);
-            var totalRecParcial  = prestamosDto.Sum(p => p.TotalRecaudadoParcial);
-            var totalCom         = prestamosDto.Sum(p => p.ComisionPrestamo);
-            var totalComParcial  = prestamosDto.Sum(p => p.ComisionParcial);
-
-            var totalComisionGeneral = Math.Round(totalCom + totalComParcial, 2);
-            var totalLiquidado = Math.Round(
-                liquidacionesPorCobrador.Where(l => l.CobradorId == cobrador.Id).Sum(l => l.MontoLiquidado), 2);
-            var saldoPendiente = Math.Round(totalComisionGeneral - totalLiquidado, 2);
-
-            var historial = liquidacionesPorCobrador
-                .Where(l => l.CobradorId == cobrador.Id)
-                .Select(l => new LiquidacionRegistroDto(
-                    Id: l.Id,
-                    MontoLiquidado: l.MontoLiquidado,
-                    FechaLiquidacion: l.FechaLiquidacion,
-                    Observaciones: l.Observaciones,
-                    RealizadoPorNombre: l.RealizadoPorUsuario?.Nombre
-                )).ToList();
-
-            resultado.Add(new LiquidacionCobradorDto(
-                CobradorId          : cobrador.Id,
-                CobradorNombre      : cobrador.Nombre,
-                CobradorTelefono    : cobrador.Telefono,
-                TotalPrestamos      : prestamosDto.Count,
-                TotalCuotasPagadas  : prestamosDto.Sum(p => p.CuotasPagadas),
-                TotalCuotasParciales: prestamosDto.Sum(p => p.CuotasParciales),
-                TotalRecaudado      : Math.Round(totalRec, 2),
-                TotalRecaudadoParcial: Math.Round(totalRecParcial, 2),
-                TotalComision       : Math.Round(totalCom, 2),
-                TotalComisionParcial: Math.Round(totalComParcial, 2),
-                TotalComisionGeneral: totalComisionGeneral,
-                TotalLiquidado      : totalLiquidado,
-                SaldoPendiente      : saldoPendiente,
-                FechaConsulta       : DateTime.UtcNow,
-                Prestamos           : prestamosDto.OrderBy(p => p.ClienteNombre).ToList(),
-                HistorialLiquidaciones: historial
-            ));
-        }
-
-        return resultado.OrderBy(c => c.CobradorNombre).ToList();
-    }
-
-    /// <summary>
-    /// Registra un pago al cobrador (liquidación parcial o total).
-    /// POST /api/cobros/liquidar
-    /// </summary>
-    [HttpPost("liquidar")]
-    [AuthorizeRoles(RolUsuario.Admin, RolUsuario.Socio)]
-    public async Task<ActionResult<object>> LiquidarCobrador([FromBody] RegistrarLiquidacionDto dto)
-    {
-        if (dto.Monto <= 0)
-            return BadRequest(new { message = "El monto a liquidar debe ser mayor que cero" });
-
-        var cobrador = await _context.Usuarios
-            .FirstOrDefaultAsync(u => u.Id == dto.CobradorId && u.Rol == RolUsuario.Cobrador);
-
-        if (cobrador == null)
-            return NotFound(new { message = "Cobrador no encontrado" });
-
-        var liquidacion = new LiquidacionCobrador
-        {
-            CobradorId       = dto.CobradorId,
-            MontoLiquidado   = Math.Round(dto.Monto, 2),
-            FechaLiquidacion = DateTime.UtcNow,
-            Observaciones    = dto.Observaciones,
-            RealizadoPor     = GetCurrentUserId()
-        };
-
-        _context.LiquidacionesCobrador.Add(liquidacion);
-        await _context.SaveChangesAsync();
-
-        return Ok(new
-        {
-            message = $"Liquidación de ${dto.Monto:N2} registrada para {cobrador.Nombre}",
-            liquidacionId = liquidacion.Id,
-            cobradorNombre = cobrador.Nombre,
-            monto = liquidacion.MontoLiquidado,
-            fecha = liquidacion.FechaLiquidacion
         });
     }
 }

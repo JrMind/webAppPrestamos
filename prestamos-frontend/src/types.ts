@@ -395,47 +395,6 @@ export interface CreatePrestamoConFuentesDto {
   valorPapeleria?: number;
 }
 
-// Liquidación de comisiones de cobrador
-export interface LiquidacionRegistro {
-  id: number;
-  montoLiquidado: number;
-  fechaLiquidacion: string;
-  observaciones?: string;
-  realizadoPorNombre?: string;
-}
-
-export interface LiquidacionCobrador {
-  cobradorId: number;
-  cobradorNombre: string;
-  cobradorTelefono?: string;
-  totalPrestamos: number;
-  totalCuotasPagadas: number;
-  totalCuotasParciales: number;
-  totalRecaudado: number;
-  totalRecaudadoParcial: number;
-  totalComision: number;
-  totalComisionParcial: number;
-  totalComisionGeneral: number;
-  totalLiquidado: number;
-  saldoPendiente: number;
-  fechaConsulta: string;
-  prestamos: ComisionPrestamo[];
-  historialLiquidaciones?: LiquidacionRegistro[];
-}
-
-export interface ComisionPrestamo {
-  prestamoId: number;
-  clienteNombre: string;
-  clienteCedula: string;
-  montoPrestado: number;
-  estadoPrestamo: string;
-  porcentajeCobrador: number;
-  cuotasTotales: number;
-  cuotasPagadas: number;
-  totalRecaudado: number;
-  comisionPrestamo: number;
-}
-
 // SMS Campaign Types
 export interface SmsCampaign {
   id: number;
@@ -494,6 +453,7 @@ export interface CuotaCobroMes {
   saldoPendiente: number;
   estadoCuota: string;
   cobrado: boolean;
+  clienteId?: number;
   clienteNombre: string;
   clienteTelefono?: string;
   cobradorNombre?: string;
@@ -699,7 +659,50 @@ export interface MetricasGenerales {
   estadisticasCobradores: EstadisticasCobrador[];
   interesesMensuales: InteresMensual[];
   salariosCobradores: SalarioCobrador[];
-  prestamosVencidos: PrestamoVencido[];
+}
+
+// Balance económico: costos por prioridad y salario por cobrador, y balance general del negocio
+export interface CostoBalance {
+  clave: string;
+  nombre: string;
+  monto: number;
+  cubierto: number;
+}
+
+export interface BalanceCobrador {
+  cobradorId: number;
+  cobradorNombre: string;
+  capitalACargo: number;
+  interesProgramado: number;
+  interesCobrado: number;
+  moraCobrada: number;
+  recaudo: number;
+  costos: CostoBalance[];
+  totalCostos: number;
+  costosCubiertos: number;
+  moto: number;
+  prestamoAsociadoId: number | null;
+  salario: number;
+  salarioCorresponde: number;
+  excedente: number;
+  estado: 'NoCubreCostos' | 'SalarioParcial' | 'Rentable';
+}
+
+export interface BalanceEconomico {
+  anio: number;
+  mes: number;
+  costoRuta: number;
+  tasaCostoCapital: number;
+  cobradores: BalanceCobrador[];
+  negocio: {
+    interesCobrado: number;
+    moraCobrada: number;
+    ingresos: number;
+    costos: CostoBalance[];
+    totalCostos: number;
+    salariosCobradores: number;
+    resultado: number;
+  };
 }
 
 // Fondos: Sistema, Papelería, Renovación, Cobro de intereses y Cobro de mora
@@ -790,56 +793,6 @@ export interface ProgramadoCobrador {
   saldadoSinPago: number;
 }
 
-// Distribución de préstamos
-export interface PrestamoDistribucionItem {
-  id: number;
-  clienteNombre: string;
-  clienteCedula: string;
-  capitalRestante: number;
-  tasaInteres: number;
-  tipoInteres: string;
-  frecuenciaPago: string;
-  numeroCuotas: number;
-  montoCuota: number;
-  montoIntereses: number;
-  saldoPendiente: number;
-  enMora: boolean;
-  diasEnMora: number;
-}
 
-export interface GrupoDistribucion {
-  numero: number;
-  prestamos: PrestamoDistribucionItem[];
-  totalCapital: number;
-  totalIntereses: number;
-  totalMontoCuota: number;
-  tasaPonderadaCapital: number;
-  porcentajeCapitalEnMora: number;
-  diasPromedioMora: number;
-}
 
-export interface PrestamoExcluidoDistribucion {
-  id: number;
-  clienteNombre: string;
-  clienteCedula: string;
-  montoPrestado: number;
-  tasaInteres: number;
-  frecuenciaPago: string;
-  numeroCuotas: number;
-  montoCuota: number;
-  montoIntereses: number;
-  enMora: boolean;
-  aportePorParteCuota: number;
-}
 
-export interface DistribucionPrestamos {
-  grupos: GrupoDistribucion[];
-  prestamosExcluidos: PrestamoExcluidoDistribucion[];   // capital > 4M, no congelados
-  prestamosCongelados: PrestamoExcluidoDistribucion[];  // EsCongelado = true
-  totalCapitalDistribuido: number;
-  totalCapitalExcluido: number;
-  totalCapitalCongelado: number;
-  totalPrestamosDistribuidos: number;
-  totalPrestamosExcluidos: number;
-  totalPrestamosCongelados: number;
-}
