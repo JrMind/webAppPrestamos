@@ -156,7 +156,7 @@ export const BalanceEconomico = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
                 <strong style={{ fontSize: '1.05rem' }}>{c.cobradorNombre}</strong>
-                <span style={{ ...muted, marginLeft: '0.75rem' }}>Capital a cargo: <strong style={{ color: 'inherit' }}>{formatMoney(c.capitalACargo)}</strong></span>
+                <span style={{ ...muted, marginLeft: '0.75rem' }} title="Monto prestado de sus préstamos activos y vencidos">Capital a cargo (activos y vencidos): <strong style={{ color: 'inherit' }}>{formatMoney(c.capitalACargo)}</strong></span>
               </div>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ padding: '0.2rem 0.7rem', borderRadius: 999, fontSize: '0.8rem', fontWeight: 600, background: est.color }}>{est.texto}</span>

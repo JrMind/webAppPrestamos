@@ -98,8 +98,9 @@ public class BalanceEconomicoController : BaseApiController
         var cobradoresOcultos = todosCobradores.Where(c => config.ContainsKey(PrefijoOculto + c.Id))
             .Select(c => new CobradorOcultoDto { CobradorId = c.Id, CobradorNombre = c.Nombre }).ToList();
 
+        // Capital a cargo: préstamos activos y vencidos (un vencido sigue en la calle y lo sigue cobrando él)
         var prestamosActivos = await _context.Prestamos
-            .Where(p => p.EstadoPrestamo == "Activo")
+            .Where(p => p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido")
             .Select(p => new { p.CobradorId, p.MontoPrestado })
             .ToListAsync();
 
