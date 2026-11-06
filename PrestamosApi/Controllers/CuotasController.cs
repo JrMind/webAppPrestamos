@@ -115,8 +115,10 @@ public class CuotasController : ControllerBase
         // Un préstamo es "Vencido" solo cuando su fecha de última cuota ya pasó
         var hoyUtc = DateTime.UtcNow.Date;
 
+        // Solo pasa a Vencido si todavía debe algo
         var prestamosAVencer = await _context.Prestamos
-            .Where(p => p.EstadoPrestamo == "Activo" && p.FechaVencimiento < hoyUtc)
+            .Where(p => p.EstadoPrestamo == "Activo" && p.FechaVencimiento < hoyUtc
+                     && (p.EsCongelado || p.Cuotas.Any(c => c.SaldoPendiente > 0.01m)))
             .ToListAsync();
 
         foreach (var prestamo in prestamosAVencer)

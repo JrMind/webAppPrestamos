@@ -91,9 +91,15 @@ public class AutomatedCierreWorker : BackgroundService
                 if (pendiente != null && p.FechaVencimiento.Date != pendiente.FechaCobro.Date)
                     p.FechaVencimiento = pendiente.FechaCobro;
             }
-            else if (p.Cuotas.Count > 0 && p.Cuotas.All(c => c.EstadoCuota == "Pagada"))
+            else if (p.Cuotas.Count > 0 && p.Cuotas.All(c => c.EstadoCuota == "Pagada" || c.SaldoPendiente <= 0.01m))
             {
-                // Todas las cuotas cobradas (p. ej. con "Marcar cobrado") pero el préstamo seguía Activo/Vencido
+                // Nada pendiente (todas cobradas, p. ej. con "Marcar cobrado", o con saldo 0 en otro estado)
+                // pero el préstamo seguía Activo/Vencido
+                foreach (var c in p.Cuotas.Where(c => c.EstadoCuota != "Pagada"))
+                {
+                    c.EstadoCuota = "Pagada";
+                    c.SaldoPendiente = 0;
+                }
                 p.EstadoPrestamo = "Pagado";
                 marcadosPagados++;
             }
@@ -108,8 +114,10 @@ public class AutomatedCierreWorker : BackgroundService
                     congeladosReparados, marcadosPagados);
         }
 
+        // Solo pasa a Vencido si todavía debe algo (un préstamo sin saldo no está vencido, está pagado)
         var prestamosAVencer = await context.Prestamos
-            .Where(p => p.EstadoPrestamo == "Activo" && p.FechaVencimiento < hoyUtc)
+            .Where(p => p.EstadoPrestamo == "Activo" && p.FechaVencimiento < hoyUtc
+                     && (p.EsCongelado || p.Cuotas.Any(c => c.SaldoPendiente > 0.01m)))
             .ToListAsync();
 
         foreach (var p in prestamosAVencer)
