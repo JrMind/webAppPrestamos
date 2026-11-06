@@ -281,7 +281,8 @@ public class DashboardController : BaseApiController
                     .Where(c => (c.Prestamo!.EstadoPrestamo == "Activo" || c.Prestamo.EstadoPrestamo == "Vencido")
                              && c.Prestamo.EsCongelado == false
                              && (c.EstadoCuota == "Pendiente" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida" || c.EstadoCuota == "Mora"))
-                    .SumAsync(c => c.MontoCapital);
+                    // Proporcional a lo que falta: una cuota abonada a medias no tiene pendiente todo su capital
+                    .SumAsync(c => c.MontoCuota > 0 ? c.MontoCapital * c.SaldoPendiente / c.MontoCuota : c.MontoCapital);
 
                 var capitalCongelados = await ScopePrestamos(_context.Prestamos, fechaScope, cobsScope)
                     .Where(p => (p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido")
