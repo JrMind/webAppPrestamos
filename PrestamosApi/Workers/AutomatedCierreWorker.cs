@@ -3,6 +3,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.EntityFrameworkCore;
 using PrestamosApi.Data;
+using PrestamosApi.Models;
 using PrestamosApi.Services;
 
 namespace PrestamosApi.Workers;
@@ -66,77 +67,119 @@ public class AutomatedCierreWorker : BackgroundService
         var prestamoService = scope.ServiceProvider.GetRequiredService<IPrestamoService>();
         var hoyUtc = DateTime.UtcNow.Date;
 
-        var vigentes = await context.Prestamos
-            .Include(p => p.Cuotas)
-            .Where(p => p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido")
-            .ToListAsync();
+        // Cada paso se guarda por separado: si uno falla (p. ej. un congelado con datos raros),
+        // los demás igual se aplican y el error queda en el log con su causa real.
 
-        int congeladosReparados = 0, marcadosPagados = 0;
-        foreach (var p in vigentes)
+        // 1) Préstamos normales sin nada pendiente -> Pagado
+        var normales = await context.Prestamos
+            .Include(p => p.Cuotas)
+            .Where(p => (p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido") && !p.EsCongelado)
+            .ToListAsync();
+        var marcadosPagados = 0;
+        foreach (var p in normales.Where(p => p.Cuotas.Count > 0
+                     && p.Cuotas.All(c => c.EstadoCuota == "Pagada" || c.SaldoPendiente <= 0.01m)))
         {
-            if (p.EsCongelado)
+            // Todas cobradas (p. ej. con "Marcar cobrado") o con saldo 0 en otro estado
+            foreach (var c in p.Cuotas.Where(c => c.EstadoCuota != "Pagada"))
             {
-                // Congelado sin cuota de interés pendiente (se cobró estando "Vencido" o con "Marcar cobrado"):
-                // generar la siguiente para que vuelva a aparecer en Cobros
-                var nueva = prestamoService.GenerarCuotaCongeladaSiFalta(p);
+                c.EstadoCuota = "Pagada";
+                c.SaldoPendiente = 0;
+            }
+            p.EstadoPrestamo = "Pagado";
+            marcadosPagados++;
+        }
+        if (await GuardarAsync(context, "marcar Pagado los préstamos sin saldo") && marcadosPagados > 0)
+            _logger.LogInformation("Préstamos sin saldo marcados Pagado: {Pagados}", marcadosPagados);
+
+        // 2) Congelados: generar la cuota de interés que falte y alinear su vencimiento (uno por uno)
+        var congelados = await context.Prestamos
+            .Include(p => p.Cuotas)
+            .Where(p => (p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido") && p.EsCongelado)
+            .ToListAsync();
+        var congeladosReparados = 0;
+        foreach (var p in congelados)
+        {
+            CuotaPrestamo? nueva;
+            try
+            {
+                nueva = prestamoService.GenerarCuotaCongeladaSiFalta(p);
                 if (nueva != null)
                 {
                     context.CuotasPrestamo.Add(nueva);
-                    congeladosReparados++;
-                    continue;
                 }
-
-                // El vencimiento de un congelado es su cuota pendiente
-                var pendiente = p.Cuotas.Where(c => c.EstadoCuota != "Pagada").OrderBy(c => c.FechaCobro).FirstOrDefault();
-                if (pendiente != null && p.FechaVencimiento.Date != pendiente.FechaCobro.Date)
-                    p.FechaVencimiento = pendiente.FechaCobro;
-            }
-            else if (p.Cuotas.Count > 0 && p.Cuotas.All(c => c.EstadoCuota == "Pagada" || c.SaldoPendiente <= 0.01m))
-            {
-                // Nada pendiente (todas cobradas, p. ej. con "Marcar cobrado", o con saldo 0 en otro estado)
-                // pero el préstamo seguía Activo/Vencido
-                foreach (var c in p.Cuotas.Where(c => c.EstadoCuota != "Pagada"))
+                else
                 {
-                    c.EstadoCuota = "Pagada";
-                    c.SaldoPendiente = 0;
+                    // El vencimiento de un congelado es su cuota pendiente
+                    var pendiente = p.Cuotas.Where(c => c.EstadoCuota != "Pagada").OrderBy(c => c.FechaCobro).FirstOrDefault();
+                    if (pendiente != null && p.FechaVencimiento.Date != pendiente.FechaCobro.Date)
+                        p.FechaVencimiento = pendiente.FechaCobro;
                 }
-                p.EstadoPrestamo = "Pagado";
-                marcadosPagados++;
             }
+            catch (Exception ex)
+            {
+                // Un congelado con datos raros (fechas, frecuencia) no debe frenar a los demás
+                _logger.LogError(ex, "⚠️ No se pudo calcular la cuota del congelado #{Id}: {Causa}", p.Id, ex.Message);
+                Console.WriteLine($"⚠️ Estados de préstamos: congelado #{p.Id} omitido: {ex.Message}");
+                continue;
+            }
+            if (!context.ChangeTracker.HasChanges()) continue;
+            if (await GuardarAsync(context, $"reparar el préstamo congelado #{p.Id}") && nueva != null)
+                congeladosReparados++;
         }
+        if (congeladosReparados > 0)
+            _logger.LogInformation("Congelados con nueva cuota de interés: {Congelados}", congeladosReparados);
 
-        if (context.ChangeTracker.HasChanges())
-        {
-            await context.SaveChangesAsync();
-            if (congeladosReparados > 0 || marcadosPagados > 0)
-                _logger.LogInformation(
-                    "Préstamos reparados: {Congelados} congelados con nueva cuota, {Pagados} marcados Pagado",
-                    congeladosReparados, marcadosPagados);
-        }
-
-        // Solo pasa a Vencido si todavía debe algo (un préstamo sin saldo no está vencido, está pagado)
+        // 3) Vencido solo si todavía debe algo; reactivar los Vencido cuyo vencimiento aún no pasó
         var prestamosAVencer = await context.Prestamos
             .Where(p => p.EstadoPrestamo == "Activo" && p.FechaVencimiento < hoyUtc
                      && (p.EsCongelado || p.Cuotas.Any(c => c.SaldoPendiente > 0.01m)))
             .ToListAsync();
-
         foreach (var p in prestamosAVencer)
             p.EstadoPrestamo = "Vencido";
 
-        // Revertir préstamos marcados "Vencido" cuya fecha de vencimiento aún no ha pasado
         var prestamosAReactivar = await context.Prestamos
             .Where(p => p.EstadoPrestamo == "Vencido" && p.FechaVencimiento >= hoyUtc)
             .ToListAsync();
-
         foreach (var p in prestamosAReactivar)
             p.EstadoPrestamo = "Activo";
 
-        if (prestamosAVencer.Any() || prestamosAReactivar.Any())
-        {
-            await context.SaveChangesAsync();
+        if ((prestamosAVencer.Any() || prestamosAReactivar.Any())
+            && await GuardarAsync(context, "actualizar Vencido/Activo"))
             _logger.LogInformation(
                 "Estados préstamos actualizados: {Vencidos} marcados Vencido, {Reactivados} reactivados a Activo",
                 prestamosAVencer.Count, prestamosAReactivar.Count);
+    }
+
+    /// <summary>
+    /// Guarda los cambios pendientes. Si falla, registra la causa real (el error interno de la base
+    /// de datos, no solo "An error occurred while saving") y descarta esos cambios para no arrastrarlos
+    /// al siguiente paso.
+    /// </summary>
+    private async Task<bool> GuardarAsync(PrestamosDbContext context, string paso)
+    {
+        if (!context.ChangeTracker.HasChanges()) return true;
+        try
+        {
+            await context.SaveChangesAsync();
+            return true;
+        }
+        catch (Exception ex)
+        {
+            var causa = ex.InnerException?.Message ?? ex.Message;
+            _logger.LogError(ex, "⚠️ No se pudo {Paso}: {Causa}", paso, causa);
+            Console.WriteLine($"⚠️ Estados de préstamos: no se pudo {paso}: {causa}");
+            // Descartar solo los cambios que fallaron; el resto de entidades sigue rastreado
+            foreach (var entry in context.ChangeTracker.Entries().Where(e => e.State != EntityState.Unchanged).ToList())
+            {
+                if (entry.State == EntityState.Added)
+                    entry.State = EntityState.Detached;
+                else
+                {
+                    entry.CurrentValues.SetValues(entry.OriginalValues);
+                    entry.State = EntityState.Unchanged;
+                }
+            }
+            return false;
         }
     }
 }
