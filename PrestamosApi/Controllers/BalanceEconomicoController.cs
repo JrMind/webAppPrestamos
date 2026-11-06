@@ -98,10 +98,18 @@ public class BalanceEconomicoController : BaseApiController
         var cobradoresOcultos = todosCobradores.Where(c => config.ContainsKey(PrefijoOculto + c.Id))
             .Select(c => new CobradorOcultoDto { CobradorId = c.Id, CobradorNombre = c.Nombre }).ToList();
 
-        // Capital a cargo: préstamos activos y vencidos (un vencido sigue en la calle y lo sigue cobrando él)
+        // Capital a cargo: solo el capital que falta por cobrar de sus préstamos activos y vencidos.
+        // Normales: la parte de capital de lo que falta de cada cuota. Congelados: el capital que deben.
         var prestamosActivos = await _context.Prestamos
             .Where(p => p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido")
-            .Select(p => new { p.CobradorId, p.MontoPrestado })
+            .Select(p => new
+            {
+                p.CobradorId,
+                CapitalPendiente = p.EsCongelado
+                    ? p.MontoPrestado
+                    : p.Cuotas.Where(c => c.EstadoCuota != "Pagada")
+                        .Sum(c => c.MontoCuota > 0 ? c.MontoCapital * c.SaldoPendiente / c.MontoCuota : c.MontoCapital)
+            })
             .ToListAsync();
 
         // Préstamos asociados a cobradores: cuotas que vencen en el mes
@@ -133,7 +141,7 @@ public class BalanceEconomicoController : BaseApiController
         var filas = new List<BalanceCobradorDto>();
         foreach (var cob in cobradores)
         {
-            var capitalACargo = prestamosActivos.Where(p => p.CobradorId == cob.Id).Sum(p => p.MontoPrestado);
+            var capitalACargo = prestamosActivos.Where(p => p.CobradorId == cob.Id).Sum(p => p.CapitalPendiente);
             var interesCobrado = cuotasPagadasMes.Where(c => c.Prestamo?.CobradorId == cob.Id).Sum(InteresDeCuota)
                                + pagosSinCuotaMes.Where(p => p.TipoPago == TiposPago.SoloInteres && p.Prestamo?.CobradorId == cob.Id).Sum(p => p.MontoPago);
             var moraCobrada = pagosSinCuotaMes.Where(p => p.TipoPago == TiposPago.Mora && p.Prestamo?.CobradorId == cob.Id).Sum(p => p.MontoPago);
