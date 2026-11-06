@@ -105,7 +105,10 @@ public class ComposicionCapitalDto
 {
     public int? CobradorId { get; set; }
     public string CobradorNombre { get; set; } = string.Empty;
-    public int Prestamos { get; set; }
+    public int Prestamos { get; set; }             // Préstamos que todavía deben algo (los que se cuentan)
+    public int Activos { get; set; }
+    public int Vencidos { get; set; }
+    public int VencidosSinSaldo { get; set; }      // Marcados Vencido pero sin nada pendiente: deberían estar Pagado (no se cuentan)
     public decimal CapitalPrestado { get; set; }   // Suma de las partes
     public decimal Recuperado { get; set; }        // Capital de cuotas ya pagadas (y abonos a capital en congelados)
     public decimal AtrasadoMesesPasados { get; set; } // Capital sin pagar de cuotas de meses anteriores

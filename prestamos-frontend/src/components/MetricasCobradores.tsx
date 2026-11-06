@@ -269,7 +269,15 @@ export const MetricasCobradores = () => {
                   {composicion.map((x, i) => (
                     <tr key={x.cobradorId ?? 'sin'} style={{ background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)' }}>
                       <td style={{ ...s.td, fontWeight: 600 }}>{x.cobradorNombre}</td>
-                      <td style={s.td}>{x.prestamos}</td>
+                      <td style={s.td}>
+                        {x.prestamos}
+                        <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>{x.activos} activos · {x.vencidos} vencidos</div>
+                        {x.vencidosSinSaldo > 0 && (
+                          <div style={{ fontSize: '0.72rem', color: 'var(--accent-orange, #f97316)' }} title="Marcados Activo/Vencido pero sin nada pendiente: deberían estar Pagado. No se cuentan.">
+                            + {x.vencidosSinSaldo} sin saldo (no se cuentan)
+                          </div>
+                        )}
+                      </td>
                       <td style={{ ...s.td, fontWeight: 700 }}>{formatMoney(x.capitalPrestado)}</td>
                       {cols.map(c => (
                         <td key={c.label} style={{ ...s.td, color: c.color, fontWeight: c.color ? 700 : 400 }}>
@@ -291,7 +299,9 @@ export const MetricasCobradores = () => {
               </table>
             </div>
             <p style={{ ...s.kpiSub, padding: '0.75rem 1.25rem 1rem' }}>
-              Capital prestado = Ya recuperado + Atrasado + Pendiente este mes + Meses futuros + Congelados. Incluye préstamos activos y vencidos.
+              Capital prestado = Ya recuperado + Atrasado + Pendiente este mes + Meses futuros + Congelados. Incluye préstamos activos y vencidos
+              que todavía deben algo; por eso puede haber más préstamos que en "Detalle por cobrador", que solo cuenta los activos.
+              Los préstamos "sin saldo" ya están pagados pero siguen marcados como activos/vencidos: no se cuentan aquí.
               "Atrasado" es el capital de cuotas de meses anteriores que no se ha pagado. En los congelados la cuota es solo interés,
               así que su capital no está en ninguna cuota: se muestra aparte (y lo abonado a capital cuenta como recuperado).
             </p>

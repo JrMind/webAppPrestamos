@@ -714,6 +714,9 @@ export interface ComposicionCapital {
   cobradorId: number | null;
   cobradorNombre: string;
   prestamos: number;
+  activos: number;
+  vencidos: number;
+  vencidosSinSaldo: number;
   capitalPrestado: number;
   recuperado: number;
   atrasadoMesesPasados: number;

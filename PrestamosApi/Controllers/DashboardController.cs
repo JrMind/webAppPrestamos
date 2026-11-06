@@ -657,12 +657,17 @@ public class DashboardController : BaseApiController
             .Where(p => p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido")
             .ToListAsync();
 
+        // Un préstamo normal sin nada pendiente ya está pagado aunque siga marcado Activo/Vencido:
+        // no se cuenta (solo inflaría "Ya recuperado"), pero se informa cuántos hay.
+        static bool SinSaldo(Prestamo p) => !p.EsCongelado && p.Cuotas.All(c => c.SaldoPendiente <= 0.01m);
+
         var filas = prestamos
             .GroupBy(p => new { p.CobradorId, Nombre = p.Cobrador != null ? p.Cobrador.Nombre : "Sin cobrador" })
             .Select(g =>
             {
                 decimal recuperado = 0, atrasado = 0, esteMes = 0, futuros = 0, congelados = 0;
-                foreach (var p in g)
+                var vivos = g.Where(p => !SinSaldo(p)).ToList();
+                foreach (var p in vivos)
                 {
                     if (p.EsCongelado)
                     {
@@ -689,7 +694,10 @@ public class DashboardController : BaseApiController
                 {
                     CobradorId = g.Key.CobradorId,
                     CobradorNombre = g.Key.Nombre,
-                    Prestamos = g.Count(),
+                    Prestamos = vivos.Count,
+                    Activos = vivos.Count(p => p.EstadoPrestamo == "Activo"),
+                    Vencidos = vivos.Count(p => p.EstadoPrestamo == "Vencido"),
+                    VencidosSinSaldo = g.Count(p => SinSaldo(p)),
                     Recuperado = Math.Round(recuperado, 0),
                     AtrasadoMesesPasados = Math.Round(atrasado, 0),
                     PendienteEsteMes = Math.Round(esteMes, 0),
