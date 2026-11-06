@@ -509,6 +509,13 @@ export const dashboardApi = {
         return handleResponse<PrestamoSinSaldo[]>(response);
     },
 
+    marcarPagadosSinSaldo: async (): Promise<{ prestamosMarcados: number; cuotasNormalizadas: number; message: string }> => {
+        const response = await fetch(`${API_URL}/dashboard/prestamos-sin-saldo/marcar-pagados`, {
+            method: 'POST', headers: getHeaders(),
+        });
+        return handleResponse(response);
+    },
+
     getComposicionCapital: async (): Promise<ComposicionCapital[]> => {
         const response = await fetch(`${API_URL}/dashboard/composicion-capital`, { headers: getHeaders() });
         return handleResponse<ComposicionCapital[]>(response);

@@ -762,6 +762,52 @@ public class DashboardController : BaseApiController
     }
 
     /// <summary>
+    /// Marca como Pagado los préstamos normales Activo/Vencido que tienen cuotas y no deben nada
+    /// (misma regla que el proceso automático al iniciar). Las cuotas con saldo 0 en otro estado
+    /// quedan como Pagada. Los préstamos sin cuotas no se tocan. Devuelve cuántos cambió.
+    /// </summary>
+    [HttpPost("prestamos-sin-saldo/marcar-pagados")]
+    [AuthorizeRoles(RolUsuario.Socio, RolUsuario.Admin)]
+    public async Task<IActionResult> MarcarPagadosSinSaldo()
+    {
+        var prestamos = await _context.Prestamos
+            .Include(p => p.Cuotas)
+            .Where(p => (p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido") && !p.EsCongelado)
+            .Where(p => p.Cuotas.Any() && p.Cuotas.All(c => c.EstadoCuota == "Pagada" || c.SaldoPendiente <= 0.01m))
+            .ToListAsync();
+
+        var cuotasNormalizadas = 0;
+        foreach (var p in prestamos)
+        {
+            foreach (var c in p.Cuotas.Where(c => c.EstadoCuota != "Pagada"))
+            {
+                c.EstadoCuota = "Pagada";
+                c.SaldoPendiente = 0;
+                cuotasNormalizadas++;
+            }
+            p.EstadoPrestamo = "Pagado";
+        }
+
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            // Mostrar la causa real en pantalla (p. ej. una restricción de la base de datos)
+            return StatusCode(500, new { message = $"No se pudo guardar: {ex.InnerException?.Message ?? ex.Message}" });
+        }
+
+        return Ok(new
+        {
+            prestamosMarcados = prestamos.Count,
+            cuotasNormalizadas,
+            ids = prestamos.Select(p => p.Id).ToList(),
+            message = $"{prestamos.Count} préstamos marcados como Pagado ({cuotasNormalizadas} cuotas con saldo 0 pasaron a Pagada)"
+        });
+    }
+
+    /// <summary>
     /// Préstamos vencidos (se muestran en Cobros): sin cuotas este mes ni posteriores y con saldo de meses pasados.
     /// </summary>
     [HttpGet("prestamos-vencidos")]

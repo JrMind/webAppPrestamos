@@ -76,6 +76,24 @@ export const MetricasCobradores = () => {
   const [composicion, setComposicion] = useState<ComposicionCapital[] | null>(null);
   const [sinSaldo, setSinSaldo] = useState<PrestamoSinSaldo[] | null>(null);
   const [verSinSaldo, setVerSinSaldo] = useState(false);
+  const [resultadoMarcar, setResultadoMarcar] = useState<{ ok: boolean; texto: string } | null>(null);
+  const [marcando, setMarcando] = useState(false);
+
+  const marcarPagados = async (cantidad: number) => {
+    if (!confirm(`¿Marcar como Pagado los ${cantidad} préstamos que no deben nada? No se borra nada: solo cambia su estado.`)) return;
+    setMarcando(true);
+    try {
+      const r = await dashboardApi.marcarPagadosSinSaldo();
+      setResultadoMarcar({ ok: true, texto: `✅ ${r.message}` });
+      const [comp, lista] = await Promise.all([dashboardApi.getComposicionCapital(), dashboardApi.getPrestamosSinSaldo()]);
+      setComposicion(comp);
+      setSinSaldo(lista);
+    } catch (e) {
+      setResultadoMarcar({ ok: false, texto: `❌ ${e instanceof Error ? e.message : 'Error al marcar'}` });
+    } finally {
+      setMarcando(false);
+    }
+  };
 
   const guardarSalario = async () => {
     if (!salarioEditando || !metricas) return;
@@ -322,8 +340,20 @@ export const MetricasCobradores = () => {
                     🔍 Préstamos marcados activos/vencidos que no deben nada · {sinSaldo.filter(x => x.tipo === 'SinSaldo').length} sin saldo
                     {sinSaldo.some(x => x.tipo === 'SinCuotas') && ` · ${sinSaldo.filter(x => x.tipo === 'SinCuotas').length} sin cuotas`}
                   </span>
-                  <span style={{ color: 'var(--text-muted)' }}>{verSinSaldo ? '▾ Ocultar' : '▸ Ver lista'}</span>
+                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.75rem' }}>
+                    {sinSaldo.some(x => x.tipo === 'SinSaldo') && (
+                      <button disabled={marcando}
+                        onClick={e => { e.stopPropagation(); marcarPagados(sinSaldo.filter(x => x.tipo === 'SinSaldo').length); }}
+                        style={{ background: 'var(--accent-green)', color: '#fff', border: 'none', borderRadius: 'var(--radius-sm)', padding: '0.3rem 0.7rem', cursor: 'pointer', fontWeight: 600 }}>
+                        {marcando ? 'Marcando…' : `✓ Marcar como Pagado (${sinSaldo.filter(x => x.tipo === 'SinSaldo').length})`}
+                      </button>
+                    )}
+                    <span style={{ color: 'var(--text-muted)' }}>{verSinSaldo ? '▾ Ocultar' : '▸ Ver lista'}</span>
+                  </span>
                 </div>
+                {resultadoMarcar && (
+                  <div style={{ padding: '0.5rem 1.25rem', color: resultadoMarcar.ok ? 'var(--accent-green)' : 'var(--accent-red)' }}>{resultadoMarcar.texto}</div>
+                )}
                 {verSinSaldo && (
                   <div style={{ overflowX: 'auto', maxHeight: 420, overflowY: 'auto' }}>
                     <table style={s.table}>
