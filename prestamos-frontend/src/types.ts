@@ -697,6 +697,7 @@ export interface BalanceEconomico {
   tasaCostoCapital: number;
   cobradores: BalanceCobrador[];
   costosOperativos: { id: number; nombre: string; montoMensual: number; cobradorIds: number[] }[];
+  cobradoresOcultos: { cobradorId: number; cobradorNombre: string }[];
   negocio: {
     interesCobrado: number;
     moraCobrada: number;

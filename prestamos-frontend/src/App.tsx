@@ -180,31 +180,6 @@ function App() {
     }
   };
 
-  // Estados para edición inline en Ganancias Socios
-  const [editingGananciaSocioId, setEditingGananciaSocioId] = useState<number | null>(null);
-  const [editMontoSocio, setEditMontoSocio] = useState<string>('');
-
-  const handleStartEditGananciaSocio = (id: number, currentMonto: number) => {
-    setEditingGananciaSocioId(id);
-    setEditMontoSocio(currentMonto.toString());
-  };
-
-  const handleSaveGananciaSocio = async (id: number) => {
-    try {
-      if (!editMontoSocio) return;
-      await aportesApi.ajustarCapital({
-        usuarioId: id,
-        nuevoCapital: Number(editMontoSocio)
-      });
-      showToast('Capital de socio actualizado', 'success');
-      setEditingGananciaSocioId(null);
-      loadResumenParticipacion(); // Recargar datos
-    } catch (error) {
-      showToast('Error al actualizar capital', 'error');
-      console.error(error);
-    }
-  };
-
   // Handlers para Costos Operativos
   const loadCostos = async () => {
     try {
@@ -505,6 +480,8 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   useEffect(() => { if (activeTab === 'cobros') { if (filtroCobradorId === 'morosos') { loadMorosos(); } else { loadCobrosDelMes(); } loadCobradoresList(); } }, [activeTab, filtroCobradorId]);
+  // El selector "Asociar como préstamo de cobrador" del detalle necesita la lista antes de abrirse
+  useEffect(() => { if (showDetalleModal && cobradoresList.length === 0) loadCobradoresList(); }, [showDetalleModal]);
   useEffect(() => { if (activeTab === 'prestamosdia') loadPrestamosDelDia(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'socios') loadBalanceSocios(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'usuarios') loadUsuarios(); }, [activeTab]);
@@ -2301,53 +2278,6 @@ function App() {
                 </table>
               </div>
 
-              {/* Socios */}
-              <h4 style={{ margin: '1.5rem 0 0.5rem' }}>👥 Socios ({resumenParticipacion.socios.length})</h4>
-              <div className="table-container">
-                <table>
-                  <thead><tr><th>Socio</th><th>Capital Aportado</th><th>Capital Actual</th><th>% Participación</th><th>Ganancia Proyectada Total</th><th>📅 Interés Mes</th><th>💵 Flujo Neto Mes</th><th>Ganancia Realizada</th></tr></thead>
-                  <tbody>
-                    {resumenParticipacion.socios.map(s => (
-                      <tr key={s.id}>
-                        <td><strong>{s.nombre}</strong></td>
-                        <td className="money">{formatMoney(s.capitalAportado)}</td>
-                        <td className="money" style={{ color: '#10b981' }}>
-                          {editingGananciaSocioId === s.id ? (
-                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                              <input
-                                type="number"
-                                value={editMontoSocio}
-                                onChange={e => setEditMontoSocio(e.target.value)}
-                                style={{ width: '120px', padding: '0.25rem', background: '#333', border: '1px solid #444', color: '#fff', borderRadius: '4px' }}
-                              />
-                              <button onClick={() => handleSaveGananciaSocio(s.id)} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Guardar">💾</button>
-                              <button onClick={() => setEditingGananciaSocioId(null)} style={{ background: 'none', border: 'none', cursor: 'pointer' }} title="Cancelar">❌</button>
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
-                              {formatMoney(s.capitalActual)}
-                              <span
-                                onClick={() => handleStartEditGananciaSocio(s.id, s.capitalActual)}
-                                style={{ cursor: 'pointer', fontSize: '0.9rem', opacity: 0.6 }}
-                                title="Editar Capital Actual">
-                                ✏️
-                              </span>
-                            </div>
-                          )}
-                        </td>
-                        <td>{s.porcentaje}%</td>
-                        <td className="money">{formatMoney(s.gananciaProyectadaTotal)}</td>
-                        <td className="money" style={{ color: '#3b82f6' }}>{formatMoney(s.gananciaInteresMes)}</td>
-                        <td className="money" style={{ color: '#06b6d4' }}>{formatMoney(s.flujoNetoMes)}</td>
-                        <td className="money" style={{ color: '#10b981' }}>{formatMoney(s.gananciaRealizada)}</td>
-                      </tr>
-                    ))}
-
-                    {resumenParticipacion.socios.length === 0 && <tr><td colSpan={6} className="empty-state">No hay socios registrados</td></tr>}
-                  </tbody>
-                </table>
-              </div>
-
               {/* Costos Operativos */}
               <h4 style={{ margin: '1.5rem 0 0.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span>📋 Costos Operativos ({costos.length + resumenParticipacion.aportadores.length})</span>
@@ -3110,7 +3040,6 @@ function App() {
                   }}>📱 Enviar Balance SMS</button>
                   {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && (
                     <select value="" title="Su cuota mensual pasa a ser un costo que ese cobrador debe cubrir en el Balance económico"
-                      onFocus={() => { if (cobradoresList.length === 0) loadCobradoresList(); }}
                       onChange={async e => {
                         const cobradorId = Number(e.target.value);
                         if (!cobradorId) return;

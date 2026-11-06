@@ -30,6 +30,7 @@ public class BalanceEconomicoController : BaseApiController
     private const string PrefijoPrestamo = "PrestamoCobrador:";
     private const string PrefijoSalario = "SalarioCobrador:";
     private const string PrefijoCostoCobradores = "CostoOperativoCobradores:"; // costoId -> "1,5" (ids de cobradores)
+    private const string PrefijoOculto = "BalanceOcultarCobrador:"; // cobrador que no se muestra ni paga ruta
 
     private readonly PrestamosDbContext _context;
 
@@ -49,7 +50,7 @@ public class BalanceEconomicoController : BaseApiController
         var config = await _context.ConfiguracionesSistema
             .Where(c => c.Clave == ClaveCostoRuta || c.Clave.StartsWith(PrefijoMoto)
                      || c.Clave.StartsWith(PrefijoPrestamo) || c.Clave.StartsWith(PrefijoSalario)
-                     || c.Clave.StartsWith(PrefijoCostoCobradores))
+                     || c.Clave.StartsWith(PrefijoCostoCobradores) || c.Clave.StartsWith(PrefijoOculto))
             .ToDictionaryAsync(c => c.Clave, c => c.Valor);
 
         decimal LeerDecimal(string clave, decimal porDefecto = 0m) =>
@@ -88,11 +89,14 @@ public class BalanceEconomicoController : BaseApiController
             .ToListAsync();
 
         // ── Cobradores y su capital a cargo ────────────────────────
-        var cobradores = await _context.Usuarios
+        var todosCobradores = await _context.Usuarios
             .Where(u => u.Rol == RolUsuario.Cobrador && u.Activo)
             .OrderBy(u => u.Nombre)
             .Select(u => new { u.Id, u.Nombre })
             .ToListAsync();
+        var cobradores = todosCobradores.Where(c => !config.ContainsKey(PrefijoOculto + c.Id)).ToList();
+        var cobradoresOcultos = todosCobradores.Where(c => config.ContainsKey(PrefijoOculto + c.Id))
+            .Select(c => new CobradorOcultoDto { CobradorId = c.Id, CobradorNombre = c.Nombre }).ToList();
 
         var prestamosActivos = await _context.Prestamos
             .Where(p => p.EstadoPrestamo == "Activo")
@@ -211,12 +215,16 @@ public class BalanceEconomicoController : BaseApiController
 
         var costosNegocio = new List<CostoCobradorDto>
         {
-            new() { Clave = "aportadores", Nombre = "Intereses a aportadores externos", Monto = Math.Round(costoAportadoresMes, 0) },
-            new() { Clave = "operativos", Nombre = "Costos operativos", Monto = Math.Round(costosOperativosMes, 0) },
+            new()
+            {
+                Clave = "operativos",
+                Nombre = $"Costos operativos (incluye {costoAportadoresMes:N0} de aportadores externos)",
+                Monto = Math.Round(costosOperativosMes + costoAportadoresMes, 0)
+            },
             new() { Clave = "ruta", Nombre = $"Rutas ({cobradores.Count} × {costoRuta:N0})", Monto = costoRuta * cobradores.Count },
-            new() { Clave = "motos", Nombre = "Motos", Monto = filas.Sum(f => f.Moto) },
-            new() { Clave = "prestamos", Nombre = "Cuotas de préstamos de cobradores", Monto = filas.Sum(f => f.Costos.Where(c => c.Clave == "prestamo").Sum(c => c.Monto)) },
         };
+        var motos = filas.Sum(f => f.Moto);
+        if (motos > 0) costosNegocio.Add(new() { Clave = "motos", Nombre = "Motos", Monto = motos });
         var disponibleNegocio = ingresos;
         foreach (var c in costosNegocio)
         {
@@ -234,6 +242,7 @@ public class BalanceEconomicoController : BaseApiController
             CostoRuta = costoRuta,
             TasaCostoCapital = Math.Round(tasaCapital, 2),
             Cobradores = filas,
+            CobradoresOcultos = cobradoresOcultos,
             CostosOperativos = costosConCobradores.Select(x => new CostoOperativoAsociableDto
             {
                 Id = x.Costo.Id,
@@ -287,6 +296,16 @@ public class BalanceEconomicoController : BaseApiController
         if (prestamo == null) return BadRequest(new { message = $"No existe el préstamo #{dto.PrestamoId}" });
         await GuardarAsync(PrefijoPrestamo + cobradorId, prestamo.Id.ToString(), $"Préstamo asociado al cobrador {cobradorId}");
         return Ok(new { prestamoId = prestamo.Id, clienteNombre = prestamo.Cliente?.Nombre });
+    }
+
+    /// <summary>Oculta o vuelve a mostrar un cobrador en el balance (oculto: no paga ruta ni cuenta en costos).</summary>
+    [HttpPut("cobradores/{cobradorId:int}/visible")]
+    public async Task<IActionResult> CambiarVisible(int cobradorId, [FromBody] VisibleDto dto)
+    {
+        if (!await EsCobradorAsync(cobradorId)) return NotFound(new { message = "Cobrador no encontrado" });
+        if (dto.Visible) await BorrarAsync(PrefijoOculto + cobradorId);
+        else await GuardarAsync(PrefijoOculto + cobradorId, "1", $"Cobrador {cobradorId} oculto en el balance económico");
+        return Ok(new { cobradorId, visible = dto.Visible });
     }
 
     /// <summary>Asocia un costo operativo a uno o varios cobradores (lista vacía lo desasocia).</summary>
@@ -357,6 +376,7 @@ public class BalanceEconomicoController : BaseApiController
     public record ValorOpcionalDto(decimal? Valor);
     public record PrestamoAsociadoDto(int? PrestamoId);
     public record CostoCobradoresDto(List<int>? CobradorIds);
+    public record VisibleDto(bool Visible);
 }
 
 public class CostoCobradorDto
@@ -408,7 +428,14 @@ public class BalanceEconomicoDto
     public decimal TasaCostoCapital { get; set; }
     public List<BalanceCobradorDto> Cobradores { get; set; } = new();
     public List<CostoOperativoAsociableDto> CostosOperativos { get; set; } = new();
+    public List<CobradorOcultoDto> CobradoresOcultos { get; set; } = new();
     public BalanceNegocioDto Negocio { get; set; } = new();
+}
+
+public class CobradorOcultoDto
+{
+    public int CobradorId { get; set; }
+    public string CobradorNombre { get; set; } = string.Empty;
 }
 
 public class CostoOperativoAsociableDto

@@ -158,7 +158,11 @@ export const BalanceEconomico = () => {
                 <strong style={{ fontSize: '1.05rem' }}>{c.cobradorNombre}</strong>
                 <span style={{ ...muted, marginLeft: '0.75rem' }}>Capital a cargo: <strong style={{ color: 'inherit' }}>{formatMoney(c.capitalACargo)}</strong></span>
               </div>
-              <span style={{ padding: '0.2rem 0.7rem', borderRadius: 999, fontSize: '0.8rem', fontWeight: 600, background: est.color }}>{est.texto}</span>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
+                <span style={{ padding: '0.2rem 0.7rem', borderRadius: 999, fontSize: '0.8rem', fontWeight: 600, background: est.color }}>{est.texto}</span>
+                <button className="btn btn-secondary btn-sm" title="No mostrar en el balance ni contar su ruta"
+                  onClick={() => guardar(() => balanceEconomicoApi.cambiarVisible(c.cobradorId, false))}>🙈 Ocultar</button>
+              </span>
             </div>
             <div style={{ ...muted, margin: '0.35rem 0 0.75rem' }}>
               Recogió <strong style={{ color: '#10b981' }}>{formatMoney(c.recaudo)}</strong>
@@ -243,6 +247,17 @@ export const BalanceEconomico = () => {
         );
       })}
       {data.cobradores.length === 0 && <div style={card}>No hay cobradores activos.</div>}
+      {data.cobradoresOcultos.length > 0 && (
+        <div style={{ ...muted, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.5rem', margin: '-0.25rem 0 1rem' }}>
+          Ocultos (no pagan ruta ni cuentan en costos):
+          {data.cobradoresOcultos.map(o => (
+            <button key={o.cobradorId} className="btn btn-secondary btn-sm"
+              onClick={() => guardar(() => balanceEconomicoApi.cambiarVisible(o.cobradorId, true))}>
+              👁️ Mostrar {o.cobradorNombre}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Barra general del negocio: todos los préstamos, con y sin cobrador */}
       <div style={{ ...card, borderLeft: `4px solid ${n.resultado >= 0 ? '#10b981' : '#ef4444'}` }}>
@@ -270,8 +285,9 @@ export const BalanceEconomico = () => {
           <div>Resultado del mes: <strong style={{ color: n.resultado >= 0 ? '#10b981' : '#ef4444' }}>{formatMoney(n.resultado)}</strong></div>
         </div>
         <p style={{ ...muted, marginTop: '0.75rem', marginBottom: 0 }}>
-          Los costos del negocio usan el interés real de los aportadores externos, no el % del capital a cargo de cada cobrador.
-          Si en Costos operativos hay costos creados a mano para aportadores o salarios de cobradores, se cuentan dos veces: elimínalos o desactívalos.
+          Los costos del negocio usan el interés real de los aportadores externos (dentro de costos operativos), no el % del capital a cargo de cada cobrador.
+          Las cuotas de los préstamos de cobradores no son costo del negocio: solo cuentan en la barra de cada cobrador.
+          Si un salario de cobrador está en Costos operativos y además en su tarjeta, se cuenta dos veces.
         </p>
       </div>
     </div>
