@@ -29,6 +29,7 @@ public class BalanceEconomicoController : BaseApiController
     private const string PrefijoMoto = "MotoCobrador:";
     private const string PrefijoPrestamo = "PrestamoCobrador:";
     private const string PrefijoSalario = "SalarioCobrador:";
+    private const string PrefijoCostoCobradores = "CostoOperativoCobradores:"; // costoId -> "1,5" (ids de cobradores)
 
     private readonly PrestamosDbContext _context;
 
@@ -47,7 +48,8 @@ public class BalanceEconomicoController : BaseApiController
         // ── Configuración ──────────────────────────────────────────
         var config = await _context.ConfiguracionesSistema
             .Where(c => c.Clave == ClaveCostoRuta || c.Clave.StartsWith(PrefijoMoto)
-                     || c.Clave.StartsWith(PrefijoPrestamo) || c.Clave.StartsWith(PrefijoSalario))
+                     || c.Clave.StartsWith(PrefijoPrestamo) || c.Clave.StartsWith(PrefijoSalario)
+                     || c.Clave.StartsWith(PrefijoCostoCobradores))
             .ToDictionaryAsync(c => c.Clave, c => c.Valor);
 
         decimal LeerDecimal(string clave, decimal porDefecto = 0m) =>
@@ -107,6 +109,22 @@ public class BalanceEconomicoController : BaseApiController
             .Where(p => idsPrestamosAsociados.Contains(p.Id))
             .ToDictionaryAsync(p => p.Id);
 
+        // Costos operativos activos, mensualizados, y a qué cobradores están asociados (se reparten en partes iguales)
+        var costosOperativos = await _context.Costos.Where(c => c.Activo).OrderBy(c => c.Nombre).ToListAsync();
+        static decimal Mensual(Costo c) => c.Frecuencia switch
+        {
+            "Mensual" => c.Monto,
+            "Quincenal" => c.Monto * 2,
+            _ => 0m // "Único": no es un costo mensual
+        };
+        List<int> CobradoresDeCosto(int costoId) =>
+            config.TryGetValue(PrefijoCostoCobradores + costoId, out var v)
+                ? v.Split(',', StringSplitOptions.RemoveEmptyEntries).Select(x => int.TryParse(x, out var i) ? i : 0).Where(i => i > 0).Distinct().ToList()
+                : new List<int>();
+        var costosConCobradores = costosOperativos
+            .Select(c => (Costo: c, Mensual: Mensual(c), Cobradores: CobradoresDeCosto(c.Id)))
+            .ToList();
+
         var filas = new List<BalanceCobradorDto>();
         foreach (var cob in cobradores)
         {
@@ -119,7 +137,7 @@ public class BalanceEconomicoController : BaseApiController
             var moto = LeerDecimal(PrefijoMoto + cob.Id);
             var prestamoId = LeerEntero(PrefijoPrestamo + cob.Id);
             Prestamo? prestamo = prestamoId.HasValue && prestamosAsociados.TryGetValue(prestamoId.Value, out var pr) ? pr : null;
-            var cuotaPrestamo = prestamo?.Cuotas.Where(c => c.FechaCobro >= inicio && c.FechaCobro < fin).Sum(c => c.MontoCuota) ?? 0m;
+            var cuotaPrestamo = prestamo != null ? CuotaMensual(prestamo, inicio, fin) : 0m;
 
             var costos = new List<CostoCobradorDto>
             {
@@ -131,8 +149,19 @@ public class BalanceEconomicoController : BaseApiController
                 costos.Add(new()
                 {
                     Clave = "prestamo",
-                    Nombre = prestamo != null ? $"Cuota préstamo #{prestamo.Id} ({prestamo.Cliente?.Nombre})" : $"Préstamo #{prestamoId} (no existe)",
-                    Monto = cuotaPrestamo
+                    Nombre = prestamo != null
+                        ? $"Cuota préstamo #{prestamo.Id} ({prestamo.Cliente?.Nombre}{(prestamo.EsCongelado ? ", congelado" : "")})"
+                        : $"Préstamo #{prestamoId} (no existe)",
+                    Monto = Math.Round(cuotaPrestamo, 0)
+                });
+
+            // Costos operativos asociados a este cobrador (si un costo es de varios, se reparte en partes iguales)
+            foreach (var (costo, mensual, ids) in costosConCobradores.Where(x => x.Cobradores.Contains(cob.Id)))
+                costos.Add(new()
+                {
+                    Clave = $"costo-{costo.Id}",
+                    Nombre = ids.Count > 1 ? $"{costo.Nombre} (1/{ids.Count})" : costo.Nombre,
+                    Monto = Math.Round(mensual / ids.Count, 0)
                 });
 
             // Llenar costos en orden de prioridad con lo recaudado
@@ -161,6 +190,8 @@ public class BalanceEconomicoController : BaseApiController
                 CostosCubiertos = Math.Round(Math.Min(Math.Max(recaudo, 0), totalCostos), 0),
                 Moto = moto,
                 PrestamoAsociadoId = prestamoId,
+                PrestamoAsociadoCliente = prestamo?.Cliente?.Nombre,
+                PrestamoAsociadoCongelado = prestamo?.EsCongelado ?? false,
                 Salario = salario,
                 SalarioCorresponde = Math.Round(salarioCorresponde, 0),
                 Excedente = Math.Round(sobranteTrasCostos - (salario > 0 ? salario : 0), 0),
@@ -176,13 +207,7 @@ public class BalanceEconomicoController : BaseApiController
         var moraTotal = pagosSinCuotaMes.Where(p => p.TipoPago == TiposPago.Mora).Sum(p => p.MontoPago);
         var ingresos = interesTotal + moraTotal;
 
-        var costosOperativos = await _context.Costos.Where(c => c.Activo).ToListAsync();
-        var costosOperativosMes = costosOperativos.Sum(c => c.Frecuencia switch
-        {
-            "Mensual" => c.Monto,
-            "Quincenal" => c.Monto * 2,
-            _ => 0m // "Único": no es un costo mensual
-        });
+        var costosOperativosMes = costosConCobradores.Sum(x => x.Mensual);
 
         var costosNegocio = new List<CostoCobradorDto>
         {
@@ -209,6 +234,13 @@ public class BalanceEconomicoController : BaseApiController
             CostoRuta = costoRuta,
             TasaCostoCapital = Math.Round(tasaCapital, 2),
             Cobradores = filas,
+            CostosOperativos = costosConCobradores.Select(x => new CostoOperativoAsociableDto
+            {
+                Id = x.Costo.Id,
+                Nombre = x.Costo.Nombre,
+                MontoMensual = Math.Round(x.Mensual, 0),
+                CobradorIds = x.Cobradores
+            }).ToList(),
             Negocio = new BalanceNegocioDto
             {
                 InteresCobrado = Math.Round(interesTotal, 0),
@@ -257,6 +289,43 @@ public class BalanceEconomicoController : BaseApiController
         return Ok(new { prestamoId = prestamo.Id, clienteNombre = prestamo.Cliente?.Nombre });
     }
 
+    /// <summary>Asocia un costo operativo a uno o varios cobradores (lista vacía lo desasocia).</summary>
+    [HttpPut("costos-operativos/{costoId:int}/cobradores")]
+    public async Task<IActionResult> AsociarCostoOperativo(int costoId, [FromBody] CostoCobradoresDto dto)
+    {
+        if (!await _context.Costos.AnyAsync(c => c.Id == costoId))
+            return NotFound(new { message = "Costo operativo no encontrado" });
+        var ids = (dto.CobradorIds ?? new List<int>()).Distinct().ToList();
+        if (ids.Count > 0)
+        {
+            var validos = await _context.Usuarios.CountAsync(u => ids.Contains(u.Id) && u.Rol == RolUsuario.Cobrador);
+            if (validos != ids.Count) return BadRequest(new { message = "Alguno de los cobradores no existe" });
+            await GuardarAsync(PrefijoCostoCobradores + costoId, string.Join(",", ids), $"Cobradores que cubren el costo operativo {costoId}");
+        }
+        else await BorrarAsync(PrefijoCostoCobradores + costoId);
+        return Ok(new { costoId, cobradorIds = ids });
+    }
+
+    /// <summary>
+    /// Lo que el préstamo asociado cuesta en el mes. Congelado: su cuota de interés por los períodos del mes
+    /// (la siguiente cuota solo se genera al pagar la anterior). Normal: las cuotas que vencen en el mes.
+    /// </summary>
+    private static decimal CuotaMensual(Prestamo p, DateTime inicio, DateTime fin)
+    {
+        if (p.EsCongelado)
+        {
+            var periodosMes = p.FrecuenciaPago switch
+            {
+                "Diario" => 30m,
+                "Semanal" => 52m / 12m,
+                "Quincenal" => 2m,
+                _ => 1m
+            };
+            return p.MontoCuota * periodosMes;
+        }
+        return p.Cuotas.Where(c => c.FechaCobro >= inicio && c.FechaCobro < fin).Sum(c => c.MontoCuota);
+    }
+
     private Task<bool> EsCobradorAsync(int id) =>
         _context.Usuarios.AnyAsync(u => u.Id == id && u.Rol == RolUsuario.Cobrador);
 
@@ -287,6 +356,7 @@ public class BalanceEconomicoController : BaseApiController
     public record ValorDto(decimal Valor);
     public record ValorOpcionalDto(decimal? Valor);
     public record PrestamoAsociadoDto(int? PrestamoId);
+    public record CostoCobradoresDto(List<int>? CobradorIds);
 }
 
 public class CostoCobradorDto
@@ -311,6 +381,8 @@ public class BalanceCobradorDto
     public decimal CostosCubiertos { get; set; }
     public decimal Moto { get; set; }
     public int? PrestamoAsociadoId { get; set; }
+    public string? PrestamoAsociadoCliente { get; set; }
+    public bool PrestamoAsociadoCongelado { get; set; }
     public decimal Salario { get; set; }
     public decimal SalarioCorresponde { get; set; }
     public decimal Excedente { get; set; }           // Lo que queda después de costos y salario completo
@@ -335,5 +407,14 @@ public class BalanceEconomicoDto
     public decimal CostoRuta { get; set; }
     public decimal TasaCostoCapital { get; set; }
     public List<BalanceCobradorDto> Cobradores { get; set; } = new();
+    public List<CostoOperativoAsociableDto> CostosOperativos { get; set; } = new();
     public BalanceNegocioDto Negocio { get; set; } = new();
+}
+
+public class CostoOperativoAsociableDto
+{
+    public int Id { get; set; }
+    public string Nombre { get; set; } = string.Empty;
+    public decimal MontoMensual { get; set; }
+    public List<int> CobradorIds { get; set; } = new();
 }

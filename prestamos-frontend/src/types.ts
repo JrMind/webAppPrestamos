@@ -682,6 +682,8 @@ export interface BalanceCobrador {
   costosCubiertos: number;
   moto: number;
   prestamoAsociadoId: number | null;
+  prestamoAsociadoCliente: string | null;
+  prestamoAsociadoCongelado: boolean;
   salario: number;
   salarioCorresponde: number;
   excedente: number;
@@ -694,6 +696,7 @@ export interface BalanceEconomico {
   costoRuta: number;
   tasaCostoCapital: number;
   cobradores: BalanceCobrador[];
+  costosOperativos: { id: number; nombre: string; montoMensual: number; cobradorIds: number[] }[];
   negocio: {
     interesCobrado: number;
     moraCobrada: number;

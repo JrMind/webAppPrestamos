@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } from 'recharts';
-import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi, saldosApi, moraApi } from './api';
+import { clientesApi, prestamosApi, cuotasApi, pagosApi, dashboardApi, authApi, usuariosApi, cobrosApi, aportesApi, getAuthToken, capitalApi, prestamosConFuentesApi, aportadoresExternosApi, smsCampaignsApi, smsHistoryApi, cobrosDelMesApi, prestamosDelDiaApi, miBalanceApi, gananciasApi, ResumenParticipacion, costosApi, gastosApi, transferenciasApi, saldosApi, moraApi, balanceEconomicoApi } from './api';
 import { Cliente, CreateClienteDto, CreatePrestamoDto, CreatePagoDto, Cuota, DashboardMetricas, Pago, Prestamo, Usuario, Cobrador, BalanceSocio, FuenteCapital, BalanceCapital, AportadorExterno, CreateAportadorExternoDto, SmsCampaign, CreateSmsCampaignDto, SmsHistory, CobrosDelMes, MorososResponse, PrestamosDelDia, MiBalance, Costo, CreateCostoDto, GastoDto, CreateGastoDto, TransferenciaDto, CreateTransferenciaDto, MoraPrestamo, Fondo } from './types';
 import { MetricasCobradores } from './components/MetricasCobradores';
 import { CuotasVencidasPorCliente } from './components/CuotasVencidasPorCliente';
@@ -3108,6 +3108,23 @@ function App() {
                       showToast('SMS de balance enviado', 'success');
                     } catch (e: any) { showToast(e.message || 'Error al enviar SMS', 'error'); }
                   }}>📱 Enviar Balance SMS</button>
+                  {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && (
+                    <select value="" title="Su cuota mensual pasa a ser un costo que ese cobrador debe cubrir en el Balance económico"
+                      onFocus={() => { if (cobradoresList.length === 0) loadCobradoresList(); }}
+                      onChange={async e => {
+                        const cobradorId = Number(e.target.value);
+                        if (!cobradorId) return;
+                        try {
+                          await balanceEconomicoApi.actualizarPrestamo(cobradorId, selectedPrestamo.id);
+                          const nombre = cobradoresList.find(c => c.id === cobradorId)?.nombre ?? 'el cobrador';
+                          showToast(`Préstamo #${selectedPrestamo.id} asociado a ${nombre}`, 'success');
+                        } catch (err: any) { showToast(err.message || 'Error al asociar', 'error'); }
+                      }}
+                      style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', background: 'var(--background)', border: '1px solid var(--border)', color: 'inherit', fontSize: '0.8rem' }}>
+                      <option value="">🔗 Asociar como préstamo de cobrador…</option>
+                      {cobradoresList.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}
+                    </select>
+                  )}
                 </div>
               </div>
               <div className="progress-bar" style={{ margin: '1rem 0' }}><div className="progress-fill" style={{ width: `${(selectedPrestamo.totalPagado / selectedPrestamo.montoTotal) * 100}%` }}></div></div>

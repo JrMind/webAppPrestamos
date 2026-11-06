@@ -812,6 +812,12 @@ export const balanceEconomicoApi = {
         });
         await handleResponse(response);
     },
+    asociarCostoOperativo: async (costoId: number, cobradorIds: number[]): Promise<void> => {
+        const response = await fetch(`${API_URL}/balance-economico/costos-operativos/${costoId}/cobradores`, {
+            method: 'PUT', headers: getHeaders(), body: JSON.stringify({ cobradorIds }),
+        });
+        await handleResponse(response);
+    },
     actualizarPrestamo: async (cobradorId: number, prestamoId: number | null): Promise<void> => {
         const response = await fetch(`${API_URL}/balance-economico/cobradores/${cobradorId}/prestamo`, {
             method: 'PUT', headers: getHeaders(), body: JSON.stringify({ prestamoId }),

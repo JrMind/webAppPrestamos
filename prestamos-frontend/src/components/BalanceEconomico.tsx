@@ -19,6 +19,8 @@ const COLOR_COSTO: Record<string, string> = {
   prestamos: '#06b6d4',
 };
 
+const colorDe = (clave: string) => COLOR_COSTO[clave] ?? (clave.startsWith('costo-') ? '#ec4899' : '#888');
+
 const card: React.CSSProperties = { background: 'var(--surface, var(--bg-card))', border: '1px solid var(--border)', borderRadius: '10px', padding: '1rem 1.25rem', marginBottom: '1rem' };
 const muted: React.CSSProperties = { fontSize: '0.8rem', color: '#999' };
 const inputStyle: React.CSSProperties = { width: 120, padding: '0.3rem 0.5rem', background: 'var(--background, var(--bg-secondary))', border: '1px solid var(--border)', borderRadius: '6px', color: 'inherit' };
@@ -31,7 +33,7 @@ const BarraCostos = ({ costos, total }: { costos: CostoBalance[]; total: number 
     {costos.filter(c => c.monto > 0).map(c => {
       const ancho = total > 0 ? (c.monto / total) * 100 : 0;
       const lleno = c.monto > 0 ? (c.cubierto / c.monto) * 100 : 0;
-      const color = COLOR_COSTO[c.clave] ?? '#888';
+      const color = colorDe(c.clave);
       return (
         <div key={c.clave} title={`${c.nombre}: ${formatMoney(c.cubierto)} de ${formatMoney(c.monto)}`}
           style={{ width: `${ancho}%`, position: 'relative', borderRight: '1px solid rgba(0,0,0,0.35)' }}>
@@ -53,7 +55,7 @@ const LeyendaCostos = ({ costos }: { costos: CostoBalance[] }) => (
   <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem 1.25rem', marginTop: '0.5rem' }}>
     {costos.map((c, i) => (
       <span key={c.clave} style={{ fontSize: '0.8rem', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}>
-        <span style={{ width: 10, height: 10, borderRadius: 2, background: COLOR_COSTO[c.clave] ?? '#888', display: 'inline-block' }} />
+        <span style={{ width: 10, height: 10, borderRadius: 2, background: colorDe(c.clave), display: 'inline-block' }} />
         <span style={{ color: '#aaa' }}>{i + 1}. {c.nombre}:</span>
         <strong>{formatMoney(c.monto)}</strong>
         <span style={{ color: c.cubierto >= c.monto ? '#10b981' : c.cubierto > 0 ? '#f59e0b' : '#ef4444' }}>
@@ -196,10 +198,47 @@ export const BalanceEconomico = () => {
               <span>Moto: {editable({ campo: `moto-${c.cobradorId}`, valor: c.moto || null, vacio: 'Agregar',
                 onGuardar: v => balanceEconomicoApi.actualizarMoto(c.cobradorId, v),
                 onBorrar: () => balanceEconomicoApi.actualizarMoto(c.cobradorId, null) })}</span>
-              <span>Préstamo asociado: {editable({ campo: `prestamo-${c.cobradorId}`, valor: c.prestamoAsociadoId, vacio: 'Asociar #', prefijo: '#',
+              <span>Préstamo asociado: {editable({ campo: `prestamo-${c.cobradorId}`, valor: c.prestamoAsociadoId, vacio: 'Asociar # de préstamo', prefijo: '#',
                 onGuardar: v => balanceEconomicoApi.actualizarPrestamo(c.cobradorId, v || null),
-                onBorrar: () => balanceEconomicoApi.actualizarPrestamo(c.cobradorId, null) })}</span>
+                onBorrar: () => balanceEconomicoApi.actualizarPrestamo(c.cobradorId, null) })}
+                {c.prestamoAsociadoId && c.prestamoAsociadoCliente && (
+                  <span style={{ ...muted, marginLeft: '0.35rem' }}>{c.prestamoAsociadoCliente}{c.prestamoAsociadoCongelado ? ' · congelado' : ''}</span>
+                )}
+              </span>
             </div>
+
+            {/* Costos operativos que debe cubrir este cobrador */}
+            {(() => {
+              const asociados = data.costosOperativos.filter(o => o.cobradorIds.includes(c.cobradorId));
+              const disponibles = data.costosOperativos.filter(o => !o.cobradorIds.includes(c.cobradorId));
+              return (
+                <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: '0.4rem 0.6rem', marginTop: '0.6rem', fontSize: '0.85rem' }}>
+                  <span>Costos operativos:</span>
+                  {asociados.map(o => (
+                    <span key={o.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', padding: '0.15rem 0.5rem', borderRadius: 999, background: 'rgba(236,72,153,0.18)', border: '1px solid rgba(236,72,153,0.4)' }}>
+                      {o.nombre} · {formatMoney(o.montoMensual / o.cobradorIds.length)}{o.cobradorIds.length > 1 ? ` (1/${o.cobradorIds.length})` : ''}
+                      <button title="Quitar de este cobrador"
+                        onClick={() => guardar(() => balanceEconomicoApi.asociarCostoOperativo(o.id, o.cobradorIds.filter(id => id !== c.cobradorId)))}
+                        style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0 }}>✕</button>
+                    </span>
+                  ))}
+                  {disponibles.length > 0 ? (
+                    <select value="" style={{ ...inputStyle, width: 'auto' }}
+                      onChange={e => {
+                        const o = data.costosOperativos.find(x => x.id === Number(e.target.value));
+                        if (o) guardar(() => balanceEconomicoApi.asociarCostoOperativo(o.id, [...o.cobradorIds, c.cobradorId]));
+                      }}>
+                      <option value="">+ Asociar costo…</option>
+                      {disponibles.map(o => (
+                        <option key={o.id} value={o.id}>
+                          {o.nombre} · {formatMoney(o.montoMensual)}/mes{o.cobradorIds.length > 0 ? ` (compartido con ${o.cobradorIds.length})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  ) : asociados.length === 0 && <span style={muted}>No hay costos operativos activos</span>}
+                </div>
+              );
+            })()}
           </div>
         );
       })}
