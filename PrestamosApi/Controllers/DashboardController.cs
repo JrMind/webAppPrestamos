@@ -393,19 +393,15 @@ public class DashboardController : BaseApiController
             var hace12Meses = hoy.AddMonths(-11);
             var mesInicioBusqueda = DateTime.SpecifyKind(new DateTime(hace12Meses.Year, hace12Meses.Month, 1), DateTimeKind.Utc);
 
-            var cuotasPagadasUltimosMeses = await ScopeCuotas(
-                _context.CuotasPrestamo
-                    .Include(c => c.Prestamo).ThenInclude(p => p!.Cliente)
-                    .Include(c => c.Prestamo).ThenInclude(p => p!.Cobrador),
-                fechaScope, cobsScope)
-                .Where(c => c.FechaPago.HasValue
-                        && c.FechaPago.Value >= mesInicioBusqueda
-                        && c.MontoPagado > 0
-                        && (c.EstadoCuota == "Pagada" || c.EstadoCuota == "Parcial" || c.EstadoCuota == "Vencida"))
-                .ToListAsync();
-
             // Cuotas programadas (por fecha de cobro) en los mismos 12 meses, para comparar programado vs pagado
             var mesFinBusqueda = DateTime.SpecifyKind(new DateTime(hoy.Year, hoy.Month, 1).AddMonths(1), DateTimeKind.Utc);
+
+            // Lo cobrado por cuotas, en la fecha real de cada pago (un abono de septiembre no cuenta en noviembre
+            // aunque la cuota se termine de pagar en noviembre)
+            var cobrosUltimosMeses = await RecaudoHelper.CargarAsync(
+                ScopePagos(_context.Pagos, fechaScope, cobsScope),
+                ScopeCuotas(_context.CuotasPrestamo, fechaScope, cobsScope),
+                _context.Pagos, mesInicioBusqueda, mesFinBusqueda);
             var cuotasProgramadasUltimosMeses = await ScopeCuotas(
                 _context.CuotasPrestamo
                     .Include(c => c.Prestamo).ThenInclude(p => p!.Cobrador),
@@ -429,18 +425,12 @@ public class DashboardController : BaseApiController
                 var mesFoco    = DateTime.SpecifyKind(new DateTime(hoy.Year, hoy.Month, 1).AddMonths(-i), DateTimeKind.Utc);
                 var mesFocoFin = mesFoco.AddMonths(1);
 
-        var cuotasMes = cuotasPagadasUltimosMeses
-            .Where(c => c.FechaPago!.Value >= mesFoco && c.FechaPago.Value < mesFocoFin);
+        var cobrosMes = cobrosUltimosMeses
+            .Where(m => m.Fecha >= mesFoco && m.Fecha < mesFocoFin)
+            .ToList();
 
-        // Interés proporcional a lo pagado: MontoInteres exacto de la cuota (en congelados la cuota completa es interés)
-        static decimal InteresDeCuota(CuotaPrestamo c)
-        {
-            var proporcion = c.MontoCuota > 0 ? c.MontoPagado / c.MontoCuota : 1m;
-            return c.MontoInteres * proporcion;
-        }
-
-        var prestamosMes = cuotasMes
-            .GroupBy(c => c.PrestamoId)
+        var prestamosMes = cobrosMes
+            .GroupBy(m => m.PrestamoId)
             .Select(g =>
             {
                 var p = g.First().Prestamo;
@@ -451,11 +441,11 @@ public class DashboardController : BaseApiController
                     CobradorId     = p?.CobradorId,
                     CobradorNombre = p?.Cobrador?.Nombre,
                     EsCongelado    = p?.EsCongelado == true,
-                    CuotasPagadas  = g.Count(),
-                    MontoPagado    = Math.Round(g.Sum(c => c.MontoPagado), 2),
+                    CuotasPagadas  = g.Count(),   // Pagos registrados en el mes
+                    MontoPagado    = Math.Round(g.Sum(m => m.Monto), 2),
                     // Lo que no es interés es capital: capital + interés = lo que el cobrador debe entregar
-                    CapitalCobrado = Math.Round(g.Sum(c => c.MontoPagado) - g.Sum(InteresDeCuota), 2),
-                    InteresCobrado = Math.Round(g.Sum(InteresDeCuota), 2)
+                    CapitalCobrado = Math.Round(g.Sum(m => m.Monto - m.Interes), 2),
+                    InteresCobrado = Math.Round(g.Sum(m => m.Interes), 2)
                 };
             })
             .Where(x => x.MontoPagado > 0)
@@ -514,7 +504,7 @@ public class DashboardController : BaseApiController
         interesesMensuales.Add(new InteresMensualDto
         {
             Mes            = mesFoco.ToString("MMM yyyy"),
-            InteresCobrado = Math.Round(cuotasMes.Sum(InteresDeCuota), 2),
+            InteresCobrado = Math.Round(cobrosMes.Sum(m => m.Interes), 2),
             Prestamos      = prestamosMes,
             Programado     = programadoMes,
             OtrosPagos     = otrosPagosMes

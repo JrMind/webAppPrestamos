@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using PrestamosApi.Attributes;
 using PrestamosApi.Data;
 using PrestamosApi.Models;
+using PrestamosApi.Services;
 
 namespace PrestamosApi.Controllers;
 
@@ -68,18 +69,15 @@ public class BalanceEconomicoController : BaseApiController
         var tasaCapital = capitalAportadores > 0 ? costoAportadoresMes / capitalAportadores * 100m : 0m;
 
         // ── Recaudo del mes (interés + mora) por préstamo ──────────────
-        var cuotasPagadasMes = await _context.CuotasPrestamo
-            .Include(c => c.Prestamo)
-            .Where(c => c.FechaPago.HasValue && c.FechaPago >= inicio && c.FechaPago < fin && c.MontoPagado > 0)
-            .ToListAsync();
+        // Lo cobrado por cuotas en el mes, en la fecha real de cada pago
+        var cobrosMes = await RecaudoHelper.CargarAsync(
+            _context.Pagos, _context.CuotasPrestamo, _context.Pagos, inicio, fin);
         var pagosSinCuotaMes = await _context.Pagos
             .Include(p => p.Prestamo)
             .Where(p => (p.TipoPago == TiposPago.SoloInteres || p.TipoPago == TiposPago.Mora)
                      && p.FechaPago >= inicio && p.FechaPago < fin)
             .ToListAsync();
 
-        static decimal InteresDeCuota(CuotaPrestamo c) =>
-            c.MontoInteres * (c.MontoCuota > 0 ? c.MontoPagado / c.MontoCuota : 1m);
 
         // Interés programado del mes (meta): interés de las cuotas con fecha de cobro en el mes
         var interesProgramado = await _context.CuotasPrestamo
@@ -142,7 +140,7 @@ public class BalanceEconomicoController : BaseApiController
         foreach (var cob in cobradores)
         {
             var capitalACargo = prestamosActivos.Where(p => p.CobradorId == cob.Id).Sum(p => p.CapitalPendiente);
-            var interesCobrado = cuotasPagadasMes.Where(c => c.Prestamo?.CobradorId == cob.Id).Sum(InteresDeCuota)
+            var interesCobrado = cobrosMes.Where(m => m.Prestamo?.CobradorId == cob.Id).Sum(m => m.Interes)
                                + pagosSinCuotaMes.Where(p => p.TipoPago == TiposPago.SoloInteres && p.Prestamo?.CobradorId == cob.Id).Sum(p => p.MontoPago);
             var moraCobrada = pagosSinCuotaMes.Where(p => p.TipoPago == TiposPago.Mora && p.Prestamo?.CobradorId == cob.Id).Sum(p => p.MontoPago);
             var recaudo = interesCobrado + moraCobrada;
@@ -215,7 +213,7 @@ public class BalanceEconomicoController : BaseApiController
         }
 
         // ── Barra general del negocio ──────────────────────────────
-        var interesTotal = cuotasPagadasMes.Sum(InteresDeCuota)
+        var interesTotal = cobrosMes.Sum(m => m.Interes)
                          + pagosSinCuotaMes.Where(p => p.TipoPago == TiposPago.SoloInteres).Sum(p => p.MontoPago);
         var moraTotal = pagosSinCuotaMes.Where(p => p.TipoPago == TiposPago.Mora).Sum(p => p.MontoPago);
         var ingresos = interesTotal + moraTotal;

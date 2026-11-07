@@ -471,7 +471,7 @@ export const MetricasCobradores = () => {
                     <th style={s.th}>Préstamo</th>
                     <th style={s.th}>Cliente</th>
                     <th style={s.th}>Cobrador</th>
-                    <th style={s.th}>Cuotas</th>
+                    <th style={s.th} title="Pagos registrados en el mes">Pagos</th>
                     <th style={s.th}>Monto Pagado</th>
                     <th style={s.th}>Capital</th>
                     <th style={s.th}>Interés</th>
