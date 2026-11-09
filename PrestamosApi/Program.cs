@@ -122,6 +122,18 @@ using (var scope = app.Services.CreateScope())
         // Fallback: ensure DB exists if migrations fail
         try { context.Database.EnsureCreated(); } catch { }
     }
+
+    // Esquema del Tablero (notas de préstamos + cuenta corriente de cobradores).
+    // Idempotente: crea/ajusta las tablas solo si faltan.
+    try
+    {
+        context.Database.ExecuteSqlRaw(TableroSchema.Sql);
+        Console.WriteLine("✅ Esquema del Tablero verificado");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($"⚠️ Error verificando esquema del Tablero: {ex.Message}");
+    }
 }
 
 // Corregir estados de préstamos al iniciar (fix datos históricos mal marcados)

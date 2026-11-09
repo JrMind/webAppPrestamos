@@ -2,7 +2,8 @@ import {
     Cliente, CreateClienteDto, CreatePagoDto, CreatePrestamoDto,
     Cuota, DashboardMetricas, Pago, Prestamo, LoginDto, AuthResponse,
     Usuario, Cobrador, BalanceSocio, CobrosHoy, MovimientoCapital, Aporte,
-    MetricasGenerales, MoraPrestamo, Fondo, PrestamoVencido, BalanceEconomico, ComposicionCapital, PrestamoSinSaldo
+    MetricasGenerales, MoraPrestamo, Fondo, PrestamoVencido, BalanceEconomico, ComposicionCapital, PrestamoSinSaldo,
+    NotaTablero, GuardarNotaPrestamoDto, CuentaCobrador, MovimientoCuentaCobrador, TipoMovimientoCuenta
 } from './types';
 
 const API_URL = import.meta.env.DEV
@@ -975,5 +976,62 @@ export const saldosApi = {
             body: JSON.stringify({ monto }),
         });
         if (!response.ok) throw new Error('Error al actualizar el saldo');
+    },
+};
+
+// Tablero: notas de préstamos y cuenta corriente de cobradores
+export const tableroApi = {
+    getNotas: async (prestamoId?: number): Promise<NotaTablero[]> => {
+        const qs = prestamoId ? `?prestamoId=${prestamoId}` : '';
+        const response = await fetch(`${API_URL}/tablero/notas-prestamos${qs}`, { headers: getHeaders() });
+        return handleResponse<NotaTablero[]>(response);
+    },
+
+    crearNota: async (data: GuardarNotaPrestamoDto): Promise<void> => {
+        const response = await fetch(`${API_URL}/tablero/notas-prestamos`, {
+            method: 'POST', headers: getHeaders(), body: JSON.stringify(data),
+        });
+        await handleResponse(response);
+    },
+
+    actualizarNota: async (id: number, data: GuardarNotaPrestamoDto): Promise<void> => {
+        const response = await fetch(`${API_URL}/tablero/notas-prestamos/${id}`, {
+            method: 'PUT', headers: getHeaders(), body: JSON.stringify(data),
+        });
+        await handleResponse(response);
+    },
+
+    marcarCumplida: async (id: number, cumplida: boolean): Promise<void> => {
+        const response = await fetch(`${API_URL}/tablero/notas-prestamos/${id}/cumplida`, {
+            method: 'PATCH', headers: getHeaders(), body: JSON.stringify({ cumplida }),
+        });
+        await handleResponse(response);
+    },
+
+    eliminarNota: async (id: number): Promise<void> => {
+        const response = await fetch(`${API_URL}/tablero/notas-prestamos/${id}`, { method: 'DELETE', headers: getHeaders() });
+        if (!response.ok) throw new Error('Error al eliminar la nota');
+    },
+
+    getCuentasCobradores: async (): Promise<CuentaCobrador[]> => {
+        const response = await fetch(`${API_URL}/tablero/cuentas-cobradores`, { headers: getHeaders() });
+        return handleResponse<CuentaCobrador[]>(response);
+    },
+
+    getMovimientos: async (cobradorId: number): Promise<MovimientoCuentaCobrador[]> => {
+        const response = await fetch(`${API_URL}/tablero/cuentas-cobradores/${cobradorId}/movimientos`, { headers: getHeaders() });
+        return handleResponse<MovimientoCuentaCobrador[]>(response);
+    },
+
+    crearMovimiento: async (cobradorId: number, data: { tipo: TipoMovimientoCuenta; monto: number; descripcion: string; fecha?: string }): Promise<void> => {
+        const response = await fetch(`${API_URL}/tablero/cuentas-cobradores/${cobradorId}/movimientos`, {
+            method: 'POST', headers: getHeaders(), body: JSON.stringify(data),
+        });
+        await handleResponse(response);
+    },
+
+    eliminarMovimiento: async (id: number): Promise<void> => {
+        const response = await fetch(`${API_URL}/tablero/movimientos-cobrador/${id}`, { method: 'DELETE', headers: getHeaders() });
+        if (!response.ok) throw new Error('Error al eliminar el movimiento');
     },
 };

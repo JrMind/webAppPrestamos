@@ -30,6 +30,7 @@ public class PrestamosDbContext : DbContext
     public DbSet<NotaPrestamo> NotasPrestamo => Set<NotaPrestamo>();
     public DbSet<Gasto> Gastos => Set<Gasto>();
     public DbSet<Transferencia> Transferencias => Set<Transferencia>();
+    public DbSet<MovimientoCuentaCobrador> MovimientosCuentaCobrador => Set<MovimientoCuentaCobrador>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -408,6 +409,10 @@ public class PrestamosDbContext : DbContext
             entity.Property(e => e.Contenido).HasColumnName("contenido").IsRequired();
             entity.Property(e => e.FechaCreacion).HasColumnName("fechacreacion").HasDefaultValueSql("NOW()");
             entity.Property(e => e.UsuarioId).HasColumnName("usuarioid");
+            entity.Property(e => e.FechaCompromiso).HasColumnName("fechacompromiso").HasColumnType("date");
+            entity.Property(e => e.MontoCompromiso).HasColumnName("montocompromiso").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Cumplida).HasColumnName("cumplida").HasDefaultValue(false);
+            entity.Property(e => e.FechaCumplida).HasColumnName("fechacumplida");
 
             entity.HasOne(e => e.Prestamo)
                 .WithMany(p => p.Notas)
@@ -420,6 +425,23 @@ public class PrestamosDbContext : DbContext
                 .OnDelete(DeleteBehavior.SetNull);
 
             entity.HasIndex(e => e.PrestamoId).HasDatabaseName("idx_notas_prestamo");
+        });
+
+        // Cuenta corriente cobrador ↔ oficina
+        modelBuilder.Entity<MovimientoCuentaCobrador>(entity =>
+        {
+            entity.ToTable("movimientoscuentacobrador");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.CobradorId).HasColumnName("cobradorid");
+            entity.Property(e => e.Tipo).HasColumnName("tipo").HasMaxLength(20).IsRequired();
+            entity.Property(e => e.Monto).HasColumnName("monto").HasColumnType("decimal(18,2)");
+            entity.Property(e => e.Descripcion).HasColumnName("descripcion").IsRequired();
+            entity.Property(e => e.Fecha).HasColumnName("fecha").HasColumnType("date");
+            entity.Property(e => e.FechaCreacion).HasColumnName("fechacreacion").HasDefaultValueSql("NOW()");
+            entity.Property(e => e.UsuarioId).HasColumnName("usuarioid");
+            entity.HasOne(e => e.Cobrador).WithMany().HasForeignKey(e => e.CobradorId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(e => e.Usuario).WithMany().HasForeignKey(e => e.UsuarioId).OnDelete(DeleteBehavior.SetNull);
+            entity.HasIndex(e => e.CobradorId).HasDatabaseName("idx_movcuentacobrador_cobrador");
         });
 
         // Transferencia

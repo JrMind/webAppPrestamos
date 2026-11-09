@@ -836,3 +836,53 @@ export interface ProgramadoCobrador {
 
 
 
+
+// ── Tablero ──────────────────────────────────────────────
+export interface NotaTablero {
+  id: number;
+  prestamoId: number;
+  clienteNombre: string;
+  clienteCedula: string;
+  clienteTelefono?: string;
+  cobradorId?: number;
+  cobradorNombre?: string;
+  estadoPrestamo: string;
+  contenido: string;
+  fechaCompromiso?: string; // yyyy-MM-dd
+  montoCompromiso?: number;
+  cumplida: boolean;
+  fechaCumplida?: string;
+  fechaCreacion: string;
+  usuarioNombre: string;
+}
+
+export interface GuardarNotaPrestamoDto {
+  prestamoId: number;
+  contenido: string;
+  fechaCompromiso?: string | null;
+  montoCompromiso?: number | null;
+}
+
+/** saldo > 0: el cobrador le debe a la oficina; saldo < 0: la oficina le debe al cobrador */
+export interface CuentaCobrador {
+  cobradorId: number;
+  cobradorNombre: string;
+  activo: boolean;
+  saldo: number;
+  cantidadMovimientos: number;
+  ultimoMovimiento?: string;
+}
+
+export type TipoMovimientoCuenta = 'CobradorDebe' | 'OficinaDebe';
+
+export interface MovimientoCuentaCobrador {
+  id: number;
+  cobradorId: number;
+  tipo: TipoMovimientoCuenta;
+  monto: number;
+  descripcion: string;
+  fecha: string; // yyyy-MM-dd
+  fechaCreacion: string;
+  usuarioNombre: string;
+  saldoAcumulado: number;
+}

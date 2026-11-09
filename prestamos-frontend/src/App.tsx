@@ -6,6 +6,7 @@ import { MetricasCobradores } from './components/MetricasCobradores';
 import { CuotasVencidasPorCliente } from './components/CuotasVencidasPorCliente';
 import { PrestamosVencidos } from './components/PrestamosVencidos';
 import { BalanceEconomico } from './components/BalanceEconomico';
+import { Tablero } from './components/Tablero';
 import { calcularFechasCuotas } from './calendarioCuotas';
 import './App.css';
 
@@ -56,7 +57,7 @@ function App() {
   const [currentUser, setCurrentUser] = useState<Usuario | null>(getStoredUser);
   const [loading, setLoading] = useState(true);
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'prestamosdia' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias' | 'metricas'>('prestamos');
+  const [activeTab, setActiveTab] = useState<'prestamos' | 'clientes' | 'cuotas' | 'cobros' | 'prestamosdia' | 'pagosdia' | 'sms' | 'smshistory' | 'socios' | 'balance' | 'usuarios' | 'aportadores' | 'ganancias' | 'metricas' | 'tablero'>('prestamos');
 
   // Data states
   const [metricas, setMetricas] = useState<DashboardMetricas | null>(null);
@@ -1616,6 +1617,7 @@ function App() {
             {currentUser?.rol !== 'Administrador' && <button className={`tab ${activeTab === 'aportadores' ? 'active' : ''}`} onClick={() => setActiveTab('aportadores')}>Aportadores</button>}
             {currentUser?.rol !== 'Administrador' && <button className={`tab ${activeTab === 'ganancias' ? 'active' : ''}`} onClick={() => { setActiveTab('ganancias'); loadResumenParticipacion(); loadCostos(); loadGastos(); loadTransferencias(); }}>⚖️ Balance económico</button>}
             {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin') && <button className={`tab ${activeTab === 'metricas' ? 'active' : ''}`} onClick={() => setActiveTab('metricas')}>📈 Métricas</button>}
+            {(currentUser?.rol === 'Socio' || currentUser?.rol === 'Admin' || currentUser?.rol === 'Administrador') && <button className={`tab ${activeTab === 'tablero' ? 'active' : ''}`} onClick={() => setActiveTab('tablero')}>📌 Tablero</button>}
           </div>
 
           {/* Prestamos Tab */}
@@ -3468,6 +3470,16 @@ function App() {
       {activeTab === 'metricas' && (
         <div className="section">
           <MetricasCobradores />
+        </div>
+      )}
+
+      {/* Tablero: notas de préstamos y cuentas de cobradores */}
+      {activeTab === 'tablero' && (
+        <div className="section">
+          <div className="section-header"><h2>📌 Tablero</h2></div>
+          <div className="section-content">
+            <Tablero onVerPrestamo={async prestamoId => { const p = await prestamosApi.getById(prestamoId); openDetalle(p); }} />
+          </div>
         </div>
       )}
 
