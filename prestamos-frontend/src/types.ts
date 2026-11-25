@@ -673,6 +673,7 @@ export interface BalanceCobrador {
   cobradorId: number;
   cobradorNombre: string;
   capitalACargo: number;
+  capitalNuevo: number;
   interesProgramado: number;
   interesCobrado: number;
   moraCobrada: number;

@@ -98,11 +98,17 @@ public class BalanceEconomicoController : BaseApiController
 
         // Capital a cargo: solo el capital que falta por cobrar de sus préstamos activos y vencidos.
         // Normales: la parte de capital de lo que falta de cada cuota. Congelados: el capital que deben.
+        // No le cuentan en el costo del capital del mes (se muestran aparte como capital nuevo):
+        //   - los préstamos hechos desde el inicio del mes consultado, y
+        //   - los que todavía no tienen ninguna cuota que cobrar hasta el fin del mes (la primera cuota cae después).
+        // Empiezan a contar el mes en que ya le toca cobrarles. Los congelados siempre cuentan.
         var prestamosActivos = await _context.Prestamos
             .Where(p => p.EstadoPrestamo == "Activo" || p.EstadoPrestamo == "Vencido")
             .Select(p => new
             {
                 p.CobradorId,
+                EsNuevo = p.FechaPrestamo >= inicio
+                    || (!p.EsCongelado && !p.Cuotas.Any(c => c.FechaCobro < fin)),
                 CapitalPendiente = p.EsCongelado
                     ? p.MontoPrestado
                     : p.Cuotas.Where(c => c.EstadoCuota != "Pagada")
@@ -139,7 +145,8 @@ public class BalanceEconomicoController : BaseApiController
         var filas = new List<BalanceCobradorDto>();
         foreach (var cob in cobradores)
         {
-            var capitalACargo = prestamosActivos.Where(p => p.CobradorId == cob.Id).Sum(p => p.CapitalPendiente);
+            var capitalACargo = prestamosActivos.Where(p => p.CobradorId == cob.Id && !p.EsNuevo).Sum(p => p.CapitalPendiente);
+            var capitalNuevo = prestamosActivos.Where(p => p.CobradorId == cob.Id && p.EsNuevo).Sum(p => p.CapitalPendiente);
             var interesCobrado = cobrosMes.Where(m => m.Prestamo?.CobradorId == cob.Id).Sum(m => m.Interes)
                                + pagosSinCuotaMes.Where(p => p.TipoPago == TiposPago.SoloInteres && p.Prestamo?.CobradorId == cob.Id).Sum(p => p.MontoPago);
             var moraCobrada = pagosSinCuotaMes.Where(p => p.TipoPago == TiposPago.Mora && p.Prestamo?.CobradorId == cob.Id).Sum(p => p.MontoPago);
@@ -192,6 +199,7 @@ public class BalanceEconomicoController : BaseApiController
                 CobradorId = cob.Id,
                 CobradorNombre = cob.Nombre,
                 CapitalACargo = Math.Round(capitalACargo, 0),
+                CapitalNuevo = Math.Round(capitalNuevo, 0),
                 InteresProgramado = Math.Round(interesProgramado.FirstOrDefault(i => i.CobradorId == cob.Id)?.Interes ?? 0, 0),
                 InteresCobrado = Math.Round(interesCobrado, 0),
                 MoraCobrada = Math.Round(moraCobrada, 0),
@@ -399,6 +407,7 @@ public class BalanceCobradorDto
     public int CobradorId { get; set; }
     public string CobradorNombre { get; set; } = string.Empty;
     public decimal CapitalACargo { get; set; }
+    public decimal CapitalNuevo { get; set; }
     public decimal InteresProgramado { get; set; }   // Meta: interés de las cuotas del mes
     public decimal InteresCobrado { get; set; }
     public decimal MoraCobrada { get; set; }

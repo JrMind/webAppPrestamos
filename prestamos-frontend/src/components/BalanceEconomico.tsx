@@ -156,7 +156,10 @@ export const BalanceEconomico = () => {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem' }}>
               <div>
                 <strong style={{ fontSize: '1.05rem' }}>{c.cobradorNombre}</strong>
-                <span style={{ ...muted, marginLeft: '0.75rem' }} title="Capital que falta por cobrar de sus préstamos activos y vencidos (sin intereses)">Capital por cobrar a cargo: <strong style={{ color: 'inherit' }}>{formatMoney(c.capitalACargo)}</strong></span>
+                <span style={{ ...muted, marginLeft: '0.75rem' }} title="Capital que falta por cobrar de sus préstamos activos y vencidos (sin intereses). No incluye préstamos hechos este mes ni los que aún no tienen cuota en el mes.">Capital por cobrar a cargo: <strong style={{ color: 'inherit' }}>{formatMoney(c.capitalACargo)}</strong></span>
+                {c.capitalNuevo > 0 && (
+                  <span style={{ ...muted, marginLeft: '0.75rem' }} title="Préstamos hechos en este mes o cuya primera cuota cae después de este mes: no se le cobra el % todavía, empiezan a contar el mes en que les toca cuota">+ Capital nuevo / sin cuota este mes (no cuenta): <strong style={{ color: 'inherit' }}>{formatMoney(c.capitalNuevo)}</strong></span>
+                )}
               </div>
               <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.5rem' }}>
                 <span style={{ padding: '0.2rem 0.7rem', borderRadius: 999, fontSize: '0.8rem', fontWeight: 600, background: est.color }}>{est.texto}</span>
